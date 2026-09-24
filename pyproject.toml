@@ -1,0 +1,37 @@
+[project]
+name = "tr-banking"
+version = "0.1.0"
+description = "Turkish banking market dashboard: credit, card spending and bank rates in one place."
+authors = [
+    { name = "Enes", email = "altunenes000@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+    "pandas>=3.0.6",
+    "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "streamlit>=1.64.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes, I: import sorting, UP: modern syntax, B: bugbear, SIM: simplifications
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.8",
+]
