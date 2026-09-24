@@ -1,0 +1,20 @@
+# Gizli bilgiler
+.env
+
+# Veritabanı dosyaları
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Ham veri
+data/raw/
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db
