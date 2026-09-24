@@ -1,0 +1,10 @@
+# Project-level Streamlit settings, read when `streamlit run` starts from the repo root
+# (and by Streamlit Community Cloud).
+
+[server]
+# Never ask for an email on first run, on any machine.
+showEmailPrompt = false
+
+[browser]
+# Do not send usage statistics to Streamlit.
+gatherUsageStats = false

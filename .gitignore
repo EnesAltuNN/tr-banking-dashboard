@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Database files
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Raw data and logs
+data/raw/
+data/logs/
+
+# OS files
+.DS_Store
+Thumbs.db

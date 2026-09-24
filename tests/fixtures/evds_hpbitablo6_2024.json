@@ -1,0 +1,70 @@
+{
+  "totalCount": 5,
+  "items": [
+    {
+      "Tarih": "14-06-2024",
+      "YEARWEEK": "2024-24",
+      "TP_HPBITABLO6_2": null,
+      "TP_HPBITABLO6_3": null,
+      "TP_HPBITABLO6_7": null,
+      "TP_HPBITABLO6_11": null,
+      "TP_HPBITABLO6_16": null,
+      "TP_HPBITABLO6_20": null,
+      "UNIXTIME": {
+        "$numberLong": "1718312400"
+      }
+    },
+    {
+      "Tarih": "21-06-2024",
+      "YEARWEEK": "2024-25",
+      "TP_HPBITABLO6_2": null,
+      "TP_HPBITABLO6_3": null,
+      "TP_HPBITABLO6_7": null,
+      "TP_HPBITABLO6_11": null,
+      "TP_HPBITABLO6_16": null,
+      "TP_HPBITABLO6_20": null,
+      "UNIXTIME": {
+        "$numberLong": "1718917200"
+      }
+    },
+    {
+      "Tarih": "28-06-2024",
+      "YEARWEEK": "2024-26",
+      "TP_HPBITABLO6_2": "3191973690.00000000",
+      "TP_HPBITABLO6_3": "446684702.00000000",
+      "TP_HPBITABLO6_7": "90649617.00000000",
+      "TP_HPBITABLO6_11": "1186682677.00000000",
+      "TP_HPBITABLO6_16": "1467956694.00000000",
+      "TP_HPBITABLO6_20": "9043556827.00000000",
+      "UNIXTIME": {
+        "$numberLong": "1719522000"
+      }
+    },
+    {
+      "Tarih": "05-07-2024",
+      "YEARWEEK": "2024-27",
+      "TP_HPBITABLO6_2": "3191885409.00000000",
+      "TP_HPBITABLO6_3": "446991291.00000000",
+      "TP_HPBITABLO6_7": "89892626.00000000",
+      "TP_HPBITABLO6_11": "1188274215.00000000",
+      "TP_HPBITABLO6_16": "1466727277.00000000",
+      "TP_HPBITABLO6_20": "9077632434.00000000",
+      "UNIXTIME": {
+        "$numberLong": "1720126800"
+      }
+    },
+    {
+      "Tarih": "12-07-2024",
+      "YEARWEEK": "2024-28",
+      "TP_HPBITABLO6_2": "3223312138.00000000",
+      "TP_HPBITABLO6_3": "448182928.00000000",
+      "TP_HPBITABLO6_7": "89289932.00000000",
+      "TP_HPBITABLO6_11": "1200776485.00000000",
+      "TP_HPBITABLO6_16": "1485062793.00000000",
+      "TP_HPBITABLO6_20": "9154518695.00000000",
+      "UNIXTIME": {
+        "$numberLong": "1720731600"
+      }
+    }
+  ]
+}
