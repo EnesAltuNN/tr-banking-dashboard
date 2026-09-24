@@ -12,8 +12,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Raw data
+# Raw data and logs
 data/raw/
+data/logs/
 
 # OS files
 .DS_Store

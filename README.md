@@ -60,6 +60,20 @@ data errors, so a scheduler can detect failures.
 New data is published by the CBRT on Thursdays at 14:30 (Istanbul time), for the week ending
 the previous Friday.
 
+### Weekly automatic fetch (Windows)
+
+```powershell
+# Register a scheduled task: every Thursday 15:00, or as soon as the PC is on after that
+powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1
+
+Start-ScheduledTask -TaskName "tr-banking weekly fetch"                  # run it now
+Get-Content data\logs\fetch.log -Tail 20                                 # check the log
+Unregister-ScheduledTask -TaskName "tr-banking weekly fetch" -Confirm:$false   # remove it
+```
+
+The task runs as the current user while logged on. It needs no admin rights and stores no password.
+A missed week does no harm, because every fetch re-reads the last 8 weeks.
+
 ## Tests and linting
 
 ```powershell

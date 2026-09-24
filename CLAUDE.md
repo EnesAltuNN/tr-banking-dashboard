@@ -106,4 +106,9 @@ uv run ruff format .                                  # format
 uv run tr-banking backfill --start 2024-06-28         # load history
 uv run tr-banking fetch                               # latest 8 weeks
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
+powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```
+
+The scheduled task ("tr-banking weekly fetch", Thursdays 15:00) runs `scripts\scheduled_fetch.ps1`,
+which logs to `data\logs\fetch.log`. Keep `.ps1` files pure ASCII: Windows PowerShell 5.1 reads
+BOM-less files as ANSI.
