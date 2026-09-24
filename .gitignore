@@ -1,7 +1,7 @@
-# Gizli bilgiler
+# Secrets
 .env
 
-# Veritabanı dosyaları
+# Database files
 *.db
 *.sqlite
 
@@ -12,9 +12,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Ham veri
+# Raw data
 data/raw/
 
-# Sistem dosyaları
+# OS files
 .DS_Store
 Thumbs.db
