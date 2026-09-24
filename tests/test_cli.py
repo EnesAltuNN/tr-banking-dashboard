@@ -4,28 +4,31 @@ from typing import Any
 import pytest
 
 from tr_banking import cli
+from tr_banking.pipeline import UpdateError
 from tr_banking.sources.evds import EvdsApiError
 
 
 class FakeRun:
-    """Stands in for run_evds_update so CLI tests never touch .env, the network or a DB."""
+    """Stands in for run_update so CLI tests never touch .env, the network or a DB."""
 
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
         self.calls: list[tuple[date, date]] = []
+        self.sources: list[tuple[str, ...]] = []
 
-    def __call__(self, settings: Any, start: date, end: date) -> int:
+    def __call__(self, settings: Any, start: date, end: date, sources: Any) -> dict:
         self.calls.append((start, end))
+        self.sources.append(tuple(sources))
         if self.error:
             raise self.error
-        return 0
+        return {}
 
 
 @pytest.fixture
 def fake_run(monkeypatch: pytest.MonkeyPatch) -> FakeRun:
     run = FakeRun()
     monkeypatch.setattr(cli, "get_settings", lambda: object())
-    monkeypatch.setattr(cli, "run_evds_update", run)
+    monkeypatch.setattr(cli, "run_update", run)
     return run
 
 
@@ -65,6 +68,7 @@ def test_backfill_end_defaults_to_today(fake_run: FakeRun) -> None:
         ["backfill", "--start", "2024-12-31", "--end", "2024-01-01"],
         ["fetch", "--weeks", "0"],
         ["fetch", "--weeks", "abc"],
+        ["fetch", "--source", "bkm"],
     ],
 )
 def test_invalid_arguments_exit_with_usage_error(fake_run: FakeRun, argv: list[str]) -> None:
@@ -79,7 +83,26 @@ def test_known_failure_returns_exit_code_1(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(cli, "get_settings", lambda: object())
-    monkeypatch.setattr(cli, "run_evds_update", FakeRun(error=EvdsApiError("403 Forbidden")))
+    monkeypatch.setattr(cli, "run_update", FakeRun(error=EvdsApiError("403 Forbidden")))
 
     assert cli.main(["fetch"]) == 1
     assert "fetch failed: 403 Forbidden" in caplog.text
+
+
+def test_all_sources_by_default(fake_run: FakeRun) -> None:
+    cli.main(["fetch"])
+
+    assert fake_run.sources == [("evds", "bddk")]
+
+
+def test_source_option_limits_the_update(fake_run: FakeRun) -> None:
+    cli.main(["backfill", "--start", "2014-01-03", "--source", "bddk"])
+
+    assert fake_run.sources == [("bddk",)]
+
+
+def test_partial_failure_returns_exit_code_1(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+    monkeypatch.setattr(cli, "run_update", FakeRun(error=UpdateError("update failed for: bddk")))
+
+    assert cli.main(["fetch"]) == 1

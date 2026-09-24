@@ -24,10 +24,23 @@ INFLATION_NOTE = (
     "credit expansion. FX-denominated loans are included at their TRY value, so lira "
     "depreciation also pushes these figures up."
 )
-SOURCE_NOTE = (
-    "Source: CBRT (TCMB) EVDS, data group `bie_hpbitablo6` - Banking Sector Selected Loans "
-    "(domestic branches), weekly Friday values, TRY + FX. Week-over-week compares with the "
-    "previous week; year-over-year with the same week 52 weeks earlier."
+# Display order of the source picker; only sources with data are shown.
+SOURCE_LABELS = {"evds": "TCMB EVDS", "bddk": "BDDK weekly bulletin"}
+SOURCE_NOTES = {
+    "evds": (
+        "Source: CBRT (TCMB) EVDS, data group `bie_hpbitablo6` - Banking Sector Selected Loans "
+        "(domestic branches), weekly Friday values, TRY + FX, available from 2024-06-28."
+    ),
+    "bddk": (
+        "Source: BDDK weekly bulletin (Haftalık Bülten), table *Krediler*, whole sector, "
+        "weekly Friday values, TRY + FX, available from 2014-01-03. Coverage differs slightly "
+        "from EVDS (common series agree within about 0.3%); BDDK *Commercial and other loans* "
+        "is broader than EVDS *Commercial loans*."
+    ),
+}
+COMPARISON_NOTE = (
+    "Week-over-week compares with the previous week; year-over-year with the same week "
+    "52 weeks earlier."
 )
 
 
@@ -47,9 +60,12 @@ def main() -> None:
 
     series, observations, fetched_at = load_data(str(get_settings().db_path))
     if observations.empty:
-        st.info("No data yet. Load it with `uv run tr-banking backfill --start 2024-06-28`.")
+        st.info("No data yet. Load it with `uv run tr-banking backfill --start 2014-01-03`.")
         st.stop()
 
+    source = render_source_picker(series)
+    series = series[series["source"] == source]
+    observations = observations[observations["series_id"].isin(series["id"])]
     selected_ids, start, end = render_filters(series, observations)
     selected = observations[observations["series_id"].isin(selected_ids)]
     render_status(selected, fetched_at)
@@ -60,7 +76,15 @@ def main() -> None:
 
     in_range = selected[selected["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
     render_charts(in_range, series.set_index("id"), selected_ids)
-    st.caption(SOURCE_NOTE)
+    st.caption(f"{SOURCE_NOTES.get(source, '')} {COMPARISON_NOTE}")
+
+
+def render_source_picker(series: pd.DataFrame) -> str:
+    """One source at a time: each has its own history length, units and definitions."""
+    available = [source for source in SOURCE_LABELS if source in set(series["source"])]
+    return st.radio(
+        "Source", options=available, format_func=SOURCE_LABELS.__getitem__, horizontal=True
+    )
 
 
 def render_filters(

@@ -10,7 +10,10 @@ YEAR = timedelta(weeks=52)
 SUMMARY_COLUMNS = ["series_id", "last_date", "last_value", "wow_pct", "yoy_pct"]
 
 # Stored unit -> (multiplier, label) used for display. Unknown units are shown as stored.
-DISPLAY_UNITS = {"thousand TRY": (1e-6, "billion TRY")}
+DISPLAY_UNITS = {
+    "thousand TRY": (1e-6, "billion TRY"),  # EVDS
+    "million TRY": (1e-3, "billion TRY"),  # BDDK
+}
 
 
 def display_unit(unit: str) -> tuple[float, str]:

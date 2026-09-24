@@ -6,19 +6,24 @@ AI-generated summary planned on top.
 
 | Module | Source | Frequency | Status |
 |---|---|---|---|
-| 1. Credit market | CBRT (TCMB) EVDS API; BDDK weekly bulletin later | weekly | **EVDS part done** |
+| 1. Credit market | CBRT (TCMB) EVDS API and BDDK weekly bulletin | weekly | **done** |
 | 2. Card spending | BKM statistics (Excel) | monthly | planned |
 | 3. Bank loan/deposit rates and campaigns | bank websites (scraping) | daily | planned |
 
 ## What it does today
 
-- Fetches six weekly banking-sector loan series from EVDS3: total consumer loans, housing,
-  auto, general purpose (ihtiyaç), individual credit cards and commercial loans.
+- Fetches weekly banking-sector loan series from two sources:
+  - **EVDS3 (CBRT)**, 6 series from 2024-06-28: total consumer loans, housing, auto, general
+    purpose (ihtiyaç), individual credit cards and commercial loans.
+  - **BDDK weekly bulletin**, 7 series from 2014-01-03: the same consumer items, plus total
+    loans and commercial and other loans.
 - Stores them in SQLite with idempotent upserts. Re-running a fetch never duplicates rows,
   and revised values replace old ones.
 - Saves every raw API response under `data/raw/` for debugging.
-- Streamlit dashboard: one line chart per series, date range and series filters, and a table
-  with the last value, week-over-week % and year-over-year % change.
+- Streamlit dashboard:
+  - a source picker, date range and series filters,
+  - one line chart per series,
+  - a table with the last value, week-over-week % and year-over-year % change.
 
 ## Setup
 
@@ -43,19 +48,19 @@ The key is sent only as an HTTP header, never in the URL, and it is never logged
 ## Usage
 
 ```powershell
-# Load history (weekly data in this data group starts on 2024-06-28)
-uv run tr-banking backfill --start 2024-06-28
+# Load history (BDDK goes back to 2014-01-03; EVDS data simply starts on 2024-06-28)
+uv run tr-banking backfill --start 2014-01-03
 
-# Fetch the latest 8 weeks (safe to run repeatedly, e.g. daily or weekly)
+# Fetch the latest 8 weeks from all sources (safe to run repeatedly)
 uv run tr-banking fetch
-uv run tr-banking fetch --weeks 4
+uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk
 
 # Open the dashboard
 uv run streamlit run src/tr_banking/app/dashboard.py
 ```
 
-Add `-v` for debug logging (`uv run tr-banking -v fetch`). The CLI exits with code 1 on API or
-data errors, so a scheduler can detect failures.
+Add `-v` for debug logging (`uv run tr-banking -v fetch`). If one source fails, the others are
+still loaded. The CLI then exits with code 1, so a scheduler can detect the failure.
 
 New data is published by the CBRT on Thursdays at 14:30 (Istanbul time), for the week ending
 the previous Friday.
@@ -109,6 +114,33 @@ uv run ruff format .
   archived on 2025-01-31 and use a different methodology. They are not merged with the current
   series, because joining them would hide a break in the data.
 - **Values are nominal.** Inflation, and the TRY value of FX loans, drive much of the growth.
+
+- **BDDK weekly bulletin** ([bddk.org.tr/BultenHaftalik](https://www.bddk.org.tr/BultenHaftalik)),
+  table *Krediler*, whole sector.
+  - Weekly (Friday) values in million TRY, TRY + FX, from 2014-01-03.
+  - Codes have the form `<row id>:<bank group>:<currency>:<column>`.
+
+| Code | Series |
+|---|---|
+| `1.0.1:10001:TRY:3` | Total loans |
+| `1.0.2:10001:TRY:3` | Consumer loans (total, incl. credit cards) |
+| `1.0.4:10001:TRY:3` | Housing loans |
+| `1.0.5:10001:TRY:3` | Auto loans |
+| `1.0.6:10001:TRY:3` | General purpose loans |
+| `1.0.8:10001:TRY:3` | Individual credit cards |
+| `1.0.12:10001:TRY:3` | Commercial and other loans |
+
+- **How BDDK data is fetched:**
+  - BDDK has no official API. The client calls the JSON endpoint behind the bulletin's charts,
+    one request per series, spaced 1 second apart.
+  - Bank-group breakdowns (state / domestic private / foreign, which add up to the sector) are
+    config-only additions: change the `10001` group code.
+  - `bddk.org.tr` does not send its intermediate TLS certificate. The client verifies against
+    the operating system's certificate store via
+    [truststore](https://pypi.org/project/truststore/), never by disabling verification.
+- **EVDS and BDDK agree closely:** within about 0.3% on common series. Their bank coverage
+  differs slightly, and BDDK *commercial and other loans* is broader than EVDS *commercial
+  loans*.
 - **EVDS3 API notes:**
   - Base URL: `https://evds3.tcmb.gov.tr/igmevdsms-dis/`.
   - Parameters are appended to the path without `?`, e.g. `series=A-B&startDate=DD-MM-YYYY&endDate=...&type=json`.
@@ -123,17 +155,19 @@ src/tr_banking/
   settings.py              env/.env settings (pydantic-settings)
   config.py                series.yaml loading and validation
   sources/evds.py          EVDS3 client and response parser
+  sources/bddk.py          BDDK weekly bulletin client and parser
+  sources/common.py        shared HTTP retries and raw-response saving
   db/schema.sql            series + observations tables
   db/repository.py         the only code that knows SQL
   pipeline.py, cli.py      fetch/backfill
   app/                     Streamlit dashboard and metrics
-tests/                     pytest suite with a real EVDS response fixture
+tests/                     pytest suite with real EVDS and BDDK response fixtures
 ```
 
 ## Roadmap
 
 1. ~~Credit market from EVDS~~ ✔
-2. BDDK weekly bulletin as a second credit source
+2. ~~BDDK weekly bulletin as a second credit source~~ ✔ (bank-group breakdown next)
 3. Card spending from BKM monthly statistics
 4. Bank loan/deposit rates and campaigns (daily scraping)
 5. Weekly AI-generated market summary combining all modules

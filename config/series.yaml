@@ -1,4 +1,5 @@
 # Series tracked by the dashboard. Adding a series = adding an entry here; no code change.
+# Sources below: EVDS (TCMB), then BDDK weekly bulletin.
 #
 # Allowed values (validated in src/tr_banking/config.py):
 #   source:    evds | bddk | bkm | bank_site
@@ -63,5 +64,79 @@ series:
     name_tr: Ticari krediler
     name_en: Commercial loans
     unit: thousand TRY
+    frequency: weekly
+    module: credit
+
+# ---------------------------------------------------------------------------------------------
+# BDDK weekly bulletin (https://www.bddk.org.tr/BultenHaftalik), table 1 "Krediler".
+# Verified on 2026-09-24 from the bulletin page (row ids, bank groups) and its JSON endpoint.
+# code = <row id>:<bank group (tarafKodu)>:<currency>:<column>
+#   bank groups: 10001 Sektor, 10002 Mevduat, 10003 Kalkinma ve Yatirim, 10004 Katilim,
+#                10005 Kamu, 10006 Yabanci, 10007 Yerli Ozel (Kamu+Yabanci+Yerli Ozel = Sektor)
+#   currency: TRY | USD; column: 1 = TP (TL), 2 = YP (FX), 3 = Toplam
+# Weekly (Friday), million TRY, data starts 2014-01-03.
+# Note: BDDK "Tuketici Kredileri" (row 1.0.3) excludes credit cards; row 1.0.2 includes them
+# and is the counterpart of EVDS TP.HPBITABLO6.2.
+
+  # 1 Toplam Krediler (2+10)
+  - source: bddk
+    code: "1.0.1:10001:TRY:3"
+    name_tr: Toplam krediler
+    name_en: Total loans
+    unit: million TRY
+    frequency: weekly
+    module: credit
+
+  # 2 Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)
+  - source: bddk
+    code: "1.0.2:10001:TRY:3"
+    name_tr: Tüketici kredileri (toplam)
+    name_en: Consumer loans (total)
+    unit: million TRY
+    frequency: weekly
+    module: credit
+
+  # 4 a) Konut
+  - source: bddk
+    code: "1.0.4:10001:TRY:3"
+    name_tr: Konut kredileri
+    name_en: Housing loans
+    unit: million TRY
+    frequency: weekly
+    module: credit
+
+  # 5 b) Taşıt
+  - source: bddk
+    code: "1.0.5:10001:TRY:3"
+    name_tr: Taşıt kredileri
+    name_en: Auto loans
+    unit: million TRY
+    frequency: weekly
+    module: credit
+
+  # 6 c) İhtiyaç
+  - source: bddk
+    code: "1.0.6:10001:TRY:3"
+    name_tr: İhtiyaç kredileri
+    name_en: General purpose loans
+    unit: million TRY
+    frequency: weekly
+    module: credit
+
+  # 7 Bireysel Kredi Kartları (8+9)
+  - source: bddk
+    code: "1.0.8:10001:TRY:3"
+    name_tr: Bireysel kredi kartları
+    name_en: Individual credit cards
+    unit: million TRY
+    frequency: weekly
+    module: credit
+
+  # 10 Ticari ve Diğer Krediler (broader than EVDS "Ticari Krediler" TP.HPBITABLO6.20)
+  - source: bddk
+    code: "1.0.12:10001:TRY:3"
+    name_tr: Ticari ve diğer krediler
+    name_en: Commercial and other loans
+    unit: million TRY
     frequency: weekly
     module: credit

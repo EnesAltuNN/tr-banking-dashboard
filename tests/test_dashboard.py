@@ -11,11 +11,14 @@ from tr_banking import settings as settings_module
 from tr_banking.config import load_series_config
 from tr_banking.db.repository import Repository
 from tr_banking.settings import PROJECT_ROOT, Settings
+from tr_banking.sources.bddk import parse_bddk_response
 from tr_banking.sources.evds import parse_evds_response
 
 DASHBOARD = PROJECT_ROOT / "src" / "tr_banking" / "app" / "dashboard.py"
-FIXTURE = Path(__file__).parent / "fixtures" / "evds_hpbitablo6_2024.json"
-SPECS = load_series_config(PROJECT_ROOT / "config" / "series.yaml").for_source("evds")
+FIXTURES = Path(__file__).parent / "fixtures"
+CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
+SPECS = CONFIG.for_source("evds")
+BDDK_SPECS = CONFIG.for_source("bddk")
 
 
 @pytest.fixture
@@ -34,12 +37,15 @@ def run_dashboard() -> AppTest:
 
 
 def populated_db(path: Path) -> Path:
-    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    evds = json.loads((FIXTURES / "evds_hpbitablo6_2024.json").read_text(encoding="utf-8"))
+    bddk = json.loads((FIXTURES / "bddk_konut_2024.json").read_text(encoding="utf-8"))
     with Repository(path) as repo:
         repo.init_schema()
-        for spec in SPECS:
+        for spec in SPECS + BDDK_SPECS:
             repo.upsert_series(spec)
-        repo.upsert_observations("evds", parse_evds_response(payload, [s.code for s in SPECS]))
+        repo.upsert_observations("evds", parse_evds_response(evds, [s.code for s in SPECS]))
+        for spec in BDDK_SPECS:  # the housing fixture stands in for every BDDK series
+            repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
     return path
 
 
@@ -72,3 +78,16 @@ def test_empty_selection_shows_hint(use_db: Callable, tmp_path: Path) -> None:
 
     assert not app.exception
     assert "Select at least one series" in app.info[0].value
+
+
+def test_source_picker_switches_to_bddk(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+
+    app.radio[0].set_value("bddk").run()
+
+    assert not app.exception
+    table = app.dataframe[0].value
+    assert table["Series"].tolist() == [spec.name_en for spec in BDDK_SPECS]
+    assert table["Last value"].iloc[0] == pytest.approx(448.6)  # million TRY -> billion TRY
+    assert len(app.get("vega_lite_chart")) == len(BDDK_SPECS)

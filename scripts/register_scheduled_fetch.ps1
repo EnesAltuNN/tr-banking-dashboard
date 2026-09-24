@@ -26,7 +26,7 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatt
 
 # No -User: runs as the current user while logged on, so no admin rights or stored password.
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
-    -Settings $settings -Description "Fetch weekly EVDS loan data into tr-banking-dashboard" `
+    -Settings $settings -Description "Fetch weekly EVDS and BDDK loan data into tr-banking-dashboard" `
     -Force | Out-Null
 
 Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo |

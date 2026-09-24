@@ -73,4 +73,5 @@ def test_pct_change_without_valid_base_is_nan(previous: float | None) -> None:
 
 def test_display_unit() -> None:
     assert display_unit("thousand TRY") == (1e-6, "billion TRY")
+    assert display_unit("million TRY") == (1e-3, "billion TRY")
     assert display_unit("%") == (1.0, "%")

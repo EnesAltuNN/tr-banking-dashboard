@@ -21,7 +21,7 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
 
 | Module | Source | Frequency | `module` value | Status |
 |---|---|---|---|---|
-| 1. Credit market | TCMB EVDS3 (+ BDDK weekly bulletin later) | weekly | `credit` | EVDS done |
+| 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done |
 | 2. Card spending | BKM statistics, Excel parsing | monthly | `cards` | planned |
 | 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | planned |
 
@@ -41,8 +41,14 @@ pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_bank
 
 - `settings.py`: pydantic-settings from env vars / `.env`; `EVDS_API_KEY` is optional there
   (the dashboard does not need it) and is checked by the fetch pipeline.
-- `cli.py`: `tr-banking fetch [--weeks N]`, `tr-banking backfill --start YYYY-MM-DD [--end]`.
-  Expected failures log one line and exit 1.
+- `cli.py`:
+  - `tr-banking fetch [--weeks N] [--source evds|bddk]`
+  - `tr-banking backfill --start YYYY-MM-DD [--end] [--source ...]`
+- `pipeline.run_update` runs each source independently. A failing source is logged and the
+  others still load; the CLI then exits 1.
+- `sources/common.py` holds the shared retry logic (transient 429/5xx and network errors only)
+  and raw-response saving.
+- Every client implements `ObservationClient.fetch_observations(codes, start, end)`.
 
 ## Data model
 
@@ -79,6 +85,28 @@ pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_bank
 - New weekly data appears on Thursdays around 14:30 Istanbul time.
 - Never guess series codes: discover them through the metadata endpoints and show the official
   name, frequency and unit before using them.
+
+## BDDK weekly bulletin facts (verified 2026-09-24)
+
+- There is no official API. The client uses the endpoint behind the "advanced" page's charts:
+  - `POST https://www.bddk.org.tr/BultenHaftalik/tr/Gelismis/KiyaslamaJsonGetir`
+  - Form fields: `dil=tr`, `baslangicTarihi`/`bitisTarihi` (`DD.MM.YYYY`), `id` (row, e.g.
+    `1.0.4`), `parabirimi` (`TRY`|`USD`), `sutun` (1 TL, 2 FX, 3 total), `tarafKodu` (bank group).
+  - No token or cookie is needed.
+  - Response: `{"Baslik", "XEkseni": ["D.MM.YYYY"...], "YEkseni": [numbers]}`.
+  - One request returns the full range; data starts 2014-01-03.
+- An unknown row or bank group returns HTTP 200 with **empty lists**, so the parser treats an
+  empty series as an error.
+- The home-page variant `tr/Home/KiyaslamaJsonGetir` caps results at 13 weeks; don't use it.
+- Series code in config: `<row>:<group>:<currency>:<column>`.
+  - Bank groups: 10001 sector, 10002 deposit, 10003 development & investment, 10004
+    participation, 10005 state, 10006 foreign, 10007 domestic private.
+  - State + foreign + domestic private = sector (checked).
+- Rows come from the bulletin table *Krediler* (tabloId 1 on the page). Row 1.0.3 (consumer
+  loans) excludes credit cards; 1.0.2 includes them.
+- `bddk.org.tr` sends an incomplete TLS chain. Use `truststore` (OS certificate store); never
+  `verify=False`.
+- It is a public website, not an API: keep the 1 s delay between requests.
 
 ## Coding conventions
 

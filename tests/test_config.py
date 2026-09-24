@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from tr_banking.config import SeriesConfig, load_series_config
 from tr_banking.settings import PROJECT_ROOT
+from tr_banking.sources.bddk import parse_series_code
 
 VALID_SPEC = {
     "source": "evds",
@@ -30,6 +31,14 @@ def test_project_series_yaml_loads() -> None:
         "TP.HPBITABLO6.20",
     ]
     assert all(spec.module == "credit" for spec in config.series)
+
+
+def test_project_bddk_series_have_valid_codes() -> None:
+    specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").for_source("bddk")
+
+    assert len(specs) == 7
+    assert {parse_series_code(spec.code).group for spec in specs} == {"10001"}
+    assert {spec.unit for spec in specs} == {"million TRY"}
 
 
 def test_turkish_characters_survive_loading(tmp_path: Path) -> None:

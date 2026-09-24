@@ -5,9 +5,9 @@ import logging
 from collections.abc import Sequence
 from datetime import date, timedelta
 
-from tr_banking.pipeline import run_evds_update
+from tr_banking.pipeline import IMPLEMENTED_SOURCES, UpdateError, run_update
 from tr_banking.settings import get_settings
-from tr_banking.sources.evds import EvdsApiError, EvdsResponseError
+from tr_banking.sources.common import SourceApiError
 
 logger = logging.getLogger("tr_banking.cli")
 
@@ -28,9 +28,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if start > end:
             parser.error(f"--start {start} is after --end {end}")
 
+    sources = (args.source,) if args.source else IMPLEMENTED_SOURCES
     try:
-        run_evds_update(get_settings(), start, end)
-    except (EvdsApiError, EvdsResponseError, ValueError) as exc:
+        run_update(get_settings(), start, end, sources)
+    except (UpdateError, SourceApiError, ValueError) as exc:
         # Expected failures: one clear line (full traceback with -v), non-zero exit code.
         logger.error("%s failed: %s", args.command, exc, exc_info=args.verbose)
         return 1
@@ -42,7 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    fetch = commands.add_parser("fetch", help="fetch the latest weeks")
+    # Options shared by both commands.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--source", choices=IMPLEMENTED_SOURCES, help="only this source (default: all)"
+    )
+
+    fetch = commands.add_parser("fetch", parents=[common], help="fetch the latest weeks")
     fetch.add_argument(
         "--weeks",
         type=positive_int,
@@ -50,7 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"how many weeks back to fetch (default: {DEFAULT_FETCH_WEEKS})",
     )
 
-    backfill = commands.add_parser("backfill", help="load history from a start date")
+    backfill = commands.add_parser(
+        "backfill", parents=[common], help="load history from a start date"
+    )
     backfill.add_argument("--start", type=iso_date, required=True, help="YYYY-MM-DD")
     backfill.add_argument("--end", type=iso_date, help="YYYY-MM-DD (default: today)")
     return parser
