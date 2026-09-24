@@ -123,6 +123,10 @@ pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_bank
   - Databases are `:memory:` or `tmp_path`.
 - Dashboard charts use one series per chart, with each series on its own y-scale. Never use a
   dual axis.
+- The dashboard is bilingual (TR default, EN). Every UI text and all number/date formatting
+  live in `app/i18n.py`, with both languages always filled in (a test enforces this).
+  - Turkish formats: `18.445,2` and `-1,1%`. English formats: `18,445.2` and `-1.1%`.
+  - Up/down colors always come with a +/- sign.
 
 ## Commands
 

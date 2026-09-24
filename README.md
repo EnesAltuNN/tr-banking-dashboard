@@ -103,13 +103,18 @@ uv run ruff format .
 
 | Code | Series |
 |---|---|
-| `TP.HPBITABLO6.2` | Consumer loans (total) |
+| `TP.HPBITABLO6.2` | Consumer loans (total, incl. individual credit cards) |
 | `TP.HPBITABLO6.3` | Housing loans |
 | `TP.HPBITABLO6.7` | Auto loans |
 | `TP.HPBITABLO6.11` | General purpose loans (ihtiyaç) |
 | `TP.HPBITABLO6.16` | Individual credit cards |
 | `TP.HPBITABLO6.20` | Commercial loans |
 
+- **Consumer loans (total) include individual credit cards.**
+  - In the CBRT table, `TP.HPBITABLO6.2` (1.1 Tüketici Kredileri) is the sum of housing, auto,
+    general purpose *and* individual credit cards (1.1.1 to 1.1.4).
+  - Those four rows add up to the total exactly. Do not add credit cards on top of it.
+  - BDDK's matching row is `1.0.2`; BDDK row 1.0.3 (*Tüketici Kredileri*) excludes cards.
 - **History starts 2024-06-28.** The older weekly loan groups (`bie_kredi`, `bie_tukkre`) were
   archived on 2025-01-31 and use a different methodology. They are not merged with the current
   series, because joining them would hide a break in the data.

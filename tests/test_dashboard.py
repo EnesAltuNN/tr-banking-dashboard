@@ -19,6 +19,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
 SPECS = CONFIG.for_source("evds")
 BDDK_SPECS = CONFIG.for_source("bddk")
+TR_COLUMNS = ["Seri", "Tarih", "Son değer (milyar TL)", "Haftalık %", "Yıllık %"]
 
 
 @pytest.fixture
@@ -55,7 +56,7 @@ def test_empty_database_shows_instructions(use_db: Callable, tmp_path: Path) -> 
     app = run_dashboard()
 
     assert not app.exception
-    assert "No data yet" in app.info[0].value
+    assert "Henüz veri yok" in app.info[0].value
 
 
 def test_populated_database_renders_table_and_charts(use_db: Callable, tmp_path: Path) -> None:
@@ -65,8 +66,10 @@ def test_populated_database_renders_table_and_charts(use_db: Callable, tmp_path:
 
     assert not app.exception
     table = app.dataframe[0].value
-    assert table["Series"].tolist() == [spec.name_en for spec in SPECS]
-    assert table["Last value"].iloc[0] == pytest.approx(3223.3)  # thousand TRY -> billion TRY
+    assert list(table.columns) == TR_COLUMNS
+    assert table["Seri"].tolist() == [spec.name_tr for spec in SPECS]
+    # thousand TRY -> billion TRY
+    assert table["Son değer (milyar TL)"].iloc[0] == pytest.approx(3223.3)
     assert len(app.get("vega_lite_chart")) == len(SPECS)
 
 
@@ -77,17 +80,57 @@ def test_empty_selection_shows_hint(use_db: Callable, tmp_path: Path) -> None:
     app.multiselect[0].set_value([]).run()
 
     assert not app.exception
-    assert "Select at least one series" in app.info[0].value
+    assert "En az bir seri seçin" in app.info[0].value
 
 
 def test_source_picker_switches_to_bddk(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
 
-    app.radio[0].set_value("bddk").run()
+    app.radio(key="source").set_value("bddk").run()
 
     assert not app.exception
     table = app.dataframe[0].value
-    assert table["Series"].tolist() == [spec.name_en for spec in BDDK_SPECS]
-    assert table["Last value"].iloc[0] == pytest.approx(448.6)  # million TRY -> billion TRY
+    assert table["Seri"].tolist() == [spec.name_tr for spec in BDDK_SPECS]
+    # million TRY -> billion TRY
+    assert table["Son değer (milyar TL)"].iloc[0] == pytest.approx(448.6)
     assert len(app.get("vega_lite_chart")) == len(BDDK_SPECS)
+
+
+def test_english_switch_translates_table(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert not app.exception
+    table = app.dataframe[0].value
+    assert list(table.columns) == [
+        "Series",
+        "Date",
+        "Last value (billion TRY)",
+        "Weekly %",
+        "Yearly %",
+    ]
+    assert table["Series"].tolist() == [spec.name_en for spec in SPECS]
+    assert app.title[0].value == "Turkish Banking Market Dashboard"
+
+
+def test_language_switch_keeps_selected_source(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+    app.radio(key="source").set_value("bddk").run()
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert app.radio(key="source").value == "bddk"
+    assert app.dataframe[0].value["Series"].tolist() == [spec.name_en for spec in BDDK_SPECS]
+
+
+def test_turkish_charts_use_turkish_number_format(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    spec = json.loads(app.get("vega_lite_chart")[0].proto.spec)
+    assert spec["config"]["locale"]["number"]["decimal"] == ","
