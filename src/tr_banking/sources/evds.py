@@ -13,6 +13,8 @@ import httpx
 import pandas as pd
 from pydantic import SecretStr
 
+from tr_banking.sources import OBSERVATION_COLUMNS
+
 logger = logging.getLogger(__name__)
 
 DATE_COLUMN = "Tarih"
@@ -21,7 +23,6 @@ META_COLUMNS = frozenset({DATE_COLUMN, "YEARWEEK", "UNIXTIME"})
 # Daily and weekly series use DD-MM-YYYY (monthly series use another format; not supported yet).
 # Request parameters use the same format.
 DATE_FORMAT = "%d-%m-%Y"
-OBSERVATION_COLUMNS = ["code", "date", "value"]
 
 # Codes are embedded in the URL path, so only allow characters EVDS codes actually use.
 SERIES_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_.]+$")
