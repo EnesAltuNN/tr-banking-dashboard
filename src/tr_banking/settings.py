@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     )
 
     # SecretStr masks the value in repr/str, so it cannot leak through logs or tracebacks.
-    evds_api_key: SecretStr
+    # Optional here because only fetching needs it; the dashboard only reads the database.
+    evds_api_key: SecretStr | None = None
     evds_base_url: str = "https://evds3.tcmb.gov.tr/igmevdsms-dis/"
     db_path: Path = PROJECT_ROOT / "data" / "tr_banking.db"
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"

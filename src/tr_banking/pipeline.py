@@ -30,6 +30,8 @@ def load_evds(
 
 def run_evds_update(settings: Settings, start: date, end: date) -> int:
     """Open the real client and database from settings and load EVDS data for [start, end]."""
+    if settings.evds_api_key is None:
+        raise ValueError("EVDS_API_KEY is not set (add it to .env or the environment)")
     specs = load_series_config(settings.series_config_path).for_source("evds")
     logger.info("updating %d EVDS series for %s..%s", len(specs), start, end)
     with (

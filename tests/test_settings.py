@@ -1,5 +1,6 @@
+from pathlib import Path
+
 import pytest
-from pydantic import ValidationError
 
 from tr_banking.settings import PROJECT_ROOT, Settings
 
@@ -11,6 +12,7 @@ def test_api_key_read_from_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
 
     settings = Settings(_env_file=None)
 
+    assert settings.evds_api_key is not None
     assert settings.evds_api_key.get_secret_value() == "fake-key-123"
 
 
@@ -23,11 +25,16 @@ def test_api_key_is_masked_in_repr(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "fake-key-123" not in str(settings.evds_api_key)
 
 
-def test_missing_api_key_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_key_is_optional_for_read_only_use(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EVDS_API_KEY", raising=False)
 
-    with pytest.raises(ValidationError, match="evds_api_key"):
-        Settings(_env_file=None)
+    assert Settings(_env_file=None).evds_api_key is None
+
+
+def test_db_path_can_be_overridden(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "other.db"))
+
+    assert Settings(_env_file=None).db_path == tmp_path / "other.db"
 
 
 def test_default_paths_are_under_project_root(monkeypatch: pytest.MonkeyPatch) -> None:

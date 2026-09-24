@@ -8,8 +8,8 @@ from pydantic import SecretStr
 
 from tr_banking.config import load_series_config
 from tr_banking.db.repository import Repository
-from tr_banking.pipeline import load_evds
-from tr_banking.settings import PROJECT_ROOT
+from tr_banking.pipeline import load_evds, run_evds_update
+from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.evds import EvdsClient, EvdsResponseError
 
 FIXTURE_BYTES = (Path(__file__).parent / "fixtures" / "evds_hpbitablo6_2024.json").read_bytes()
@@ -52,6 +52,15 @@ def test_load_evds_writes_nothing_when_response_is_bad(repo: Repository, tmp_pat
         load_evds(repo, client, SPECS, START, END)
 
     assert repo.get_observations().empty
+
+
+def test_update_without_api_key_fails_before_touching_anything(tmp_path: Path) -> None:
+    settings = Settings(_env_file=None, evds_api_key=None, db_path=tmp_path / "x.db")
+
+    with pytest.raises(ValueError, match="EVDS_API_KEY is not set"):
+        run_evds_update(settings, START, END)
+
+    assert not (tmp_path / "x.db").exists()
 
 
 def test_load_evds_requires_series(repo: Repository, tmp_path: Path) -> None:
