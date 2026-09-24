@@ -2,6 +2,7 @@
 name = "tr-banking"
 version = "0.1.0"
 description = "Turkish banking market dashboard: credit, card spending and bank rates in one place."
+readme = "README.md"
 authors = [
     { name = "Enes", email = "altunenes000@gmail.com" }
 ]
