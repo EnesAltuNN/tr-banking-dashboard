@@ -1,0 +1,67 @@
+# Series tracked by the dashboard. Adding a series = adding an entry here; no code change.
+#
+# Allowed values (validated in src/tr_banking/config.py):
+#   source:    evds | bddk | bkm | bank_site
+#   frequency: daily | weekly | monthly
+#   module:    credit | cards | rates
+#
+# EVDS codes below were verified on 2026-09-24 via the EVDS3 metadata endpoints:
+#   category 4502 "Para ve Banka Istatistikleri (Haftalik)"
+#   -> datagroup bie_hpbitablo6 "Bankacilik Sektoru Secilmis Kredi Buyuklukleri (Yurt Ici Subeler)"
+#   Weekly (Friday), thousand TRY, TRY + FX combined, data starts 2024-06-28.
+# The official EVDS label of each series is noted in a comment above it.
+
+series:
+  # 1.1.TÜKETİCİ KREDİLERİ / 1.1.CONSUMER LOANS
+  - source: evds
+    code: TP.HPBITABLO6.2
+    name_tr: Tüketici kredileri (toplam)
+    name_en: Consumer loans (total)
+    unit: thousand TRY
+    frequency: weekly
+    module: credit
+
+  # 1.1.1.Konut (TL + YP) / 1.1.1.Housing (TRY + FX)
+  - source: evds
+    code: TP.HPBITABLO6.3
+    name_tr: Konut kredileri
+    name_en: Housing loans
+    unit: thousand TRY
+    frequency: weekly
+    module: credit
+
+  # 1.1.2.Taşıt (TL + YP) / 1.1.2.Vehicle (TRY + FX)
+  - source: evds
+    code: TP.HPBITABLO6.7
+    name_tr: Taşıt kredileri
+    name_en: Auto loans
+    unit: thousand TRY
+    frequency: weekly
+    module: credit
+
+  # 1.1.3.İhtiyaç (TL + YP) / 1.1.3.Other (TRY + FX)
+  - source: evds
+    code: TP.HPBITABLO6.11
+    name_tr: İhtiyaç kredileri
+    name_en: General purpose loans
+    unit: thousand TRY
+    frequency: weekly
+    module: credit
+
+  # 1.1.4.Bireysel Kredi Kartları / 1.1.4.Individual Credit Cards
+  - source: evds
+    code: TP.HPBITABLO6.16
+    name_tr: Bireysel kredi kartları
+    name_en: Individual credit cards
+    unit: thousand TRY
+    frequency: weekly
+    module: credit
+
+  # 1.2.1.Ticari Krediler / 1.2.1.Commercial Loans (to non-financial corporations)
+  - source: evds
+    code: TP.HPBITABLO6.20
+    name_tr: Ticari krediler
+    name_en: Commercial loans
+    unit: thousand TRY
+    frequency: weekly
+    module: credit
