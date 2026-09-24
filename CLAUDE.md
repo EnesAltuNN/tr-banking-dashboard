@@ -16,13 +16,15 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
   suggest a commit point, then stop and wait for approval before the next step.
 - The user is on Windows: give PowerShell commands, not bash.
 - Never print, log or read the contents of `.env`.
+- Never ask for passwords, API keys or connection strings in chat. Tell the user where to
+  enter them (`.env`, GitHub Secrets, Streamlit secrets) and let them do it.
 
 ## Roadmap (3 modules)
 
 | Module | Source | Frequency | `module` value | Status |
 |---|---|---|---|---|
 | 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done |
-| 2. Card spending | BKM statistics, Excel parsing | monthly | `cards` | planned |
+| 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | on hold, see below |
 | 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | planned |
 
 New modules must plug into the existing tables; do not rewrite the schema for them.
@@ -36,7 +38,7 @@ sources/<source>.py -> DataFrame[code, date, value]  (OBSERVATION_COLUMNS, sourc
                           |
 pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_banking.db
                                                               |
-                                          app/dashboard.py + app/metrics.py (pure)
+                     app/dashboard.py + app/metrics.py (pure) + app/i18n.py (pure)
 ```
 
 - `settings.py`: pydantic-settings from env vars / `.env`; `EVDS_API_KEY` is optional there
@@ -64,6 +66,34 @@ pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_bank
   `app/metrics.py`.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
   addition, not a rewrite.
+
+## Pending decision: BKM card spending (module 2)
+
+Research is done (2026-09-24). **No code has been written.** The user put module 2 on hold and
+still has to confirm the series list below before implementation starts.
+
+- **Source page:** one page per month:
+  `https://bkm.com.tr/secilen-aya-ait-istatistikler/?filter_year=YYYY&filter_month=M&List=Listele`
+  (`robots.txt` allows it).
+- **The "Excel" download (`&xls=1`) is really an HTML table** with an `.xls` name, so parse the
+  HTML with the stdlib `html.parser`; no Excel library is needed.
+- **Coverage:** 2017-01 onward, with the same table layout every month. Publication lags about
+  1.5 to 2 months (on 2026-09-24 the latest month was 2026-07).
+- **Values:** amounts are in million TL, written in Turkish format (`2.450.238,01`). Card counts
+  are plain integers.
+- **Proposed series** (July 2026 values):
+  - Credit card shopping amount, domestic cards used domestically: 2,450,238 million TL.
+  - Debit card shopping amount, domestic cards used domestically: 418,421 million TL.
+  - Online card payments (internetten kartli odemeler), amount: 908,899 million TL.
+  - Foreign cards used domestically, shopping amount, credit + debit (a tourism signal):
+    128,787 million TL.
+  - Number of credit cards: 151.7 million.
+  - Number of debit cards: 223.2 million.
+- **Implementation plan:**
+  - Locate cells by row and column labels, not by position.
+  - Monthly metrics: month-over-month % and 12-month %.
+  - Add dashboard tabs per module.
+  - Backfill with one request per month, 1 s apart.
 
 ## EVDS3 facts (verified 2026-09-24)
 
@@ -135,8 +165,8 @@ uv sync                                               # install/update dependenc
 uv run pytest                                         # run tests
 uv run ruff check .                                   # lint
 uv run ruff format .                                  # format
-uv run tr-banking backfill --start 2024-06-28         # load history
-uv run tr-banking fetch                               # latest 8 weeks
+uv run tr-banking backfill --start 2014-01-03         # load history (all sources)
+uv run tr-banking fetch [--source evds|bddk]          # latest 8 weeks
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```

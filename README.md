@@ -7,7 +7,7 @@ AI-generated summary planned on top.
 | Module | Source | Frequency | Status |
 |---|---|---|---|
 | 1. Credit market | CBRT (TCMB) EVDS API and BDDK weekly bulletin | weekly | **done** |
-| 2. Card spending | BKM statistics (Excel) | monthly | planned |
+| 2. Card spending | BKM monthly statistics | monthly | researched, on hold |
 | 3. Bank loan/deposit rates and campaigns | bank websites (scraping) | daily | planned |
 
 ## What it does today
@@ -20,10 +20,11 @@ AI-generated summary planned on top.
 - Stores them in SQLite with idempotent upserts. Re-running a fetch never duplicates rows,
   and revised values replace old ones.
 - Saves every raw API response under `data/raw/` for debugging.
-- Streamlit dashboard:
+- Streamlit dashboard in Turkish or English (TR/EN switch, Turkish number formats):
   - a source picker, date range and series filters,
   - one line chart per series,
-  - a table with the last value, week-over-week % and year-over-year % change.
+  - a table with the last value, weekly % and yearly % change (rises green, falls red),
+  - a note that values are nominal TRY.
 
 ## Setup
 
@@ -93,6 +94,9 @@ uv run ruff format .
   unit, frequency and module. To track another series, add an entry there; no code changes.
 - **Settings** come from environment variables or `.env`: `EVDS_API_KEY` (needed only for
   fetching), plus the optional `DB_PATH` and `RAW_DIR`.
+- **Streamlit** settings live in [`.streamlit/config.toml`](.streamlit/config.toml). The
+  first-run email prompt and usage statistics are turned off for every machine that runs the
+  dashboard from the repo root.
 
 ## Data sources and notes
 
@@ -165,7 +169,11 @@ src/tr_banking/
   db/schema.sql            series + observations tables
   db/repository.py         the only code that knows SQL
   pipeline.py, cli.py      fetch/backfill
-  app/                     Streamlit dashboard and metrics
+  app/dashboard.py         Streamlit dashboard
+  app/metrics.py           last value, weekly/yearly % (pure functions)
+  app/i18n.py              TR/EN texts and number/date formatting (pure functions)
+scripts/                   Windows Task Scheduler scripts for the weekly fetch
+.streamlit/config.toml     Streamlit settings (no email prompt, no telemetry)
 tests/                     pytest suite with real EVDS and BDDK response fixtures
 ```
 
@@ -173,7 +181,7 @@ tests/                     pytest suite with real EVDS and BDDK response fixture
 
 1. ~~Credit market from EVDS~~ ✔
 2. ~~BDDK weekly bulletin as a second credit source~~ ✔ (bank-group breakdown next)
-3. Card spending from BKM monthly statistics
+3. Card spending from BKM monthly statistics (researched; series list pending)
 4. Bank loan/deposit rates and campaigns (daily scraping)
 5. Weekly AI-generated market summary combining all modules
 6. Move storage from SQLite to Postgres/Supabase (only `db/repository.py` changes)
