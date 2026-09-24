@@ -3,9 +3,8 @@
 import logging
 import math
 import re
-import time
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Self
 
@@ -14,6 +13,7 @@ import pandas as pd
 from pydantic import SecretStr
 
 from tr_banking.sources import OBSERVATION_COLUMNS
+from tr_banking.sources.common import SourceApiError, request_with_retries, save_raw_response
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,9 @@ DATE_FORMAT = "%d-%m-%Y"
 
 # Codes are embedded in the URL path, so only allow characters EVDS codes actually use.
 SERIES_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_.]+$")
-TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
-class EvdsApiError(RuntimeError):
+class EvdsApiError(SourceApiError):
     """EVDS could not be reached or answered with an error status."""
 
 
@@ -76,39 +75,24 @@ class EvdsClient:
     def fetch_observations(self, codes: Sequence[str], start: date, end: date) -> pd.DataFrame:
         url = build_series_url(self._base_url, codes, start, end)
         logger.info("EVDS: requesting %d series from %s to %s", len(codes), start, end)
-        response = self._get(url)
-        raw_path = self._save_raw(response.content, start, end)
+        response = request_with_retries(
+            self._http,
+            "GET",
+            url,
+            label="EVDS",
+            error_cls=EvdsApiError,
+            max_retries=self._max_retries,
+            retry_wait=self._retry_wait,
+            forbidden_hint=": check EVDS_API_KEY",
+        )
+        raw_path = save_raw_response(
+            self._raw_dir, response.content, f"{start:%Y%m%d}_{end:%Y%m%d}"
+        )
         try:
             payload = response.json()
         except ValueError as exc:
             raise EvdsResponseError(f"response is not valid JSON (see {raw_path})") from exc
         return parse_evds_response(payload, codes)
-
-    def _get(self, url: str) -> httpx.Response:
-        attempts = self._max_retries + 1
-        for attempt in range(1, attempts + 1):
-            try:
-                response = self._http.get(url)
-            except httpx.TransportError as exc:
-                problem = f"network error: {exc!r}"
-            else:
-                if response.status_code == httpx.codes.OK:
-                    return response
-                if response.status_code not in TRANSIENT_STATUS_CODES:
-                    raise EvdsApiError(_describe_error(response))
-                problem = f"HTTP {response.status_code}"
-            if attempt < attempts:
-                logger.warning("EVDS: attempt %d/%d failed (%s)", attempt, attempts, problem)
-                time.sleep(self._retry_wait * attempt)
-        raise EvdsApiError(f"EVDS request failed after {attempts} attempts: {problem}")
-
-    def _save_raw(self, content: bytes, start: date, end: date) -> Path:
-        self._raw_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-        path = self._raw_dir / f"{stamp}_{start:%Y%m%d}_{end:%Y%m%d}.json"
-        path.write_bytes(content)
-        logger.info("EVDS: raw response saved to %s", path)
-        return path
 
 
 def build_series_url(base_url: str, codes: Sequence[str], start: date, end: date) -> str:
@@ -126,15 +110,6 @@ def build_series_url(base_url: str, codes: Sequence[str], start: date, end: date
         "&type=json"
     )
     return f"{base_url.rstrip('/')}/{params}"
-
-
-def _describe_error(response: httpx.Response) -> str:
-    if response.is_redirect:
-        location = response.headers.get("location")
-        return f"EVDS redirected to {location!r}; the API URL may have changed"
-    if response.status_code == httpx.codes.FORBIDDEN:
-        return "EVDS returned 403 Forbidden: check EVDS_API_KEY"
-    return f"EVDS returned HTTP {response.status_code}: {response.text[:200]}"
 
 
 def evds_column_name(code: str) -> str:
