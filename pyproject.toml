@@ -27,6 +27,8 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Third-party agent skills are vendored as-is; our lint rules are not theirs.
+extend-exclude = [".agents", ".claude"]
 
 [tool.ruff.lint]
 # E/F: pycodestyle + pyflakes, I: import sorting, UP: modern syntax, B: bugbear, SIM: simplifications

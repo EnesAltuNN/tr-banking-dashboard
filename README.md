@@ -149,6 +149,13 @@ uv run ruff format .
 Postgres tests run only when `TEST_DATABASE_URL` points to a **disposable** Postgres server;
 CI provides one. Each test creates and drops its own schema. Never point it at Supabase.
 
+**CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull
+request.
+- It runs `uv sync --locked`, `ruff check`, `ruff format --check` and the full test suite.
+- The tests run against a throwaway Postgres 17 service container, so no Postgres test is
+  skipped there.
+- CI needs no secrets.
+
 ## Configuration
 
 - **Series** live in [`config/series.yaml`](config/series.yaml): code, Turkish/English name,
@@ -237,6 +244,7 @@ src/tr_banking/
   app/dashboard.py         Streamlit dashboard
   app/metrics.py           last value, weekly/yearly % (pure functions)
   app/i18n.py              TR/EN texts and number/date formatting (pure functions)
+.github/workflows/         CI (lint + tests on every push)
 scripts/                   Windows Task Scheduler scripts for the weekly fetch
 sql/                       one-off SQL to run by hand in Supabase (enable the reader role)
 .streamlit/config.toml     Streamlit settings (no email prompt, no telemetry)

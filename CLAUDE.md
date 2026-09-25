@@ -179,6 +179,11 @@ still has to confirm the series list below before implementation starts.
     every test.
   - Postgres tests need `TEST_DATABASE_URL` (a disposable server; CI provides one). Each test
     gets its own schema. Repository behavior tests run on both backends.
+- **CI** (`.github/workflows/ci.yml`):
+  - Runs on every push: `uv sync --locked`, ruff check/format and pytest, against a
+    `postgres:17` service container.
+  - It uses no secrets. Keep it that way; secrets belong only in the scheduled fetch workflow.
+  - `astral-sh/setup-uv` has no floating major tags since v8, so it is pinned to a full version.
 - Dashboard charts use one series per chart, with each series on its own y-scale. Never use a
   dual axis.
 - The dashboard is bilingual (TR default, EN). Every UI text and all number/date formatting
