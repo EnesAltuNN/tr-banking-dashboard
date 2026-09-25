@@ -56,6 +56,10 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - `tr-banking db migrate` (idempotent)
   - `tr-banking db check`: connection kind, migrations, RLS, row counts. It never logs the
     connection string.
+  - `tr-banking check-freshness [--source]`: exit 1 if a configured series has no data or data
+    older than `freshness.MAX_AGE_DAYS` for its frequency (weekly: 13 days).
+  - `tr-banking scan-raw`: exit 1 if any raw file (name or content) contains a configured
+    secret. The secrets checked are the EVDS key, the full `DATABASE_URL` and its password.
 - `pipeline.run_update` runs each source independently. A failing source is logged and the
   others still load; the CLI then exits 1.
 - `sources/common.py` holds the shared retry logic (transient 429/5xx and network errors only)
@@ -158,8 +162,12 @@ still has to confirm the series list below before implementation starts.
   - State + foreign + domestic private = sector (checked).
 - Rows come from the bulletin table *Krediler* (tabloId 1 on the page). Row 1.0.3 (consumer
   loans) excludes credit cards; 1.0.2 includes them.
-- `bddk.org.tr` sends an incomplete TLS chain. Use `truststore` (OS certificate store); never
-  `verify=False`.
+- `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV SSL CA
+  2018" is missing.
+  - `bddk_ssl_context()` trusts certifi plus the bundled public intermediate
+    (`sources/certs/`). It works on Windows and Linux CI. Never use `verify=False`.
+  - The leaf expires 2026-11-15. If the renewal changes the issuer, download the new
+    intermediate from the leaf's "CA Issuers" URL.
 - It is a public website, not an API: keep the 1 s delay between requests.
 
 ## Coding conventions
@@ -179,6 +187,16 @@ still has to confirm the series list below before implementation starts.
     every test.
   - Postgres tests need `TEST_DATABASE_URL` (a disposable server; CI provides one). Each test
     gets its own schema. Repository behavior tests run on both backends.
+- **Raw responses are public** (CI artifact of a public repo):
+  - Save only response bodies.
+  - Pass secrets as `redact=` to `save_raw_response` / `request_with_retries`.
+  - Never put secrets in file names.
+- **Scheduled fetch** (`.github/workflows/fetch.yml`):
+  - Runs Tue and Fri 04:00 UTC, plus `workflow_dispatch`.
+  - Secrets `EVDS_API_KEY` and `DATABASE_URL` (the write-capable `postgres.<ref>` session
+    pooler string) go only to the steps that need them.
+  - Steps: migrate → fetch → check-freshness → scan-raw → upload artifact (only if the scan
+    passed).
 - **CI** (`.github/workflows/ci.yml`):
   - Runs on every push: `uv sync --locked`, ruff check/format and pytest, against a
     `postgres:17` service container.
@@ -202,10 +220,13 @@ uv run tr-banking backfill --start 2014-01-03         # load history (all source
 uv run tr-banking fetch [--source evds|bddk]          # latest 8 weeks
 uv run tr-banking db migrate                          # create/upgrade schema (SQLite or Postgres)
 uv run tr-banking db check                            # connection, migrations, RLS, row counts
+uv run tr-banking check-freshness                     # exit 1 if data is stale
+uv run tr-banking scan-raw                            # exit 1 if a raw file holds a secret
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```
 
-The scheduled task ("tr-banking weekly fetch", Thursdays 15:00) runs `scripts\scheduled_fetch.ps1`,
+The GitHub Actions workflow is the main scheduler. The optional local Windows task ("tr-banking
+weekly fetch", Thursdays 15:00) runs `scripts\scheduled_fetch.ps1`,
 which logs to `data\logs\fetch.log`. Keep `.ps1` files pure ASCII: Windows PowerShell 5.1 reads
 BOM-less files as ANSI.

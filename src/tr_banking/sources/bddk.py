@@ -15,12 +15,13 @@ import ssl
 import time
 from collections.abc import Sequence
 from datetime import date, datetime
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, NamedTuple, Self
 
+import certifi
 import httpx
 import pandas as pd
-import truststore
 
 from tr_banking.sources import OBSERVATION_COLUMNS
 from tr_banking.sources.common import SourceApiError, request_with_retries, save_raw_response
@@ -33,6 +34,9 @@ SERIES_ENDPOINT = "tr/Gelismis/KiyaslamaJsonGetir"
 DATE_FORMAT = "%d.%m.%Y"
 SERIES_CODE_PATTERN = re.compile(
     r"^(?P<row>\d+(?:\.\d+)+):(?P<group>\d{5}):(?P<currency>TRY|USD):(?P<column>[123])$"
+)
+BDDK_INTERMEDIATE_CERT = files("tr_banking.sources").joinpath(
+    "certs/globalsign_rsa_ov_ssl_ca_2018.pem"
 )
 
 
@@ -49,6 +53,20 @@ class BddkSeriesKey(NamedTuple):
     group: str  # bank group (tarafKodu), e.g. "10001" = sector
     currency: str  # TRY or USD
     column: str  # 1 = TL, 2 = FX, 3 = total
+
+
+def bddk_ssl_context() -> ssl.SSLContext:
+    """certifi's root certificates plus the one intermediate BDDK forgets to send.
+
+    www.bddk.org.tr serves only its own certificate. Browsers download the missing
+    intermediate by themselves; OpenSSL (Python on Linux, e.g. GitHub Actions) does not.
+    Trusting that public intermediate lets normal verification succeed on every OS.
+    Verification is never turned off. If BDDK renews with another issuer, requests fail with
+    a certificate error: fetch the new intermediate (see the leaf's "CA Issuers" URL).
+    """
+    context = ssl.create_default_context(cafile=certifi.where())
+    context.load_verify_locations(cadata=BDDK_INTERMEDIATE_CERT.read_text(encoding="ascii"))
+    return context
 
 
 def parse_series_code(code: str) -> BddkSeriesKey:
@@ -76,13 +94,10 @@ class BddkClient:
         self._max_retries = max_retries
         self._retry_wait = retry_wait
         self._request_interval = request_interval
-        # bddk.org.tr does not send its intermediate certificate, so Python's bundled CA list
-        # cannot verify it. truststore verifies against the OS certificate store instead, which
-        # (like a browser) can complete the chain. Verification is never turned off.
         self._http = httpx.Client(
             base_url=base_url,
             timeout=timeout,
-            verify=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
+            verify=bddk_ssl_context(),
             follow_redirects=False,
             transport=transport,
         )

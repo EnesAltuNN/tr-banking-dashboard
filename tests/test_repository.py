@@ -185,3 +185,16 @@ def test_data_persists_in_file_database(tmp_path: Path) -> None:
     with SqliteRepository(db_path) as reopened:
         assert len(reopened.get_observations()) == 2
         assert reopened.last_fetched_at() == FIRST_FETCH
+
+
+def test_latest_dates(repo: Repository) -> None:
+    repo.upsert_series(HOUSING)
+    repo.upsert_series(AUTO)
+    repo.upsert_observations("evds", two_weeks())
+
+    latest = repo.latest_dates()
+
+    assert latest["code"].tolist() == [HOUSING.code, AUTO.code]
+    assert latest["frequency"].tolist() == ["weekly", "weekly"]
+    assert latest["latest_date"].iloc[0] == pd.Timestamp("2026-09-11")
+    assert pd.isna(latest["latest_date"].iloc[1])  # no data yet

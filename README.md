@@ -63,13 +63,57 @@ uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk
 uv run streamlit run src/tr_banking/app/dashboard.py
 ```
 
+Health checks (used by the scheduled workflow):
+
+```powershell
+uv run tr-banking check-freshness   # exit 1 if a series has no or too old data
+uv run tr-banking scan-raw          # exit 1 if a raw response file contains a secret
+```
+
 Add `-v` for debug logging (`uv run tr-banking -v fetch`). If one source fails, the others are
 still loaded. The CLI then exits with code 1, so a scheduler can detect the failure.
 
 New data is published by the CBRT on Thursdays at 14:30 (Istanbul time), for the week ending
 the previous Friday.
 
-### Weekly automatic fetch (Windows)
+### Automatic fetch (GitHub Actions)
+
+[`.github/workflows/fetch.yml`](.github/workflows/fetch.yml) runs `db migrate`, `fetch`,
+`check-freshness` and `scan-raw` against Supabase.
+
+- **When:** every **Tuesday and Friday at 04:00 UTC** (07:00 Istanbul; Türkiye is UTC+3 all
+  year). CBRT and BDDK publish on Thursdays, so the Friday run brings the new week. The Tuesday
+  run keeps the Supabase free project active. Repeated runs are harmless because of upserts.
+- **Run it by hand:** **Actions → Weekly fetch → Run workflow**.
+- **A silent outage fails the run.** `tr-banking check-freshness` exits 1 when any configured
+  series has no data, or data older than its rhythm allows (13 days for weekly series). A
+  missed release therefore turns the run red instead of passing quietly.
+- **Raw responses are uploaded as an artifact, kept 14 days.** Artifacts of a public
+  repository are public, so these safeguards apply:
+  - only response bodies are saved, never request headers or connection details;
+  - the EVDS key is masked if a server ever echoes it;
+  - `tr-banking scan-raw` checks every file against the real secret values, and the upload is
+    skipped unless that scan passes.
+
+**Secrets:** add both under *Settings → Secrets and variables → Actions → New repository
+secret*.
+
+| Name | Value |
+|---|---|
+| `EVDS_API_KEY` | your EVDS API key (same as in `.env`) |
+| `DATABASE_URL` | the **write-capable** Session pooler string of the `postgres` role: `postgresql://postgres.<project-ref>:<database password>@<pooler-host>:5432/postgres` (the same line as in `.env`), **not** the read-only `dashboard_reader` one |
+
+> **Scheduled runs stop after 60 days without repository activity** in public repositories.
+> GitHub then disables the workflow; re-enable it under **Actions → Weekly fetch → Enable
+> workflow**. Any push counts as activity.
+>
+> **Supabase pauses free projects after about a week without database activity.** The
+> twice-weekly schedule prevents that. A paused project can be restored from the Supabase
+> dashboard.
+
+### Weekly automatic fetch on your own PC (Windows, optional)
+
+Not needed once GitHub Actions runs the fetch; kept as an offline alternative.
 
 ```powershell
 # Register a scheduled task: every Thursday 15:00, or as soon as the PC is on after that
@@ -216,9 +260,13 @@ request.
     one request per series, spaced 1 second apart.
   - Bank-group breakdowns (state / domestic private / foreign, which add up to the sector) are
     config-only additions: change the `10001` group code.
-  - `bddk.org.tr` does not send its intermediate TLS certificate. The client verifies against
-    the operating system's certificate store via
-    [truststore](https://pypi.org/project/truststore/), never by disabling verification.
+  - `bddk.org.tr` does not send its intermediate TLS certificate (GlobalSign RSA OV SSL CA
+    2018). Browsers fetch it themselves; Python on Linux does not.
+  - The client therefore trusts certifi's roots plus that public intermediate, bundled in
+    `src/tr_banking/sources/certs/`. It works the same on Windows and in CI, and
+    verification is never disabled.
+  - BDDK's certificate expires 2026-11-15. If the renewal uses another intermediate, BDDK
+    fetches fail with a certificate error until the bundled file is updated.
 - **EVDS and BDDK agree closely:** within about 0.3% on common series. Their bank coverage
   differs slightly, and BDDK *commercial and other loans* is broader than EVDS *commercial
   loans*.
@@ -242,11 +290,13 @@ src/tr_banking/
   db/sqlite.py, schema.sql local SQLite backend
   db/postgres.py           Postgres/Supabase backend, migration runner
   db/migrations/           numbered Postgres migrations (tables, RLS, read-only role)
-  pipeline.py, cli.py      fetch/backfill
+  pipeline.py, cli.py      fetch/backfill, db and health-check commands
+  freshness.py             stale-series detection (pure)
+  security.py              secret scan for files that get published
   app/dashboard.py         Streamlit dashboard
   app/metrics.py           last value, weekly/yearly % (pure functions)
   app/i18n.py              TR/EN texts and number/date formatting (pure functions)
-.github/workflows/         CI (lint + tests on every push)
+.github/workflows/         ci.yml (lint + tests on every push), fetch.yml (Tue/Fri fetch)
 scripts/                   Windows Task Scheduler scripts for the weekly fetch
 sql/                       one-off SQL to run by hand in Supabase (enable the reader role)
 .streamlit/config.toml     Streamlit settings (no email prompt, no telemetry)

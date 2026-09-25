@@ -173,6 +173,16 @@ class Repository(ABC):
         moment = datetime.fromisoformat(stamp) if isinstance(stamp, str) else stamp
         return moment.astimezone(UTC)
 
+    def latest_dates(self) -> pd.DataFrame:
+        """source, code, frequency and newest observation date (NaT if none) per series."""
+        rows = self._fetch_all(
+            "SELECT s.source, s.code, s.frequency, MAX(o.date) "
+            "FROM series s LEFT JOIN observations o ON o.series_id = s.id "
+            "GROUP BY s.id, s.source, s.code, s.frequency ORDER BY s.id"
+        )
+        frame = pd.DataFrame(rows, columns=["source", "code", "frequency", "latest_date"])
+        return frame.assign(latest_date=pd.to_datetime(frame["latest_date"]))
+
     def counts(self) -> dict[str, int]:
         """Row counts per table, for health checks."""
         return {

@@ -10,6 +10,7 @@ from tr_banking import pipeline
 from tr_banking.config import load_series_config
 from tr_banking.db import SqliteRepository
 from tr_banking.pipeline import UpdateError, load_source, run_update
+from tr_banking.security import files_containing_secrets, secret_values
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import BddkClient
 from tr_banking.sources.evds import EvdsClient, EvdsResponseError
@@ -160,3 +161,28 @@ def test_run_update_single_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     written = run_update(settings_for(tmp_path), START, END, sources=["bddk"])
 
     assert list(written) == ["bddk"]
+
+
+def test_raw_files_hold_no_secrets(repo: SqliteRepository, tmp_path: Path) -> None:
+    """Raw responses become a public CI artifact: no key, URL, password or headers inside."""
+    key = "fake-evds-key-must-not-leak"
+    url = "postgresql://postgres.ref:db-password-must-not-leak@h.pooler.supabase.com:5432/postgres"
+    raw_dir = tmp_path / "raw"
+    evds = EvdsClient(
+        SecretStr(key), "https://evds.test/x/", raw_dir, transport=mock_transport(body=EVDS_BYTES)
+    )
+    bddk = BddkClient(
+        raw_dir,
+        base_url="https://bddk.test/",
+        request_interval=0,
+        transport=mock_transport(200, BDDK_BYTES),
+    )
+
+    with evds, bddk:
+        load_source(repo, "evds", evds, EVDS_SPECS, START, END)
+        load_source(repo, "bddk", bddk, BDDK_SPECS, START, END)
+
+    saved = [path for path in raw_dir.rglob("*") if path.is_file()]
+    secrets = secret_values(Settings(_env_file=None, evds_api_key=key, database_url=url))
+    assert len(saved) == 1 + len(BDDK_SPECS)
+    assert files_containing_secrets(raw_dir, [*secrets, "key:"]) == []

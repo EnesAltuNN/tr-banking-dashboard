@@ -3,12 +3,14 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import pytest
 
 from tr_banking import cli
+from tr_banking.config import load_series_config
 from tr_banking.db import SqliteRepository
 from tr_banking.pipeline import UpdateError
-from tr_banking.settings import Settings
+from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.evds import EvdsApiError
 
 
@@ -166,3 +168,84 @@ def test_unreachable_postgres_fails_without_leaking_password(
 
     assert "could not connect to Postgres" in caplog.text
     assert "pw-must-not-leak" not in caplog.text
+
+
+# --- check-freshness and scan-raw ---
+
+SPECS = load_series_config(PROJECT_ROOT / "config" / "series.yaml").series
+KEY = "fake-evds-key-must-not-leak"
+
+
+def seed(db_path: Path, day: date, sources: tuple[str, ...] = ("evds", "bddk")) -> None:
+    with SqliteRepository(db_path) as repo:
+        repo.init_schema()
+        for spec in SPECS:
+            if spec.source in sources:
+                repo.upsert_series(spec)
+                repo.upsert_observations(
+                    spec.source,
+                    pd.DataFrame([(spec.code, day, 1.0)], columns=["code", "date", "value"]),
+                )
+
+
+def test_check_freshness_passes_with_recent_data(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    seed(tmp_path / "t.db", date.today() - timedelta(days=5))
+    use_settings(monkeypatch, db_path=tmp_path / "t.db")
+
+    assert cli.main(["check-freshness"]) == 0
+
+    assert f"all {len(SPECS)} series are fresh" in caplog.text
+
+
+def test_check_freshness_fails_with_old_data(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    seed(tmp_path / "t.db", date.today() - timedelta(days=30))
+    use_settings(monkeypatch, db_path=tmp_path / "t.db")
+
+    assert cli.main(["check-freshness"]) == 1
+
+    assert f"{len(SPECS)} of {len(SPECS)} series are stale" in caplog.text
+
+
+def test_check_freshness_fails_when_a_configured_series_has_no_data(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    seed(tmp_path / "t.db", date.today(), sources=("evds",))
+    use_settings(monkeypatch, db_path=tmp_path / "t.db")
+
+    assert cli.main(["check-freshness"]) == 1
+    assert "(no data)" in caplog.text
+    assert cli.main(["check-freshness", "--source", "evds"]) == 0
+
+
+def test_scan_raw_fails_on_a_leaked_secret_without_printing_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    raw = tmp_path / "raw" / "evds"
+    raw.mkdir(parents=True)
+    (raw / "ok.json").write_text('{"items": []}', encoding="utf-8")
+    (raw / "bad.json").write_text(f'{{"echo": "{KEY}"}}', encoding="utf-8")
+    use_settings(monkeypatch, raw_dir=tmp_path / "raw", evds_api_key=KEY)
+
+    assert cli.main(["scan-raw"]) == 1
+
+    assert "secret found in" in caplog.text
+    assert "bad.json" in caplog.text
+    assert KEY not in caplog.text
+
+
+def test_scan_raw_passes_on_clean_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    (tmp_path / "raw").mkdir()
+    (tmp_path / "raw" / "ok.json").write_text('{"items": []}', encoding="utf-8")
+    use_settings(monkeypatch, raw_dir=tmp_path / "raw", evds_api_key=KEY)
+
+    assert cli.main(["scan-raw"]) == 0
+
+    assert "scanned 1 raw files: no secrets found" in caplog.text

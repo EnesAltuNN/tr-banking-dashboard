@@ -1,4 +1,5 @@
 import json
+import ssl
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from tr_banking.sources.bddk import (
     BddkClient,
     BddkResponseError,
     BddkSeriesKey,
+    bddk_ssl_context,
     parse_bddk_response,
     parse_series_code,
 )
@@ -191,3 +193,15 @@ def test_html_instead_of_json_fails(tmp_path: Path) -> None:
 
     with client, pytest.raises(BddkResponseError, match="not valid JSON"):
         client.fetch_observations([HOUSING], START, END)
+
+
+def test_ssl_context_trusts_the_intermediate_bddk_does_not_send() -> None:
+    context = bddk_ssl_context()
+
+    names = [
+        dict(part[0] for part in cert["subject"]).get("commonName")
+        for cert in context.get_ca_certs()
+    ]
+    assert "GlobalSign RSA OV SSL CA 2018" in names
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname

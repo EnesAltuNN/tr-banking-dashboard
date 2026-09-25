@@ -54,6 +54,7 @@ class EvdsClient:
         self._raw_dir = raw_dir / "evds"
         self._max_retries = max_retries
         self._retry_wait = retry_wait
+        self._secrets = (api_key.get_secret_value(),)  # masked in raw files and error messages
         # The key goes only in a header (never the URL), and redirects are not followed,
         # so the key is never sent to a host we did not choose.
         self._http = httpx.Client(
@@ -84,9 +85,10 @@ class EvdsClient:
             max_retries=self._max_retries,
             retry_wait=self._retry_wait,
             forbidden_hint=": check EVDS_API_KEY",
+            redact=self._secrets,
         )
         raw_path = save_raw_response(
-            self._raw_dir, response.content, f"{start:%Y%m%d}_{end:%Y%m%d}"
+            self._raw_dir, response.content, f"{start:%Y%m%d}_{end:%Y%m%d}", redact=self._secrets
         )
         try:
             payload = response.json()
