@@ -124,3 +124,16 @@ def test_supabase_api_roles_get_nothing(
         for table in ("series", "observations", "schema_migrations"):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 conn.execute(f"SELECT * FROM {table}")
+
+
+def test_status_as_dashboard_reader_does_not_fail(
+    postgres_url: str, pg: PostgresRepository
+) -> None:
+    with PostgresRepository(postgres_url) as reader:
+        reader._conn.execute("SET ROLE dashboard_reader")
+
+        status = reader.server_status()
+
+        assert status["role"] == "dashboard_reader"
+        assert status["migrations"] is None  # exists, but this role may not read it
+        assert reader.counts() == {"series": 1, "observations": 1}

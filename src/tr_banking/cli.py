@@ -79,7 +79,13 @@ def report_status(repo: Repository) -> None:
         logger.info(
             "server: PostgreSQL %s, connected as %s", status["server_version"], status["role"]
         )
-        logger.info("migrations: %s", ", ".join(status["migrations"]) or "none")
+        migrations = status["migrations"]
+        if migrations is None:
+            logger.info(
+                "migrations: not visible to %s (expected for a read-only role)", status["role"]
+            )
+        else:
+            logger.info("migrations: %s", ", ".join(migrations) or "none")
         for table, enabled in sorted(status["rls"].items()):
             logger.info("row level security on %s: %s", table, "on" if enabled else "OFF")
     try:

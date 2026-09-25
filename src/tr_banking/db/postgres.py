@@ -112,13 +112,20 @@ class PostgresRepository(Repository):
         logger.info("applied migration %s", version)
 
     def server_status(self) -> dict[str, Any]:
-        """Server facts for `tr-banking db check`: version, role, migrations and RLS."""
-        [(version, role, has_migrations)] = self._fetch_all(
+        """Server facts for `tr-banking db check`: version, role, migrations and RLS.
+
+        `migrations` is None when the table exists but this role may not read it (the
+        dashboard's read-only role, by design).
+        """
+        # CASE guarantees the privilege check only runs when the table exists.
+        [(version, role, has_table, can_read)] = self._fetch_all(
             "SELECT current_setting('server_version'), current_user, "
-            "to_regclass('schema_migrations') IS NOT NULL"
+            "to_regclass('schema_migrations') IS NOT NULL, "
+            "CASE WHEN to_regclass('schema_migrations') IS NULL THEN false "
+            "ELSE has_table_privilege('schema_migrations', 'SELECT') END"
         )
-        migrations = []
-        if has_migrations:
+        migrations: list[str] | None = [] if not has_table else None
+        if can_read:
             rows = self._fetch_all("SELECT version FROM schema_migrations ORDER BY version")
             migrations = [name for (name,) in rows]
         rls = dict(
