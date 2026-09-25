@@ -1,0 +1,94 @@
+name: Weekly fetch
+
+on:
+  schedule:
+    # Tuesday and Friday 04:00 UTC = 07:00 Istanbul (UTC+3 all year, no daylight saving).
+    # CBRT and BDDK publish weekly data on Thursdays, so the Friday run picks up the new week.
+    # The Tuesday run keeps the Supabase free-tier project active; upserts make it harmless.
+    - cron: "0 4 * * 2,5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two fetches at once (e.g. a manual run during a scheduled one).
+concurrency:
+  group: weekly-fetch
+  cancel-in-progress: false
+
+env:
+  # `uv run` must not re-sync and pull in the dev dependencies after `uv sync --no-dev`.
+  UV_NO_SYNC: "1"
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Secrets are handed only to the steps that need them, never to third-party actions.
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Check that the secrets are set
+        env:
+          EVDS_API_KEY: ${{ secrets.EVDS_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          missing=""
+          [ -n "$EVDS_API_KEY" ] || missing="$missing EVDS_API_KEY"
+          [ -n "$DATABASE_URL" ] || missing="$missing DATABASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+
+      - name: Database connection
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run tr-banking db check
+
+      - name: Migrate
+        id: migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run tr-banking db migrate
+
+      - name: Fetch latest weeks
+        env:
+          EVDS_API_KEY: ${{ secrets.EVDS_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run tr-banking fetch
+
+      # Runs even if the fetch failed, to show which series are stale. Fails the job when no
+      # new data arrived, so a silent outage turns the run red.
+      - name: Check data freshness
+        if: ${{ !cancelled() && steps.migrate.outcome == 'success' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run tr-banking check-freshness
+
+      # Artifacts of a public repository are public: upload only after proving no secret is
+      # inside (the files hold response bodies only, and the key is masked when saving).
+      - name: Scan raw responses for secrets
+        id: scan
+        if: ${{ !cancelled() }}
+        env:
+          EVDS_API_KEY: ${{ secrets.EVDS_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run tr-banking scan-raw
+
+      - name: Upload raw responses
+        if: ${{ !cancelled() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: raw-responses-${{ github.run_id }}
+          path: data/raw/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,5 +1,7 @@
 # Turkish Banking Market Dashboard
 
+[![CI](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml)
+
 A learning/portfolio project that tracks the Turkish banking market in one place.
 Three data modules feed **one database** and **one Streamlit dashboard**, with a weekly
 AI-generated summary planned on top.
@@ -17,7 +19,8 @@ AI-generated summary planned on top.
     purpose (ihtiyaç), individual credit cards and commercial loans.
   - **BDDK weekly bulletin**, 7 series from 2014-01-03: the same consumer items, plus total
     loans and commercial and other loans.
-- Stores them in SQLite with idempotent upserts. Re-running a fetch never duplicates rows,
+- Stores them with idempotent upserts, either in a local SQLite file (default) or in
+  Postgres/Supabase (when `DATABASE_URL` is set). Re-running a fetch never duplicates rows,
   and revised values replace old ones.
 - Saves every raw API response under `data/raw/` for debugging.
 - Streamlit dashboard in Turkish or English (TR/EN switch, Turkish number formats):
@@ -60,13 +63,57 @@ uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk
 uv run streamlit run src/tr_banking/app/dashboard.py
 ```
 
+Health checks (used by the scheduled workflow):
+
+```powershell
+uv run tr-banking check-freshness   # exit 1 if a series has no or too old data
+uv run tr-banking scan-raw          # exit 1 if a raw response file contains a secret
+```
+
 Add `-v` for debug logging (`uv run tr-banking -v fetch`). If one source fails, the others are
 still loaded. The CLI then exits with code 1, so a scheduler can detect the failure.
 
 New data is published by the CBRT on Thursdays at 14:30 (Istanbul time), for the week ending
 the previous Friday.
 
-### Weekly automatic fetch (Windows)
+### Automatic fetch (GitHub Actions)
+
+[`.github/workflows/fetch.yml`](.github/workflows/fetch.yml) runs `db migrate`, `fetch`,
+`check-freshness` and `scan-raw` against Supabase.
+
+- **When:** every **Tuesday and Friday at 04:00 UTC** (07:00 Istanbul; Türkiye is UTC+3 all
+  year). CBRT and BDDK publish on Thursdays, so the Friday run brings the new week. The Tuesday
+  run keeps the Supabase free project active. Repeated runs are harmless because of upserts.
+- **Run it by hand:** **Actions → Weekly fetch → Run workflow**.
+- **A silent outage fails the run.** `tr-banking check-freshness` exits 1 when any configured
+  series has no data, or data older than its rhythm allows (13 days for weekly series). A
+  missed release therefore turns the run red instead of passing quietly.
+- **Raw responses are uploaded as an artifact, kept 14 days.** Artifacts of a public
+  repository are public, so these safeguards apply:
+  - only response bodies are saved, never request headers or connection details;
+  - the EVDS key is masked if a server ever echoes it;
+  - `tr-banking scan-raw` checks every file against the real secret values, and the upload is
+    skipped unless that scan passes.
+
+**Secrets:** add both under *Settings → Secrets and variables → Actions → New repository
+secret*.
+
+| Name | Value |
+|---|---|
+| `EVDS_API_KEY` | your EVDS API key (same as in `.env`) |
+| `DATABASE_URL` | the **write-capable** Session pooler string of the `postgres` role: `postgresql://postgres.<project-ref>:<database password>@<pooler-host>:5432/postgres` (the same line as in `.env`), **not** the read-only `dashboard_reader` one |
+
+> **Scheduled runs stop after 60 days without repository activity** in public repositories.
+> GitHub then disables the workflow; re-enable it under **Actions → Weekly fetch → Enable
+> workflow**. Any push counts as activity.
+>
+> **Supabase pauses free projects after about a week without database activity.** The
+> twice-weekly schedule prevents that. A paused project can be restored from the Supabase
+> dashboard.
+
+### Weekly automatic fetch on your own PC (Windows, optional)
+
+Not needed once GitHub Actions runs the fetch; kept as an offline alternative.
 
 ```powershell
 # Register a scheduled task: every Thursday 15:00, or as soon as the PC is on after that
@@ -80,6 +127,63 @@ Unregister-ScheduledTask -TaskName "tr-banking weekly fetch" -Confirm:$false   #
 The task runs as the current user while logged on. It needs no admin rights and stores no password.
 A missed week does no harm, because every fetch re-reads the last 8 weeks.
 
+## Cloud database (Supabase)
+
+By default data goes to `data/tr_banking.db` (SQLite). Setting `DATABASE_URL` switches every
+command, including the dashboard, to Postgres. No other change is needed.
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In **Connect**, copy the **Session pooler** connection string:
+   - host `aws-0-<region>.pooler.supabase.com`, port `5432`, user `postgres.<project-ref>`;
+   - put your database password in place of `[YOUR-PASSWORD]`.
+3. Put it in `.env` as `DATABASE_URL=...`. It never goes into the repo; GitHub and Streamlit
+   get it as secrets later.
+4. Run these commands:
+
+   ```powershell
+   uv run tr-banking db check                     # expect "Supabase session pooler (IPv4)"
+   uv run tr-banking db migrate                   # create tables, RLS and the read-only role
+   uv run tr-banking backfill --start 2014-01-03  # fill it (EVDS + BDDK, about 15 seconds)
+   uv run tr-banking db check                     # expect row counts and RLS "on"
+   ```
+
+5. In Supabase's **SQL Editor**, run [`sql/enable_dashboard_reader.sql`](sql/enable_dashboard_reader.sql).
+   Type a strong password into the editor only; never save it in the file.
+
+Filling Supabase with `backfill` is simpler than copying the SQLite file. It uses exactly the
+code path of the weekly job, and the sources keep the full history anyway.
+
+**Why the session pooler.**
+- The direct connection (`db.<project-ref>.supabase.co`) is IPv6-only unless you buy the
+  IPv4 add-on, and GitHub Actions runners have no IPv6.
+- The session pooler (port 5432) is reachable over IPv4 and behaves like a normal session.
+- The transaction pooler (6543) is not used.
+- `tr-banking db check` warns if `DATABASE_URL` points to the direct host or port 6543.
+
+**Access model.**
+
+| Who | Connects as | Can do |
+|---|---|---|
+| Fetch job (local / GitHub Actions) | `postgres` (table owner) | read and write |
+| Dashboard (Streamlit Cloud) | `dashboard_reader` | `SELECT` on `series` and `observations` only; sessions are read-only |
+| Supabase REST API (`anon`, `authenticated`) | - | nothing |
+
+How the REST API is locked out:
+- Row Level Security is enabled on every table.
+- There is no policy for `anon`/`authenticated`, and their table privileges are revoked, so
+  REST requests get `permission denied`.
+- The only policy lets `dashboard_reader`, and nobody else, read rows.
+
+To check that the REST API stays closed, run this with your project URL and anon key. It must
+fail with *permission denied*:
+
+```powershell
+Invoke-RestMethod "https://<project-ref>.supabase.co/rest/v1/series?select=*" -Headers @{ apikey = "<anon key>" }
+```
+
+Schema changes are numbered files in `src/tr_banking/db/migrations/`. `db migrate` applies
+the missing ones in order and records them in `schema_migrations`.
+
 ## Tests and linting
 
 ```powershell
@@ -88,12 +192,24 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+Postgres tests run only when `TEST_DATABASE_URL` points to a **disposable** Postgres server;
+CI provides one. Each test creates and drops its own schema. Never point it at Supabase.
+
+**CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull
+request.
+- It runs `uv sync --locked`, `ruff check`, `ruff format --check` and the full test suite.
+- The tests run against a throwaway Postgres 17 service container, so no Postgres test is
+  skipped there.
+- CI needs no secrets.
+
 ## Configuration
 
 - **Series** live in [`config/series.yaml`](config/series.yaml): code, Turkish/English name,
   unit, frequency and module. To track another series, add an entry there; no code changes.
-- **Settings** come from environment variables or `.env`: `EVDS_API_KEY` (needed only for
-  fetching), plus the optional `DB_PATH` and `RAW_DIR`.
+- **Settings** come from environment variables or `.env`:
+  - `EVDS_API_KEY`, needed only for fetching;
+  - `DATABASE_URL`, optional: Postgres instead of SQLite;
+  - `DB_PATH` and `RAW_DIR`, optional.
 - **Streamlit** settings live in [`.streamlit/config.toml`](.streamlit/config.toml). The
   first-run email prompt and usage statistics are turned off for every machine that runs the
   dashboard from the repo root.
@@ -144,9 +260,13 @@ uv run ruff format .
     one request per series, spaced 1 second apart.
   - Bank-group breakdowns (state / domestic private / foreign, which add up to the sector) are
     config-only additions: change the `10001` group code.
-  - `bddk.org.tr` does not send its intermediate TLS certificate. The client verifies against
-    the operating system's certificate store via
-    [truststore](https://pypi.org/project/truststore/), never by disabling verification.
+  - `bddk.org.tr` does not send its intermediate TLS certificate (GlobalSign RSA OV SSL CA
+    2018). Browsers fetch it themselves; Python on Linux does not.
+  - The client therefore trusts certifi's roots plus that public intermediate, bundled in
+    `src/tr_banking/sources/certs/`. It works the same on Windows and in CI, and
+    verification is never disabled.
+  - BDDK's certificate expires 2026-11-15. If the renewal uses another intermediate, BDDK
+    fetches fail with a certificate error until the bundled file is updated.
 - **EVDS and BDDK agree closely:** within about 0.3% on common series. Their bank coverage
   differs slightly, and BDDK *commercial and other loans* is broader than EVDS *commercial
   loans*.
@@ -166,13 +286,19 @@ src/tr_banking/
   sources/evds.py          EVDS3 client and response parser
   sources/bddk.py          BDDK weekly bulletin client and parser
   sources/common.py        shared HTTP retries and raw-response saving
-  db/schema.sql            series + observations tables
-  db/repository.py         the only code that knows SQL
-  pipeline.py, cli.py      fetch/backfill
+  db/repository.py         storage interface: validation, upserts, queries (shared)
+  db/sqlite.py, schema.sql local SQLite backend
+  db/postgres.py           Postgres/Supabase backend, migration runner
+  db/migrations/           numbered Postgres migrations (tables, RLS, read-only role)
+  pipeline.py, cli.py      fetch/backfill, db and health-check commands
+  freshness.py             stale-series detection (pure)
+  security.py              secret scan for files that get published
   app/dashboard.py         Streamlit dashboard
   app/metrics.py           last value, weekly/yearly % (pure functions)
   app/i18n.py              TR/EN texts and number/date formatting (pure functions)
+.github/workflows/         ci.yml (lint + tests on every push), fetch.yml (Tue/Fri fetch)
 scripts/                   Windows Task Scheduler scripts for the weekly fetch
+sql/                       one-off SQL to run by hand in Supabase (enable the reader role)
 .streamlit/config.toml     Streamlit settings (no email prompt, no telemetry)
 tests/                     pytest suite with real EVDS and BDDK response fixtures
 ```
@@ -184,4 +310,4 @@ tests/                     pytest suite with real EVDS and BDDK response fixture
 3. Card spending from BKM monthly statistics (researched; series list pending)
 4. Bank loan/deposit rates and campaigns (daily scraping)
 5. Weekly AI-generated market summary combining all modules
-6. Move storage from SQLite to Postgres/Supabase (only `db/repository.py` changes)
+6. ~~Postgres/Supabase storage~~ ✔ (GitHub Actions and Streamlit Cloud next)

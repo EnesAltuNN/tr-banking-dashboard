@@ -1,11 +1,20 @@
-"""Command line entry point: `tr-banking fetch` and `tr-banking backfill`."""
+"""Command line entry point for fetching, database setup and CI health checks."""
 
 import argparse
 import logging
+import sqlite3
 from collections.abc import Sequence
 from datetime import date, timedelta
 
+import pandas as pd
+import psycopg
+
+from tr_banking.config import load_series_config
+from tr_banking.db import PostgresRepository, Repository, StorageError, open_repository
+from tr_banking.db.postgres import describe_connection
+from tr_banking.freshness import find_stale
 from tr_banking.pipeline import IMPLEMENTED_SOURCES, UpdateError, run_update
+from tr_banking.security import files_containing_secrets, mask, secret_values
 from tr_banking.settings import get_settings
 from tr_banking.sources.common import SourceApiError
 
@@ -21,21 +30,123 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_logging(args.verbose)
 
     today = date.today()
-    if args.command == "fetch":
-        start, end = today - timedelta(weeks=args.weeks), today
-    else:
-        start, end = args.start, args.end or today
-        if start > end:
-            parser.error(f"--start {start} is after --end {end}")
+    if args.command == "backfill" and args.start > (args.end or today):
+        parser.error(f"--start {args.start} is after --end {args.end or today}")
 
-    sources = (args.source,) if args.source else IMPLEMENTED_SOURCES
     try:
-        run_update(get_settings(), start, end, sources)
-    except (UpdateError, SourceApiError, ValueError) as exc:
+        if args.command == "db":
+            run_db_command(args.db_command)
+        elif args.command == "check-freshness":
+            return check_freshness(args.source)
+        elif args.command == "scan-raw":
+            return scan_raw()
+        else:
+            if args.command == "fetch":
+                start, end = today - timedelta(weeks=args.weeks), today
+            else:
+                start, end = args.start, args.end or today
+            sources = (args.source,) if args.source else IMPLEMENTED_SOURCES
+            run_update(get_settings(), start, end, sources)
+    except (UpdateError, SourceApiError, StorageError, ValueError, psycopg.Error) as exc:
         # Expected failures: one clear line (full traceback with -v), non-zero exit code.
         logger.error("%s failed: %s", args.command, exc, exc_info=args.verbose)
         return 1
     return 0
+
+
+def run_db_command(command: str) -> None:
+    settings = get_settings()
+    if command == "check" and settings.database_url is not None:
+        report_connection(settings.database_url.get_secret_value())
+    with open_repository(settings) as repo:
+        if command == "migrate":
+            repo.init_schema()
+            logger.info("%s schema is up to date", repo.backend)
+        else:
+            report_status(repo)
+
+
+def check_freshness(source: str | None) -> int:
+    """Exit 1 if any configured series has no data or data older than its rhythm allows."""
+    settings = get_settings()
+    config = load_series_config(settings.series_config_path)
+    sources = (source,) if source else IMPLEMENTED_SOURCES
+    expected = pd.DataFrame(
+        [(s.source, s.code, s.frequency) for src in sources for s in config.for_source(src)],
+        columns=["source", "code", "frequency"],
+    )
+    with open_repository(settings) as repo:
+        latest = repo.latest_dates()[["source", "code", "latest_date"]]
+    # Left join: a configured series missing from the database counts as stale.
+    merged = expected.merge(latest, on=["source", "code"], how="left")
+
+    for name, newest in merged.groupby("source")["latest_date"].max().items():
+        logger.info("%s: newest data %s", name, newest.date() if pd.notna(newest) else "none")
+    stale = find_stale(merged, date.today())
+    for row in stale.itertuples():
+        age = "no data" if pd.isna(row.age_days) else f"{int(row.age_days)} days old"
+        logger.error("stale: %s %s (%s)", row.source, row.code, age)
+    if not stale.empty:
+        logger.error("%d of %d series are stale", len(stale), len(merged))
+        return 1
+    logger.info("all %d series are fresh", len(merged))
+    return 0
+
+
+def scan_raw() -> int:
+    """Exit 1 if a saved raw response contains a configured secret (checked before upload)."""
+    settings = get_settings()
+    secrets = secret_values(settings)
+    if not secrets:
+        logger.warning("no secrets configured, nothing to look for")
+        return 0
+    files = [path for path in settings.raw_dir.rglob("*") if path.is_file()]
+    leaks = files_containing_secrets(settings.raw_dir, secrets)
+    for path in leaks:
+        logger.error("secret found in %s", mask(str(path), secrets))
+    if leaks:
+        return 1
+    logger.info("scanned %d raw files: no secrets found", len(files))
+    return 0
+
+
+def report_connection(conninfo: str) -> None:
+    """Log where DATABASE_URL points (host, port, role) without ever logging the string."""
+    info = describe_connection(conninfo)
+    logger.info(
+        "connection: %s, host %s, port %d, role %s",
+        info.kind,
+        info.host,
+        info.port,
+        info.role or "-",
+    )
+    for warning in info.warnings:
+        logger.warning("connection: %s", warning)
+
+
+def report_status(repo: Repository) -> None:
+    logger.info("backend: %s", repo.backend)
+    if isinstance(repo, PostgresRepository):
+        status = repo.server_status()
+        logger.info(
+            "server: PostgreSQL %s, connected as %s", status["server_version"], status["role"]
+        )
+        migrations = status["migrations"]
+        if migrations is None:
+            logger.info(
+                "migrations: not visible to %s (expected for a read-only role)", status["role"]
+            )
+        else:
+            logger.info("migrations: %s", ", ".join(migrations) or "none")
+        for table, enabled in sorted(status["rls"].items()):
+            logger.info("row level security on %s: %s", table, "on" if enabled else "OFF")
+    try:
+        counts = repo.counts()
+    except (sqlite3.Error, psycopg.Error):
+        logger.warning("tables not found: run `tr-banking db migrate`")
+        return
+    logger.info("rows: %d series, %d observations", counts["series"], counts["observations"])
+    logger.info("last fetch: %s", repo.last_fetched_at() or "never")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,6 +173,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backfill.add_argument("--start", type=iso_date, required=True, help="YYYY-MM-DD")
     backfill.add_argument("--end", type=iso_date, help="YYYY-MM-DD (default: today)")
+
+    db = commands.add_parser("db", help="database setup and health check")
+    db_commands = db.add_subparsers(dest="db_command", required=True)
+    db_commands.add_parser("migrate", help="create or upgrade the schema (safe to re-run)")
+    db_commands.add_parser("check", help="show connection, schema and row counts")
+
+    commands.add_parser(
+        "check-freshness",
+        parents=[common],
+        help="exit 1 if any series is older than its publishing rhythm allows",
+    )
+    commands.add_parser("scan-raw", help="exit 1 if a raw response file contains a secret")
     return parser
 
 

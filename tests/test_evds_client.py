@@ -7,6 +7,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+from tr_banking.sources.common import REDACTED
 from tr_banking.sources.evds import (
     EvdsApiError,
     EvdsClient,
@@ -205,3 +206,24 @@ def test_build_series_url_rejects_bad_input(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         build_series_url(BASE_URL, codes, start, end)
+
+
+def test_key_echoed_by_the_server_is_masked_in_raw_file(tmp_path: Path) -> None:
+    body = FIXTURE_BYTES.replace(b'"totalCount"', f'"echo": "{FAKE_KEY}", "totalCount"'.encode())
+
+    with make_client(Recorder(httpx.Response(200, content=body)), tmp_path) as client:
+        client.fetch_observations(CODES, START, END)
+
+    [saved] = (tmp_path / "evds").glob("*.json")
+    text = saved.read_text(encoding="utf-8")
+    assert FAKE_KEY not in text
+    assert REDACTED in text
+
+
+def test_key_echoed_in_an_error_is_masked(tmp_path: Path) -> None:
+    recorder = Recorder(httpx.Response(400, text=f"invalid key {FAKE_KEY}"))
+
+    with make_client(recorder, tmp_path) as client, pytest.raises(EvdsApiError) as exc_info:
+        client.fetch_observations(CODES, START, END)
+
+    assert FAKE_KEY not in str(exc_info.value)

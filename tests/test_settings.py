@@ -46,3 +46,23 @@ def test_default_paths_are_under_project_root(monkeypatch: pytest.MonkeyPatch) -
     assert settings.raw_dir == PROJECT_ROOT / "data" / "raw"
     assert settings.series_config_path.is_file()
     assert settings.evds_base_url.startswith("https://evds3.tcmb.gov.tr/")
+
+
+def test_database_url_is_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "postgresql://postgres.ref:pw-must-not-leak@host.pooler.supabase.com:5432/postgres"
+    monkeypatch.setenv("DATABASE_URL", url)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_url is not None
+    assert settings.database_url.get_secret_value() == url
+    assert "pw-must-not-leak" not in repr(settings)
+
+
+@pytest.mark.parametrize("variable", ["DATABASE_URL", "EVDS_API_KEY"])
+def test_blank_value_means_not_configured(monkeypatch: pytest.MonkeyPatch, variable: str) -> None:
+    monkeypatch.setenv(variable, "  ")
+
+    settings = Settings(_env_file=None)
+
+    assert getattr(settings, variable.lower()) is None

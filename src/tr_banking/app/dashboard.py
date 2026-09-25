@@ -22,8 +22,8 @@ from tr_banking.app.i18n import (
     unit_label,
 )
 from tr_banking.app.metrics import display_unit, summarize
-from tr_banking.db.repository import Repository
-from tr_banking.settings import get_settings
+from tr_banking.db import open_repository
+from tr_banking.settings import Settings, get_settings
 
 DISPLAY_TZ = ZoneInfo("Europe/Istanbul")
 # One series per chart, so one color; steps validated for contrast on each theme's surface.
@@ -39,12 +39,22 @@ CHARTS_PER_ROW = 2
 
 
 @st.cache_data(ttl=300)
-def load_data(db_path: str) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None]:
-    """Series, observations and last fetch time; empty frames if the database does not exist."""
-    if not Path(db_path).exists():
+def load_data(
+    storage_key: str, _settings: Settings
+) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None]:
+    """Series, observations and last fetch time; empty frames if there is no local database.
+
+    Streamlit caches by `storage_key` only; the leading underscore keeps `_settings` (which
+    holds secrets) out of the cache key.
+    """
+    if _settings.database_url is None and not Path(_settings.db_path).exists():
         return pd.DataFrame(), pd.DataFrame(), None
-    with Repository(db_path) as repo:
+    with open_repository(_settings) as repo:
         return repo.list_series(), repo.get_observations(), repo.last_fetched_at()
+
+
+def storage_key(settings: Settings) -> str:
+    return "postgres" if settings.database_url is not None else str(settings.db_path)
 
 
 def main() -> None:
@@ -52,7 +62,8 @@ def main() -> None:
     theme = st.context.theme.type or "light"
     lang = render_header()
 
-    series, observations, fetched_at = load_data(str(get_settings().db_path))
+    settings = get_settings()
+    series, observations, fetched_at = load_data(storage_key(settings), settings)
     if observations.empty:
         st.info(text("no_data", lang))
         st.stop()

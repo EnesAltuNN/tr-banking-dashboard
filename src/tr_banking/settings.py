@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # src/tr_banking/settings.py -> project root is two levels above the package directory.
@@ -22,9 +22,18 @@ class Settings(BaseSettings):
     # Optional here because only fetching needs it; the dashboard only reads the database.
     evds_api_key: SecretStr | None = None
     evds_base_url: str = "https://evds3.tcmb.gov.tr/igmevdsms-dis/"
+    # Postgres connection string (it contains a password, hence SecretStr). When set, data
+    # lives in Postgres/Supabase; when missing, in the local SQLite file at db_path.
+    database_url: SecretStr | None = None
     db_path: Path = PROJECT_ROOT / "data" / "tr_banking.db"
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"
     series_config_path: Path = PROJECT_ROOT / "config" / "series.yaml"
+
+    @field_validator("evds_api_key", "database_url", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, value: object) -> object:
+        # `DATABASE_URL=` left empty in .env (or an empty CI secret) means "not configured".
+        return None if isinstance(value, str) and not value.strip() else value
 
 
 def get_settings() -> Settings:

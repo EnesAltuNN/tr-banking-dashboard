@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import date
 
 from tr_banking.config import SeriesSpec, Source, load_series_config
-from tr_banking.db.repository import Repository
+from tr_banking.db import Repository, open_repository
 from tr_banking.settings import Settings
 from tr_banking.sources import ObservationClient
 from tr_banking.sources.bddk import BddkClient
@@ -63,7 +63,7 @@ def run_update(
     config = load_series_config(settings.series_config_path)
     written: dict[str, int] = {}
     failed: list[str] = []
-    with Repository(settings.db_path) as repo:
+    with open_repository(settings) as repo:
         repo.init_schema()
         for source in sources:
             specs = config.for_source(source)
@@ -74,7 +74,7 @@ def run_update(
             except (SourceApiError, ValueError) as exc:
                 logger.error("%s update failed: %s", source, exc)
                 failed.append(source)
-    logger.info("done: %s written to %s", written or "nothing", settings.db_path)
+    logger.info("done: %s written to %s", written or "nothing", repo.backend)
     if failed:
         raise UpdateError(f"update failed for: {', '.join(failed)}")
     return written
