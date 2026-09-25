@@ -1,5 +1,7 @@
 # Turkish Banking Market Dashboard
 
+[![CI](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml)
+
 A learning/portfolio project that tracks the Turkish banking market in one place.
 Three data modules feed **one database** and **one Streamlit dashboard**, with a weekly
 AI-generated summary planned on top.
