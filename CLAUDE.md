@@ -36,16 +36,26 @@ config/series.yaml  ->  config.py (validated SeriesSpec)
                           |
 sources/<source>.py -> DataFrame[code, date, value]  (OBSERVATION_COLUMNS, sources/__init__.py)
                           |
-pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_banking.db
+pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
+                    open_repository(settings)   or Postgres/Supabase if DATABASE_URL is set
                                                               |
                      app/dashboard.py + app/metrics.py (pure) + app/i18n.py (pure)
 ```
 
-- `settings.py`: pydantic-settings from env vars / `.env`; `EVDS_API_KEY` is optional there
-  (the dashboard does not need it) and is checked by the fetch pipeline.
+- `settings.py`: pydantic-settings from env vars / `.env`. `EVDS_API_KEY` is optional there
+  (the dashboard does not need it) and is checked by the fetch pipeline. `DATABASE_URL`
+  (SecretStr) switches storage to Postgres; blank values count as unset.
+- `db/`:
+  - `repository.py` is the abstract `Repository`: validation, upsert SQL and queries written
+    once with a `{p}` placeholder.
+  - `sqlite.py` and `postgres.py` only add connections, transactions and schema setup.
+  - Always open storage via `open_repository(settings)`.
 - `cli.py`:
   - `tr-banking fetch [--weeks N] [--source evds|bddk]`
   - `tr-banking backfill --start YYYY-MM-DD [--end] [--source ...]`
+  - `tr-banking db migrate` (idempotent)
+  - `tr-banking db check`: connection kind, migrations, RLS, row counts. It never logs the
+    connection string.
 - `pipeline.run_update` runs each source independently. A failing source is logged and the
   others still load; the CLI then exits 1.
 - `sources/common.py` holds the shared retry logic (transient 429/5xx and network errors only)
@@ -66,6 +76,20 @@ pipeline.py  ->  db/repository.py (only place with SQL)  ->  SQLite data/tr_bank
   `app/metrics.py`.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
   addition, not a rewrite.
+- Postgres uses native types: `DATE`, `DOUBLE PRECISION`, `TIMESTAMPTZ`, identity ids.
+  SQLite stores ISO text.
+- **Postgres migrations** are numbered files in `db/migrations/`, applied in order and recorded
+  in `schema_migrations`.
+  - Never edit an applied migration; add a new file instead.
+  - Every new table must enable RLS, revoke `anon`/`authenticated`, and, if the dashboard needs
+    it, grant SELECT plus add a `dashboard_reader` policy.
+  - Keep `db/schema.sql` (SQLite) in step with the migrations.
+- **Supabase access model:**
+  - The fetch job connects as `postgres`, the table owner, which bypasses RLS.
+  - The dashboard connects as `dashboard_reader`: SELECT only, read-only sessions. Its password
+    is set by hand with `sql/enable_dashboard_reader.sql` and never stored in the repo.
+  - Use the **session pooler** (port 5432, user `<role>.<project-ref>`). The direct host is
+    IPv6-only and GitHub Actions has no IPv6.
 
 ## Pending decision: BKM card spending (module 2)
 
@@ -151,6 +175,10 @@ still has to confirm the series list below before implementation starts.
   - HTTP goes through `httpx.MockTransport`.
   - Settings are built with `Settings(_env_file=None, ...)`.
   - Databases are `:memory:` or `tmp_path`.
+  - `tests/conftest.py` removes `DATABASE_URL` and `EVDS_API_KEY` from the environment for
+    every test.
+  - Postgres tests need `TEST_DATABASE_URL` (a disposable server; CI provides one). Each test
+    gets its own schema. Repository behavior tests run on both backends.
 - Dashboard charts use one series per chart, with each series on its own y-scale. Never use a
   dual axis.
 - The dashboard is bilingual (TR default, EN). Every UI text and all number/date formatting
@@ -167,6 +195,8 @@ uv run ruff check .                                   # lint
 uv run ruff format .                                  # format
 uv run tr-banking backfill --start 2014-01-03         # load history (all sources)
 uv run tr-banking fetch [--source evds|bddk]          # latest 8 weeks
+uv run tr-banking db migrate                          # create/upgrade schema (SQLite or Postgres)
+uv run tr-banking db check                            # connection, migrations, RLS, row counts
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```

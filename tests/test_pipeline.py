@@ -8,7 +8,7 @@ from pydantic import SecretStr
 
 from tr_banking import pipeline
 from tr_banking.config import load_series_config
-from tr_banking.db.repository import Repository
+from tr_banking.db import SqliteRepository
 from tr_banking.pipeline import UpdateError, load_source, run_update
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import BddkClient
@@ -24,8 +24,8 @@ START, END = date(2024, 6, 14), date(2024, 7, 12)
 
 
 @pytest.fixture
-def repo() -> Iterator[Repository]:
-    with Repository(":memory:") as repository:
+def repo() -> Iterator[SqliteRepository]:
+    with SqliteRepository(":memory:") as repository:
         repository.init_schema()
         yield repository
 
@@ -54,7 +54,7 @@ def bddk_client(tmp_path: Path, status: int = 200) -> BddkClient:
 # --- load_source ---
 
 
-def test_load_source_stores_series_and_observations(repo: Repository, tmp_path: Path) -> None:
+def test_load_source_stores_series_and_observations(repo: SqliteRepository, tmp_path: Path) -> None:
     with evds_client(tmp_path) as client:
         written = load_source(repo, "evds", client, EVDS_SPECS, START, END)
 
@@ -63,7 +63,7 @@ def test_load_source_stores_series_and_observations(repo: Repository, tmp_path: 
     assert len(repo.get_observations()) == 18
 
 
-def test_load_source_twice_is_idempotent(repo: Repository, tmp_path: Path) -> None:
+def test_load_source_twice_is_idempotent(repo: SqliteRepository, tmp_path: Path) -> None:
     with evds_client(tmp_path) as client:
         load_source(repo, "evds", client, EVDS_SPECS, START, END)
         load_source(repo, "evds", client, EVDS_SPECS, START, END)
@@ -72,7 +72,9 @@ def test_load_source_twice_is_idempotent(repo: Repository, tmp_path: Path) -> No
     assert len(repo.get_observations()) == 18
 
 
-def test_load_source_writes_nothing_when_response_is_bad(repo: Repository, tmp_path: Path) -> None:
+def test_load_source_writes_nothing_when_response_is_bad(
+    repo: SqliteRepository, tmp_path: Path
+) -> None:
     with (
         evds_client(tmp_path, body=b'{"items": []}') as client,
         pytest.raises(EvdsResponseError),
@@ -82,7 +84,7 @@ def test_load_source_writes_nothing_when_response_is_bad(repo: Repository, tmp_p
     assert repo.get_observations().empty
 
 
-def test_load_source_requires_series(repo: Repository, tmp_path: Path) -> None:
+def test_load_source_requires_series(repo: SqliteRepository, tmp_path: Path) -> None:
     with evds_client(tmp_path) as client, pytest.raises(ValueError, match="no evds series"):
         load_source(repo, "evds", client, [], START, END)
 
@@ -110,7 +112,7 @@ def use_clients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, bddk_status: in
 
 
 def stored_rows_per_source(db_path: Path) -> dict[str, int]:
-    with Repository(db_path) as repo:
+    with SqliteRepository(db_path) as repo:
         series = repo.list_series().set_index("id")
         observations = repo.get_observations()
     return observations["series_id"].map(series["source"]).value_counts().to_dict()

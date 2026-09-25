@@ -1,16 +1,15 @@
-"""SQLite storage for series and observations.
+"""Storage interface for series and observations, shared by SQLite and Postgres.
 
-This is the only module that knows SQL. Moving to Postgres/Supabase means rewriting this
-file (placeholders and connection handling); ON CONFLICT and RETURNING work the same there.
+The db package is the only place that knows SQL. The rules (validation, upsert semantics,
+query shapes) live here once; subclasses only supply the connection, transactions, schema
+setup and the placeholder style of their driver.
 """
 
 import logging
-import sqlite3
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
-from importlib.resources import files
-from pathlib import Path
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import pandas as pd
 
@@ -19,11 +18,12 @@ from tr_banking.sources import OBSERVATION_COLUMNS
 
 logger = logging.getLogger(__name__)
 
-IN_MEMORY = ":memory:"
+SERIES_COLUMNS = ["id", "source", "code", "name_tr", "name_en", "unit", "frequency", "module"]
 
+# `{p}` is replaced by the driver's placeholder: "?" (sqlite3) or "%s" (psycopg).
 UPSERT_SERIES_SQL = """
 INSERT INTO series (source, code, name_tr, name_en, unit, frequency, module)
-VALUES (:source, :code, :name_tr, :name_en, :unit, :frequency, :module)
+VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
 ON CONFLICT (source, code) DO UPDATE SET
     name_tr = excluded.name_tr,
     name_en = excluded.name_en,
@@ -33,24 +33,24 @@ ON CONFLICT (source, code) DO UPDATE SET
 RETURNING id
 """
 
-# Update on conflict (not "ignore"): EVDS revises past weeks, and a re-fetch must store the
+# Update on conflict (not "ignore"): sources revise past weeks, and a re-fetch must store the
 # corrected value. Running the same fetch twice therefore leaves the same rows.
 UPSERT_OBSERVATION_SQL = """
 INSERT INTO observations (series_id, date, value, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ({p}, {p}, {p}, {p})
 ON CONFLICT (series_id, date) DO UPDATE SET
     value = excluded.value,
     fetched_at = excluded.fetched_at
 """
 
 
-class Repository:
-    def __init__(self, path: Path | str) -> None:
-        if str(path) != IN_MEMORY:
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path)
-        # SQLite does not enforce foreign keys unless asked, per connection.
-        self._conn.execute("PRAGMA foreign_keys = ON")
+class StorageError(RuntimeError):
+    """The database could not be reached or set up."""
+
+
+class Repository(ABC):
+    placeholder: ClassVar[str]
+    backend: ClassVar[str]
 
     def __enter__(self) -> Self:
         return self
@@ -58,20 +58,41 @@ class Repository:
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
-    def close(self) -> None:
-        self._conn.close()
+    @abstractmethod
+    def close(self) -> None: ...
 
+    @abstractmethod
     def init_schema(self) -> None:
-        """Create tables if missing; safe to call on every start."""
-        sql = files("tr_banking.db").joinpath("schema.sql").read_text(encoding="utf-8")
-        self._conn.executescript(sql)
+        """Create or upgrade the schema; safe to call on every start."""
+
+    @abstractmethod
+    def _fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]: ...
+
+    @abstractmethod
+    def _write_one(self, sql: str, params: Sequence[Any]) -> list[tuple[Any, ...]]:
+        """Run one statement in its own transaction and return its RETURNING rows."""
+
+    @abstractmethod
+    def _write_many(self, sql: str, rows: list[tuple[Any, ...]]) -> None:
+        """Run a statement once per row, all in one transaction (all rows or none)."""
+
+    def _to_db_date(self, day: date) -> Any:
+        return day
+
+    def _to_db_timestamp(self, moment: datetime) -> Any:
+        return moment
+
+    def _sql(self, template: str) -> str:
+        return template.format(p=self.placeholder)
+
+    # --- writes ---
 
     def upsert_series(self, spec: SeriesSpec) -> int:
         """Insert or update a series definition and return its id."""
-        # `with conn` wraps the statement in a transaction: commit on success, rollback on error.
-        with self._conn:
-            [(series_id,)] = self._conn.execute(UPSERT_SERIES_SQL, spec.model_dump()).fetchall()
-        return series_id
+        values = spec.model_dump()
+        params = [values[column] for column in SERIES_COLUMNS[1:]]
+        [(series_id,)] = self._write_one(self._sql(UPSERT_SERIES_SQL), params)
+        return int(series_id)
 
     def upsert_observations(
         self,
@@ -91,27 +112,28 @@ class Repository:
         if unknown := sorted(set(observations["code"]) - set(series_ids)):
             raise ValueError(f"unknown {source} series (call upsert_series first): {unknown}")
 
-        stamp = (fetched_at or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
-        dates = pd.to_datetime(observations["date"]).dt.strftime("%Y-%m-%d")
+        stamp = (fetched_at or datetime.now(UTC)).astimezone(UTC).replace(microsecond=0)
+        days = pd.to_datetime(observations["date"]).dt.date
         rows = [
-            (series_ids[code], day, float(value), stamp)
+            (series_ids[code], self._to_db_date(day), float(value), self._to_db_timestamp(stamp))
             for code, day, value in zip(
-                observations["code"], dates, observations["value"], strict=True
+                observations["code"], days, observations["value"], strict=True
             )
         ]
-        # One transaction for the whole batch: either every row is stored or none is.
-        with self._conn:
-            self._conn.executemany(UPSERT_OBSERVATION_SQL, rows)
+        self._write_many(self._sql(UPSERT_OBSERVATION_SQL), rows)
         logger.info("stored %d %s observations", len(rows), source)
         return len(rows)
 
+    # --- reads ---
+
     def list_series(self, module: str | None = None) -> pd.DataFrame:
-        query = "SELECT id, source, code, name_tr, name_en, unit, frequency, module FROM series"
-        params: tuple[Any, ...] = ()
+        query = f"SELECT {', '.join(SERIES_COLUMNS)} FROM series"
+        params: list[Any] = []
         if module is not None:
-            query += " WHERE module = ?"
-            params = (module,)
-        return pd.read_sql_query(query + " ORDER BY id", self._conn, params=params)
+            query += f" WHERE module = {self.placeholder}"
+            params.append(module)
+        rows = self._fetch_all(query + " ORDER BY id", params)
+        return pd.DataFrame(rows, columns=SERIES_COLUMNS)
 
     def get_observations(
         self,
@@ -120,30 +142,46 @@ class Repository:
         end: date | None = None,
     ) -> pd.DataFrame:
         """Return series_id, date (datetime64), value; filters are optional and inclusive."""
+        p = self.placeholder
         conditions: list[str] = []
         params: list[Any] = []
         if series_ids is not None:
             # An empty selection becomes "IN (NULL)", which matches no rows.
-            placeholders = ", ".join("?" * len(series_ids)) or "NULL"
-            conditions.append(f"series_id IN ({placeholders})")
-            params.extend(series_ids)
+            conditions.append(f"series_id IN ({', '.join([p] * len(series_ids)) or 'NULL'})")
+            params.extend(int(series_id) for series_id in series_ids)
         if start is not None:
-            conditions.append("date >= ?")
-            params.append(start.isoformat())
+            conditions.append(f"date >= {p}")
+            params.append(self._to_db_date(start))
         if end is not None:
-            conditions.append("date <= ?")
-            params.append(end.isoformat())
+            conditions.append(f"date <= {p}")
+            params.append(self._to_db_date(end))
 
         query = "SELECT series_id, date, value FROM observations"
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY series_id, date"
-        return pd.read_sql_query(query, self._conn, params=params, parse_dates=["date"])
+        rows = self._fetch_all(query + " ORDER BY series_id, date", params)
+
+        frame = pd.DataFrame(rows, columns=["series_id", "date", "value"])
+        return frame.astype({"series_id": "int64", "value": "float64"}).assign(
+            date=pd.to_datetime(frame["date"])
+        )
 
     def last_fetched_at(self) -> datetime | None:
-        [(stamp,)] = self._conn.execute("SELECT MAX(fetched_at) FROM observations").fetchall()
-        return datetime.fromisoformat(stamp) if stamp else None
+        [(stamp,)] = self._fetch_all("SELECT MAX(fetched_at) FROM observations")
+        if stamp is None:
+            return None
+        moment = datetime.fromisoformat(stamp) if isinstance(stamp, str) else stamp
+        return moment.astimezone(UTC)
+
+    def counts(self) -> dict[str, int]:
+        """Row counts per table, for health checks."""
+        return {
+            table: int(self._fetch_all(f"SELECT COUNT(*) FROM {table}")[0][0])
+            for table in ("series", "observations")
+        }
 
     def _series_ids(self, source: str) -> dict[str, int]:
-        rows = self._conn.execute("SELECT code, id FROM series WHERE source = ?", (source,))
-        return dict(rows.fetchall())
+        rows = self._fetch_all(
+            f"SELECT code, id FROM series WHERE source = {self.placeholder}", [source]
+        )
+        return {code: int(series_id) for code, series_id in rows}

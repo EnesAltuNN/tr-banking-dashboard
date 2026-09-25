@@ -1,10 +1,14 @@
+import logging
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from tr_banking import cli
+from tr_banking.db import SqliteRepository
 from tr_banking.pipeline import UpdateError
+from tr_banking.settings import Settings
 from tr_banking.sources.evds import EvdsApiError
 
 
@@ -106,3 +110,59 @@ def test_partial_failure_returns_exit_code_1(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(cli, "run_update", FakeRun(error=UpdateError("update failed for: bddk")))
 
     assert cli.main(["fetch"]) == 1
+
+
+# --- db commands (real SQLite in tmp_path; Postgres errors via an unreachable port) ---
+
+
+def use_settings(monkeypatch: pytest.MonkeyPatch, **values: Any) -> None:
+    settings = Settings(_env_file=None, **values)
+    monkeypatch.setattr(cli, "get_settings", lambda: settings)
+
+
+def test_db_migrate_creates_sqlite_schema(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    use_settings(monkeypatch, db_path=tmp_path / "t.db")
+
+    assert cli.main(["db", "migrate"]) == 0
+
+    assert "sqlite schema is up to date" in caplog.text
+    with SqliteRepository(tmp_path / "t.db") as repo:
+        assert repo.counts() == {"series": 0, "observations": 0}
+
+
+def test_db_check_reports_counts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    use_settings(monkeypatch, db_path=tmp_path / "t.db")
+    cli.main(["db", "migrate"])
+
+    assert cli.main(["db", "check"]) == 0
+
+    assert "rows: 0 series, 0 observations" in caplog.text
+    assert "last fetch: never" in caplog.text
+
+
+def test_db_check_before_migrate_asks_for_migrate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    use_settings(monkeypatch, db_path=tmp_path / "empty.db")
+
+    assert cli.main(["db", "check"]) == 0
+
+    assert "run `tr-banking db migrate`" in caplog.text
+
+
+def test_unreachable_postgres_fails_without_leaking_password(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Port 1 on localhost refuses immediately; no network access needed.
+    use_settings(monkeypatch, database_url="postgresql://postgres:pw-must-not-leak@127.0.0.1:1/x")
+
+    assert cli.main(["db", "check"]) == 1
+
+    assert "could not connect to Postgres" in caplog.text
+    assert "pw-must-not-leak" not in caplog.text

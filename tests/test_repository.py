@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from tr_banking.config import SeriesSpec
-from tr_banking.db.repository import Repository
+from tr_banking.db import PostgresRepository, Repository, SqliteRepository
 
 HOUSING = SeriesSpec(
     source="evds",
@@ -22,9 +22,14 @@ FIRST_FETCH = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
 SECOND_FETCH = datetime(2026, 9, 25, 8, 0, tzinfo=UTC)
 
 
-@pytest.fixture
-def repo() -> Iterator[Repository]:
-    with Repository(":memory:") as repository:
+@pytest.fixture(params=["sqlite", "postgres"])
+def repo(request: pytest.FixtureRequest) -> Iterator[Repository]:
+    """Every behavior test runs against both backends (Postgres only with TEST_DATABASE_URL)."""
+    if request.param == "sqlite":
+        repository: Repository = SqliteRepository(":memory:")
+    else:
+        repository = PostgresRepository(request.getfixturevalue("postgres_url"))
+    with repository:
         repository.init_schema()
         yield repository
 
@@ -172,11 +177,11 @@ def test_last_fetched_at_is_none_when_empty(repo: Repository) -> None:
 def test_data_persists_in_file_database(tmp_path: Path) -> None:
     db_path = tmp_path / "nested" / "test.db"
 
-    with Repository(db_path) as repo:
+    with SqliteRepository(db_path) as repo:
         repo.init_schema()
         repo.upsert_series(HOUSING)
         repo.upsert_observations("evds", two_weeks(), fetched_at=FIRST_FETCH)
 
-    with Repository(db_path) as reopened:
+    with SqliteRepository(db_path) as reopened:
         assert len(reopened.get_observations()) == 2
         assert reopened.last_fetched_at() == FIRST_FETCH

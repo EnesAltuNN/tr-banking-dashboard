@@ -9,7 +9,7 @@ from streamlit.testing.v1 import AppTest
 
 from tr_banking import settings as settings_module
 from tr_banking.config import load_series_config
-from tr_banking.db.repository import Repository
+from tr_banking.db import SqliteRepository
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import parse_bddk_response
 from tr_banking.sources.evds import parse_evds_response
@@ -40,7 +40,7 @@ def run_dashboard() -> AppTest:
 def populated_db(path: Path) -> Path:
     evds = json.loads((FIXTURES / "evds_hpbitablo6_2024.json").read_text(encoding="utf-8"))
     bddk = json.loads((FIXTURES / "bddk_konut_2024.json").read_text(encoding="utf-8"))
-    with Repository(path) as repo:
+    with SqliteRepository(path) as repo:
         repo.init_schema()
         for spec in SPECS + BDDK_SPECS:
             repo.upsert_series(spec)

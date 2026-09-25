@@ -1,10 +1,15 @@
-"""Command line entry point: `tr-banking fetch` and `tr-banking backfill`."""
+"""Command line entry point: `tr-banking fetch | backfill | db migrate | db check`."""
 
 import argparse
 import logging
+import sqlite3
 from collections.abc import Sequence
 from datetime import date, timedelta
 
+import psycopg
+
+from tr_banking.db import PostgresRepository, Repository, StorageError, open_repository
+from tr_banking.db.postgres import describe_connection
 from tr_banking.pipeline import IMPLEMENTED_SOURCES, UpdateError, run_update
 from tr_banking.settings import get_settings
 from tr_banking.sources.common import SourceApiError
@@ -21,21 +26,69 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_logging(args.verbose)
 
     today = date.today()
-    if args.command == "fetch":
-        start, end = today - timedelta(weeks=args.weeks), today
-    else:
-        start, end = args.start, args.end or today
-        if start > end:
-            parser.error(f"--start {start} is after --end {end}")
+    if args.command == "backfill" and args.start > (args.end or today):
+        parser.error(f"--start {args.start} is after --end {args.end or today}")
 
-    sources = (args.source,) if args.source else IMPLEMENTED_SOURCES
     try:
-        run_update(get_settings(), start, end, sources)
-    except (UpdateError, SourceApiError, ValueError) as exc:
+        if args.command == "db":
+            run_db_command(args.db_command)
+        else:
+            if args.command == "fetch":
+                start, end = today - timedelta(weeks=args.weeks), today
+            else:
+                start, end = args.start, args.end or today
+            sources = (args.source,) if args.source else IMPLEMENTED_SOURCES
+            run_update(get_settings(), start, end, sources)
+    except (UpdateError, SourceApiError, StorageError, ValueError, psycopg.Error) as exc:
         # Expected failures: one clear line (full traceback with -v), non-zero exit code.
         logger.error("%s failed: %s", args.command, exc, exc_info=args.verbose)
         return 1
     return 0
+
+
+def run_db_command(command: str) -> None:
+    settings = get_settings()
+    if command == "check" and settings.database_url is not None:
+        report_connection(settings.database_url.get_secret_value())
+    with open_repository(settings) as repo:
+        if command == "migrate":
+            repo.init_schema()
+            logger.info("%s schema is up to date", repo.backend)
+        else:
+            report_status(repo)
+
+
+def report_connection(conninfo: str) -> None:
+    """Log where DATABASE_URL points (host, port, role) without ever logging the string."""
+    info = describe_connection(conninfo)
+    logger.info(
+        "connection: %s, host %s, port %d, role %s",
+        info.kind,
+        info.host,
+        info.port,
+        info.role or "-",
+    )
+    for warning in info.warnings:
+        logger.warning("connection: %s", warning)
+
+
+def report_status(repo: Repository) -> None:
+    logger.info("backend: %s", repo.backend)
+    if isinstance(repo, PostgresRepository):
+        status = repo.server_status()
+        logger.info(
+            "server: PostgreSQL %s, connected as %s", status["server_version"], status["role"]
+        )
+        logger.info("migrations: %s", ", ".join(status["migrations"]) or "none")
+        for table, enabled in sorted(status["rls"].items()):
+            logger.info("row level security on %s: %s", table, "on" if enabled else "OFF")
+    try:
+        counts = repo.counts()
+    except (sqlite3.Error, psycopg.Error):
+        logger.warning("tables not found: run `tr-banking db migrate`")
+        return
+    logger.info("rows: %d series, %d observations", counts["series"], counts["observations"])
+    logger.info("last fetch: %s", repo.last_fetched_at() or "never")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,6 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backfill.add_argument("--start", type=iso_date, required=True, help="YYYY-MM-DD")
     backfill.add_argument("--end", type=iso_date, help="YYYY-MM-DD (default: today)")
+
+    db = commands.add_parser("db", help="database setup and health check")
+    db_commands = db.add_subparsers(dest="db_command", required=True)
+    db_commands.add_parser("migrate", help="create or upgrade the schema (safe to re-run)")
+    db_commands.add_parser("check", help="show connection, schema and row counts")
     return parser
 
 
