@@ -24,10 +24,13 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
   end of each phase with tests + ruff, a short manual checklist and a suggested commit, then
   wait for approval. The user usually commits and pushes themselves.
 
-## Project status (updated 2026-09-26, after phase D)
+## Project status (updated 2026-09-26, after phase E)
 
-Hosting: repo `github.com/EnesAltuNN/tr-banking-dashboard` (**public**), database on Supabase
-(project in Frankfurt, reached through the session pooler), dashboard deployment pending.
+Hosting:
+- Repo: `github.com/EnesAltuNN/tr-banking-dashboard` (**public**).
+- Database: Supabase, project in Frankfurt, reached through the session pooler.
+- Dashboard: **https://tr-banking-dashboard.streamlit.app/** on Streamlit Community Cloud, connected as `dashboard_reader`, Python
+  3.13. Its secret `DATABASE_URL` is set in the Streamlit app settings.
 
 Cloud migration phases for module 1:
 
@@ -37,7 +40,7 @@ Cloud migration phases for module 1:
 | B | Postgres/Supabase backend, migrations, RLS, `dashboard_reader` | done: Supabase backfilled (13 series, 5,350 rows); REST API returns 401; reader role verified |
 | C | GitHub push, history secret scan, CI | done: history clean, CI green |
 | D | Scheduled fetch workflow (Tue/Fri 04:00 UTC) | done: manual run 36237384894 green; BDDK OK on Linux; public artifact holds response bodies only |
-| E | Streamlit Community Cloud deployment with `dashboard_reader` | code ready: 1 h shared cache, freshness line, safe errors; waiting for the user to deploy |
+| E | Streamlit Community Cloud deployment with `dashboard_reader` | done: live, tables/charts/TR-EN verified by the user; HTTP 200 |
 
 **Next steps:**
 1. **GitHub CLI** is installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as
@@ -48,9 +51,7 @@ Cloud migration phases for module 1:
 2. **Reminder owed to the user:** after the first scheduled Tuesday **and** Friday runs succeed,
    remind them to remove the Windows task (Backlog 4). Do not remove it before that.
    The first scheduled runs are Tue 2026-09-29 and Fri 2026-10-02, 04:00 UTC.
-3. **Phase E:** code is ready; the user deploys (steps in README, "Dashboard hosting").
-   - Afterwards, add the live URL to README and check the app.
-   - Verified facts:
+3. **Phase E is done.** Facts to keep:
      - Community Cloud reads `uv.lock` first and uses `uv sync` (supported since 2024-11), so
        no `requirements.txt` is needed.
      - `streamlit run` promotes root-level string secrets to `os.environ` at bootstrap,
@@ -89,6 +90,10 @@ New modules must plug into the existing tables; do not rewrite the schema for th
 6. Module 2: BKM (see pending decision)
 7. Module 3: bank rates/campaigns scraping, start with 3 banks
 8. Weekly AI summary: compute changes in Python, LLM only writes text
+9. `.devcontainer/devcontainer.json`: added by Streamlit's deploy flow (commit ebc1b7b).
+   - It uses Python 3.11 + pip + `requirements.txt` and would not install this uv project in
+     Codespaces. It does not affect Streamlit Cloud.
+   - The user has not decided yet: rewrite it for uv/3.13, or delete it.
 
 ## Architecture
 

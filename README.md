@@ -1,6 +1,10 @@
 # Turkish Banking Market Dashboard
 
 [![CI](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml)
+[![Weekly fetch](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/fetch.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/fetch.yml)
+[![Open the dashboard](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tr-banking-dashboard.streamlit.app/)
+
+**Live dashboard: [tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)** (Turkish/English)
 
 A learning/portfolio project that tracks the Turkish banking market in one place.
 Three data modules feed **one database** and **one Streamlit dashboard**, with a weekly
@@ -186,8 +190,9 @@ the missing ones in order and records them in `schema_migrations`.
 
 ## Dashboard hosting (Streamlit Community Cloud)
 
-The public dashboard runs on [Streamlit Community Cloud](https://share.streamlit.io) and reads
-Supabase as the read-only `dashboard_reader` role.
+The public dashboard runs on [Streamlit Community Cloud](https://share.streamlit.io) at
+**[tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)** and reads Supabase as the read-only
+`dashboard_reader` role.
 
 **How the deployment works:**
 - **Dependencies:** Community Cloud reads `uv.lock` first and installs with `uv sync`, which
@@ -353,4 +358,4 @@ tests/                     pytest suite with real EVDS and BDDK response fixture
 3. Card spending from BKM monthly statistics (researched; series list pending)
 4. Bank loan/deposit rates and campaigns (daily scraping)
 5. Weekly AI-generated market summary combining all modules
-6. ~~Postgres/Supabase storage~~ ✔ (GitHub Actions and Streamlit Cloud next)
+6. ~~Postgres/Supabase storage, scheduled GitHub Actions fetch, public dashboard~~ ✔
