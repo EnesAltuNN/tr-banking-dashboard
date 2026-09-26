@@ -18,6 +18,52 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
 - Never print, log or read the contents of `.env`.
 - Never ask for passwords, API keys or connection strings in chat. Tell the user where to
   enter them (`.env`, GitHub Secrets, Streamlit secrets) and let them do it.
+- Keep explanations short. Larger work is split into phases: show the plan first, stop at the
+  end of each phase with tests + ruff, a short manual checklist and a suggested commit, then
+  wait for approval. The user usually commits and pushes themselves.
+
+## Project status (updated 2026-09-26)
+
+Hosting: repo `github.com/EnesAltuNN/tr-banking-dashboard` (**public**), database on Supabase
+(project in Frankfurt, reached through the session pooler), dashboard deployment pending.
+
+Cloud migration phases for module 1:
+
+| Phase | Scope | Status |
+|---|---|---|
+| A | Finish docs, disable Streamlit email prompt | done |
+| B | Postgres/Supabase backend, migrations, RLS, `dashboard_reader` | done: Supabase backfilled (13 series, 5,350 rows); REST API returns 401; reader role verified |
+| C | GitHub push, history secret scan, CI | done: history clean, CI green |
+| D | Scheduled fetch workflow (Tue/Fri 04:00 UTC) | code pushed, secrets set; **first run not verified yet** |
+| E | Streamlit Community Cloud deployment with `dashboard_reader` | planned, not started |
+
+**Next steps:**
+1. **Close phase D.**
+   - The first manual "Weekly fetch" run never started (the API showed 0 runs).
+   - GitHub CLI is installed at `C:\Program Files\GitHub CLI\gh.exe`, but not yet on the PATH
+     of open terminals, and `gh auth login` may still be pending.
+   - Once the CLI works, run `gh workflow run fetch.yml`, then check every step. Confirm the
+     BDDK step passes on Linux, and that the uploaded artifact holds no secrets.
+   - If a secret is wrong, tell the user which one to fix and how; never ask for the value.
+2. **Reminder owed to the user:** after the first scheduled Tuesday **and** Friday runs succeed,
+   remind them to remove the Windows task (Backlog 4). Do not remove it before that.
+3. **Phase E** (show the short plan and wait for approval before starting):
+   - Streamlit Community Cloud does not read `uv.lock`, so generate `requirements.txt` with
+     `uv export` (including the project itself) and check in CI that it is in sync.
+   - Main file: `src/tr_banking/app/dashboard.py`. Python 3.13.
+   - Put `DATABASE_URL` for the `dashboard_reader.<project-ref>` session pooler string in the
+     app's Streamlit secrets. Root-level secrets become env vars, which `Settings` reads.
+   - The repo is public, so the app can be deployed straight from it.
+
+Local setup notes:
+- `.env` holds `EVDS_API_KEY` and `DATABASE_URL`, the write-capable `postgres.<ref>` string.
+  Local commands and the local dashboard therefore use Supabase. Comment the line out to go
+  back to SQLite.
+- The Windows task still runs locally on Thursdays 15:00 and writes to Supabase. That is
+  harmless, because upserts are idempotent.
+- Local Postgres tests: the repo has no Docker. A throwaway `pgserver` (Python 3.12, initdb
+  with `--no-locale` because the Turkish Windows locale crashes initdb) worked; point
+  `TEST_DATABASE_URL` at it.
 
 ## Roadmap (3 modules)
 
@@ -28,6 +74,17 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
 | 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | planned |
 
 New modules must plug into the existing tables; do not rewrite the schema for them.
+
+## Backlog
+
+1. Least-privilege writer role for the fetch job (replace the postgres role in GitHub Secrets)
+2. Add .gitattributes (* text=auto eol=lf) if missing
+3. Verify Supabase free-tier project is not paused after a few weeks
+4. Remove the Windows scheduled task once Actions has run reliably
+5. Decide public vs private repo for portfolio
+6. Module 2: BKM (see pending decision)
+7. Module 3: bank rates/campaigns scraping, start with 3 banks
+8. Weekly AI summary: compute changes in Python, LLM only writes text
 
 ## Architecture
 
