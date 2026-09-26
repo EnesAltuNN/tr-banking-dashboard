@@ -22,7 +22,7 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
   end of each phase with tests + ruff, a short manual checklist and a suggested commit, then
   wait for approval. The user usually commits and pushes themselves.
 
-## Project status (updated 2026-09-26)
+## Project status (updated 2026-09-26, after phase D)
 
 Hosting: repo `github.com/EnesAltuNN/tr-banking-dashboard` (**public**), database on Supabase
 (project in Frankfurt, reached through the session pooler), dashboard deployment pending.
@@ -34,19 +34,18 @@ Cloud migration phases for module 1:
 | A | Finish docs, disable Streamlit email prompt | done |
 | B | Postgres/Supabase backend, migrations, RLS, `dashboard_reader` | done: Supabase backfilled (13 series, 5,350 rows); REST API returns 401; reader role verified |
 | C | GitHub push, history secret scan, CI | done: history clean, CI green |
-| D | Scheduled fetch workflow (Tue/Fri 04:00 UTC) | code pushed, secrets set; **first run not verified yet** |
+| D | Scheduled fetch workflow (Tue/Fri 04:00 UTC) | done: manual run 36237384894 green; BDDK OK on Linux; public artifact holds response bodies only |
 | E | Streamlit Community Cloud deployment with `dashboard_reader` | planned, not started |
 
 **Next steps:**
-1. **Close phase D.**
-   - The first manual "Weekly fetch" run never started (the API showed 0 runs).
-   - GitHub CLI is installed at `C:\Program Files\GitHub CLI\gh.exe`, but not yet on the PATH
-     of open terminals, and `gh auth login` may still be pending.
-   - Once the CLI works, run `gh workflow run fetch.yml`, then check every step. Confirm the
-     BDDK step passes on Linux, and that the uploaded artifact holds no secrets.
-   - If a secret is wrong, tell the user which one to fix and how; never ask for the value.
+1. **GitHub CLI** is installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as
+   EnesAltuNN. It is not on the PATH of old terminals, so call it by full path.
+   - Use it to trigger runs (`gh workflow run fetch.yml`) and read logs and artifacts.
+   - Never use it to read or set secret values. The user sets secrets with
+     `gh secret set -f .env` or through the web UI.
 2. **Reminder owed to the user:** after the first scheduled Tuesday **and** Friday runs succeed,
    remind them to remove the Windows task (Backlog 4). Do not remove it before that.
+   The first scheduled runs are Tue 2026-09-29 and Fri 2026-10-02, 04:00 UTC.
 3. **Phase E** (show the short plan and wait for approval before starting):
    - Streamlit Community Cloud does not read `uv.lock`, so generate `requirements.txt` with
      `uv export` (including the project itself) and check in CI that it is in sync.
