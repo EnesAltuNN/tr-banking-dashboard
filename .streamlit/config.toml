@@ -8,3 +8,9 @@ showEmailPrompt = false
 [browser]
 # Do not send usage statistics to Streamlit.
 gatherUsageStats = false
+
+[client]
+# The deployed page is public: show only the exception type in the browser. Messages can hold
+# host or role names; the full traceback still goes to the server log. For local debugging:
+#   uv run streamlit run src/tr_banking/app/dashboard.py --client.showErrorDetails=full
+showErrorDetails = "type"

@@ -184,6 +184,49 @@ Invoke-RestMethod "https://<project-ref>.supabase.co/rest/v1/series?select=*" -H
 Schema changes are numbered files in `src/tr_banking/db/migrations/`. `db migrate` applies
 the missing ones in order and records them in `schema_migrations`.
 
+## Dashboard hosting (Streamlit Community Cloud)
+
+The public dashboard runs on [Streamlit Community Cloud](https://share.streamlit.io) and reads
+Supabase as the read-only `dashboard_reader` role.
+
+**How the deployment works:**
+- **Dependencies:** Community Cloud reads `uv.lock` first and installs with `uv sync`, which
+  also installs this package, so no `requirements.txt` is needed.
+- **Settings:** `.streamlit/config.toml` in the repo root applies there too.
+- **Database connection:** root-level Streamlit secrets become environment variables before
+  the app starts. A secret named `DATABASE_URL` is therefore picked up by `Settings` like
+  everywhere else.
+- **Load on Supabase:**
+  - Query results are cached for 1 hour in a cache shared by all visitors, so the database
+    sees at most one short connection per hour.
+  - The page shows both the last data fetch and the time it read the database.
+- **Errors:** visitors only see a plain "database not reachable" message and, for unexpected
+  errors, the exception type. Details stay in the app log.
+
+**Deploy steps:**
+
+1. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub, then click
+   **Create app** → **Deploy a public app from GitHub**.
+2. Fill in:
+   - Repository `EnesAltuNN/tr-banking-dashboard`, branch `main`
+   - Main file path `src/tr_banking/app/dashboard.py`
+   - App URL: a short name, e.g. `tr-banking-dashboard`
+3. Open **Advanced settings**:
+   - **Python version:** 3.13, the version in `.python-version`.
+   - **Secrets:** TOML, so the value is **quoted**. GitHub Secrets take the bare value
+     instead; that is the one difference.
+
+     ```toml
+     DATABASE_URL = "postgresql://dashboard_reader.<project-ref>:<reader password>@<pooler-host>:5432/postgres"
+     ```
+
+     Use the `dashboard_reader` session-pooler string, **not** the `postgres` one. No
+     `EVDS_API_KEY` is needed; the dashboard never fetches.
+4. Click **Deploy**. Later pushes to `main` redeploy automatically. Secrets can be edited
+   under the app's **Settings → Secrets**.
+
+Apps without traffic for 12 hours go to sleep; any visitor can wake them with one click.
+
 ## Tests and linting
 
 ```powershell

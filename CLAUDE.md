@@ -15,7 +15,9 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
 - Work in small steps; run tests after each step, list what to check manually,
   suggest a commit point, then stop and wait for approval before the next step.
 - The user is on Windows: give PowerShell commands, not bash.
-- Never print, log or read the contents of `.env`.
+- Never print, log or read the contents of `.env`, not even key names. Running project
+  commands that load `.env` internally (`tr-banking ...`, the dashboard) is agreed; they never
+  print its values.
 - Never ask for passwords, API keys or connection strings in chat. Tell the user where to
   enter them (`.env`, GitHub Secrets, Streamlit secrets) and let them do it.
 - Keep explanations short. Larger work is split into phases: show the plan first, stop at the
@@ -35,7 +37,7 @@ Cloud migration phases for module 1:
 | B | Postgres/Supabase backend, migrations, RLS, `dashboard_reader` | done: Supabase backfilled (13 series, 5,350 rows); REST API returns 401; reader role verified |
 | C | GitHub push, history secret scan, CI | done: history clean, CI green |
 | D | Scheduled fetch workflow (Tue/Fri 04:00 UTC) | done: manual run 36237384894 green; BDDK OK on Linux; public artifact holds response bodies only |
-| E | Streamlit Community Cloud deployment with `dashboard_reader` | planned, not started |
+| E | Streamlit Community Cloud deployment with `dashboard_reader` | code ready: 1 h shared cache, freshness line, safe errors; waiting for the user to deploy |
 
 **Next steps:**
 1. **GitHub CLI** is installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as
@@ -46,13 +48,16 @@ Cloud migration phases for module 1:
 2. **Reminder owed to the user:** after the first scheduled Tuesday **and** Friday runs succeed,
    remind them to remove the Windows task (Backlog 4). Do not remove it before that.
    The first scheduled runs are Tue 2026-09-29 and Fri 2026-10-02, 04:00 UTC.
-3. **Phase E** (show the short plan and wait for approval before starting):
-   - Streamlit Community Cloud does not read `uv.lock`, so generate `requirements.txt` with
-     `uv export` (including the project itself) and check in CI that it is in sync.
-   - Main file: `src/tr_banking/app/dashboard.py`. Python 3.13.
-   - Put `DATABASE_URL` for the `dashboard_reader.<project-ref>` session pooler string in the
-     app's Streamlit secrets. Root-level secrets become env vars, which `Settings` reads.
-   - The repo is public, so the app can be deployed straight from it.
+3. **Phase E:** code is ready; the user deploys (steps in README, "Dashboard hosting").
+   - Afterwards, add the live URL to README and check the app.
+   - Verified facts:
+     - Community Cloud reads `uv.lock` first and uses `uv sync` (supported since 2024-11), so
+       no `requirements.txt` is needed.
+     - `streamlit run` promotes root-level string secrets to `os.environ` at bootstrap,
+       before the script runs.
+   - Secret: TOML with a quoted value,
+     `DATABASE_URL = "postgresql://dashboard_reader.<ref>:<pw>@<pooler-host>:5432/postgres"`.
+     GitHub Secrets take the bare value.
 
 Local setup notes:
 - `.env` holds `EVDS_API_KEY` and `DATABASE_URL`, the write-capable `postgres.<ref>` string.
@@ -260,6 +265,13 @@ still has to confirm the series list below before implementation starts.
   - `astral-sh/setup-uv` has no floating major tags since v8, so it is pinned to a full version.
 - Dashboard charts use one series per chart, with each series on its own y-scale. Never use a
   dual axis.
+- The dashboard is public:
+  - `load_data` is an `st.cache_data` with a 1 h TTL, shared by all visitors. It opens one
+    short connection per cache miss, never one per rerun.
+  - Show the page's read time next to the last fetch time.
+  - Database errors show `i18n` text `db_unavailable`, never exception details.
+    `.streamlit/config.toml` sets `client.showErrorDetails = "type"`.
+  - `.streamlit/secrets.toml` is gitignored.
 - The dashboard is bilingual (TR default, EN). Every UI text and all number/date formatting
   live in `app/i18n.py`, with both languages always filled in (a test enforces this).
   - Turkish formats: `18.445,2` and `-1,1%`. English formats: `18,445.2` and `-1.1%`.
