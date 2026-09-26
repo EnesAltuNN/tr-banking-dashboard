@@ -124,8 +124,8 @@ New modules must plug into the existing tables; do not rewrite the schema for th
 6. Module 2: BKM (see Data sources)
 7. Module 3: bank rates/campaigns scraping, start with 3 banks (see Open questions)
 8. Weekly AI summary: compute changes in Python, LLM only writes text (see Open questions)
-9. `.devcontainer/devcontainer.json` from Streamlit's deploy flow (Python 3.11 + pip, not uv):
-   rewrite or delete
+9. ~~`.devcontainer/devcontainer.json` from Streamlit's deploy flow~~ **closed**: deleted (it used
+   Python 3.11 + pip and could not install this uv project)
 10. Real, inflation-adjusted values: deflate by CPI (TÜFE) from EVDS, next to the nominal view
 11. Revision history is not kept. This is a deliberate choice: upserts overwrite revised
     values. A "vintage" table (value per fetch date) could be added later if revisions matter.
