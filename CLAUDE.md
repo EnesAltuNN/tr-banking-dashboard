@@ -31,7 +31,7 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
   - `.env`;
   - GitHub Secrets, **one by one, by name**: `gh secret set NAME --repo ...` prompts for the
     value, or use the web UI. Never `gh secret set -f .env`: it turns every `.env` line into a
-    secret and would overwrite the least-privilege `DATABASE_URL` with the owner string;
+    secret without asking, so whatever `.env` holds at that moment ends up in GitHub;
   - Streamlit secrets.
 
 ## Calendar
@@ -63,10 +63,6 @@ Cloud migration of module 1 (phases A–E) is done:
 ## Next steps
 
 1. **README as a portfolio showcase** (planned for the next session).
-2. **Verify the `fetch_writer` switch** if not confirmed yet: the user sets its password
-   (`sql/enable_fetch_writer.sql`) and the GitHub secret `DATABASE_URL`. Then run
-   `gh workflow run fetch.yml`: every step must be green, and `db check` in the log must say
-   `connected as fetch_writer`.
 
 ## Deployment facts
 
@@ -89,14 +85,20 @@ Cloud migration of module 1 (phases A–E) is done:
   - Use it to trigger runs (`gh workflow run fetch.yml`) and to read logs and artifacts.
   - Never use it to read or set secret values.
 - **Local `.env`:**
-  - Holds `EVDS_API_KEY` and the **owner** (`postgres.<ref>`) `DATABASE_URL`. That is
-    intended and it stays that way: local runs are the only place where
-    `tr-banking db migrate` (DDL) and large backfills happen. The owner string lives only in
-    `.env`, never in GitHub or Streamlit.
-  - Local commands and the local dashboard therefore use Supabase. Comment the line out to go
-    back to SQLite.
-- **Windows task:** it still runs locally on Thursdays at 15:00 and writes to Supabase. That is
-  harmless because upserts are idempotent. It gets removed per the Calendar.
+  - Holds `EVDS_API_KEY` and the **`fetch_writer`** `DATABASE_URL`. Daily work (`fetch`,
+    `backfill`, `db check`, the local dashboard) runs as `fetch_writer`. Comment the line out to
+    go back to SQLite.
+- **Owner string (`postgres.<ref>`):** it lives only in the user's password manager, in no file
+  at all. It is used one-off for migrations and disaster recovery:
+  `$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL`
+  - `db migrate` checks read-only first. With nothing pending it is a no-op, even as
+    `fetch_writer`.
+  - With a migration pending and a non-owner role it stops with a clear "needs the table owner"
+    message.
+  - `fetch_writer` can read `schema_migrations` (SELECT only) for this check.
+- **Windows task:** it still runs locally on Thursdays at 15:00 and writes to Supabase via
+  `.env`, i.e. as `fetch_writer`. That is harmless because upserts are idempotent. It gets
+  removed per the Calendar.
 - **Local Postgres tests:**
   - The machine has no Docker. A throwaway `pgserver` works: Python 3.12, and initdb with
     `--no-locale`, because the Turkish Windows locale crashes initdb.
@@ -104,14 +106,17 @@ Cloud migration of module 1 (phases A–E) is done:
 
 ## Disaster recovery
 
-If the Supabase data is lost or the project is recreated:
-1. Point `DATABASE_URL` in `.env` at it (owner string).
-2. Run `uv run tr-banking db migrate`.
-3. Run `uv run tr-banking backfill --start 2014-01-03`. This takes about 15 s; the sources keep
-   the full history.
-4. Re-enable both roles' logins in the SQL editor: `sql/enable_fetch_writer.sql` and
+If the Supabase data is lost or the project is recreated, run the owner steps one-off, as the
+README's "Cloud database" section describes:
+1. `$env:DATABASE_URL = Read-Host "postgres URL"`
+2. `uv run tr-banking db migrate`
+3. `uv run tr-banking backfill --start 2014-01-03`. This takes about 15 s; the sources keep the
+   full history.
+4. `Remove-Item Env:DATABASE_URL`
+5. Re-enable both roles' logins in the SQL editor: `sql/enable_fetch_writer.sql` and
    `sql/enable_dashboard_reader.sql`.
-5. Update the GitHub and Streamlit secrets.
+6. Update `.env` and the GitHub and Streamlit secrets if the project ref or passwords
+   changed.
 
 ## Roadmap (3 modules)
 
@@ -216,9 +221,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     it, grant SELECT plus add a `dashboard_reader` policy.
   - Keep `db/schema.sql` (SQLite) in step with the migrations.
 - **Supabase access model:**
-  - **Owner `postgres`:** only from the local `.env`. It is used for `db migrate` (DDL) and
-    large backfills, and bypasses RLS as the table owner.
-  - **`fetch_writer`** (GitHub Actions):
+  - **Owner `postgres`:** not stored in any file. It is used one-off, via `Read-Host`, for
+    `db migrate` (DDL) and disaster recovery, and bypasses RLS as the table owner.
+  - **`fetch_writer`** (GitHub Actions and the local `.env`):
     - SELECT, INSERT and UPDATE on `series` and `observations`, plus SELECT on
       `schema_migrations`.
     - No DELETE or TRUNCATE, no DDL. RLS policies exist per command.
@@ -282,7 +287,7 @@ a source client.
   - Steps: db check → `db migrate --check` → fetch → check-freshness → scan-raw → upload
     artifact (only if the scan passed).
   - **Adding a migration:**
-    1. Run `uv run tr-banking db migrate` locally (owner `.env`) **before** pushing code that
+    1. Run the one-off owner command (see Deployment facts) **before** pushing code that
        needs it.
     2. Otherwise the scheduled run fails at the schema check.
 - **CI** (`.github/workflows/ci.yml`):
@@ -313,7 +318,7 @@ uv run ruff check .                                   # lint
 uv run ruff format .                                  # format
 uv run tr-banking backfill --start 2014-01-03         # load history (all sources)
 uv run tr-banking fetch [--source evds|bddk]          # latest 8 weeks
-uv run tr-banking db migrate                          # create/upgrade schema (owner role only)
+uv run tr-banking db migrate                          # up to date? no-op; else needs the owner (one-off)
 uv run tr-banking db migrate --check                  # exit 1 if a migration is pending
 uv run tr-banking db check                            # connection, migrations, RLS, row counts
 uv run tr-banking check-freshness                     # exit 1 if data is stale

@@ -23,6 +23,12 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 # Any constant works; it only has to be the same for every process running migrations.
 MIGRATION_LOCK_ID = 7_302_025
 
+# Shown when a limited role (fetch_writer, dashboard_reader) tries to apply migrations.
+OWNER_COMMAND = (
+    '$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; '
+    "Remove-Item Env:DATABASE_URL"
+)
+
 SUPABASE_POOLER_SUFFIX = ".pooler.supabase.com"
 SESSION_POOLER_PORT = 5432
 TRANSACTION_POOLER_PORT = 6543
@@ -96,11 +102,27 @@ class PostgresRepository(Repository):
         self._conn.close()
 
     def init_schema(self) -> None:
-        """Apply pending migrations in file-name order, each in its own transaction."""
-        with self._conn.transaction():
-            self._conn.execute(CREATE_MIGRATIONS_TABLE_SQL)
-        for name in migration_names():
-            self._apply(name, MIGRATIONS.joinpath(name).read_text(encoding="utf-8"))
+        """Apply pending migrations in file-name order, each in its own transaction.
+
+        Checks read-only first: with nothing pending it runs no DDL at all, so any role that
+        can read schema_migrations gets "up to date". Applying needs the table owner; a
+        limited role gets a clear message instead of a raw permission error.
+        """
+        pending = self.pending_migrations()
+        if not pending:
+            return
+        try:
+            with self._conn.transaction():
+                self._conn.execute(CREATE_MIGRATIONS_TABLE_SQL)
+            for name in pending:
+                self._apply(name, MIGRATIONS.joinpath(name).read_text(encoding="utf-8"))
+        except psycopg.errors.InsufficientPrivilege:
+            [(role,)] = self._fetch_all("SELECT current_user")
+            raise StorageError(
+                f"`db migrate` needs the table owner (postgres), but you are connected as "
+                f"{role}. Pending: {', '.join(pending)}. Run it once with the owner connection "
+                f"string from your password manager: {OWNER_COMMAND}"
+            ) from None
 
     def pending_migrations(self) -> list[str]:
         """Migration files not yet recorded in schema_migrations (all of them on a new database)."""
@@ -118,8 +140,8 @@ class PostgresRepository(Repository):
         """
         if pending := self.pending_migrations():
             raise StorageError(
-                f"pending migrations {pending}: run `uv run tr-banking db migrate` with the owner "
-                "connection (DATABASE_URL in .env), then re-run"
+                f"pending migrations {pending}: apply them once as the table owner "
+                f"({OWNER_COMMAND}), then re-run"
             )
 
     def _apply(self, version: str, sql: str) -> None:

@@ -202,3 +202,25 @@ def test_unmigrated_database_fails_loudly_instead_of_migrating(postgres_url: str
             repository.ensure_ready()
 
         assert repository.pending_migrations() == MIGRATIONS  # nothing was applied
+
+
+def test_migrate_as_fetch_writer_is_a_no_op_when_up_to_date(writer: PostgresRepository) -> None:
+    writer.init_schema()  # read-only check first: nothing pending, so no DDL is attempted
+
+    assert writer.pending_migrations() == []
+
+
+def test_migrate_as_fetch_writer_explains_that_the_owner_is_needed(
+    pg: PostgresRepository, writer: PostgresRepository
+) -> None:
+    # Pretend 0003 is new: the owner forgets it was applied.
+    pg._conn.execute("DELETE FROM schema_migrations WHERE version = '0003_fetch_writer.sql'")
+
+    with pytest.raises(StorageError) as exc_info:
+        writer.init_schema()
+
+    message = str(exc_info.value)
+    assert "needs the table owner" in message
+    assert "connected as fetch_writer" in message
+    assert "0003_fetch_writer.sql" in message
+    assert writer.pending_migrations() == ["0003_fetch_writer.sql"]  # nothing was applied

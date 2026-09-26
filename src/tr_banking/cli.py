@@ -65,11 +65,18 @@ def run_db_command(command: str, check_only: bool = False) -> int:
         if check_only:
             # Read-only: works for the least-privilege role the scheduled job uses.
             if pending := repo.pending_migrations():
-                logger.error("pending migrations: %s (run `tr-banking db migrate`)", pending)
+                logger.error(
+                    "pending migrations: %s (apply them as the table owner: "
+                    "tr-banking db migrate with the postgres connection string)",
+                    pending,
+                )
                 return 1
             logger.info("%s schema is up to date, no pending migrations", repo.backend)
             return 0
+        pending = repo.pending_migrations()
         repo.init_schema()
+        if pending:
+            logger.info("applied %d migration(s): %s", len(pending), ", ".join(pending))
         logger.info("%s schema is up to date", repo.backend)
         return 0
 
