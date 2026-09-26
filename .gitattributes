@@ -1,0 +1,3 @@
+# Store text files with LF and check them out with LF on every machine,
+# independent of each machine's core.autocrlf setting. Binary files are auto-detected.
+* text=auto eol=lf
