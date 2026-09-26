@@ -30,8 +30,22 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "en": "Pick an end date for the range.",
     },
     "status": {
-        "tr": "Son veri: **{week}** haftası · Son güncelleme: **{updated}** (TSİ)",
-        "en": "Latest data: week ending **{week}** · Last updated: **{updated}** (TRT)",
+        "tr": "Son veri: **{week}** haftası · Son veri çekimi: **{updated}** (TSİ)",
+        "en": "Latest data: week ending **{week}** · Last data fetch: **{updated}** (TRT)",
+    },
+    "freshness_note": {
+        "tr": (
+            "Veriler salı ve cuma sabahları otomatik çekilir. Bu sayfa veriyi {loaded} (TSİ) "
+            "itibarıyla gösteriyor; en geç saatte bir yenilenir."
+        ),
+        "en": (
+            "Data is fetched automatically on Tuesday and Friday mornings. This page shows it "
+            "as of {loaded} (TRT) and refreshes at least hourly."
+        ),
+    },
+    "db_unavailable": {
+        "tr": "Veritabanına şu anda ulaşılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.",
+        "en": "The database is not reachable right now. Please try again in a few minutes.",
     },
     "col_series": {"tr": "Seri", "en": "Series"},
     "col_date": {"tr": "Tarih", "en": "Date"},

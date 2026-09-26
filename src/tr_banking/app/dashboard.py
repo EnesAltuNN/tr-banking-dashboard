@@ -1,11 +1,13 @@
 """Streamlit dashboard. Run with: uv run streamlit run src/tr_banking/app/dashboard.py"""
 
-from datetime import date, datetime
+import logging
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import altair as alt
 import pandas as pd
+import psycopg
 import streamlit as st
 
 from tr_banking.app.i18n import (
@@ -22,10 +24,16 @@ from tr_banking.app.i18n import (
     unit_label,
 )
 from tr_banking.app.metrics import display_unit, summarize
-from tr_banking.db import open_repository
+from tr_banking.db import StorageError, open_repository
 from tr_banking.settings import Settings, get_settings
 
+logger = logging.getLogger(__name__)
+
 DISPLAY_TZ = ZoneInfo("Europe/Istanbul")
+# The data changes twice a week, so one read per hour is plenty. st.cache_data is shared by
+# every visitor, so a public page costs Supabase at most one connection per hour, not one per
+# visitor or click.
+CACHE_TTL = timedelta(hours=1)
 # One series per chart, so one color; steps validated for contrast on each theme's surface.
 LINE_COLORS = {"light": "#2a78d6", "dark": "#3987e5"}
 CROSSHAIR_COLOR = "#898781"
@@ -38,19 +46,22 @@ DELTA_COLORS = {
 CHARTS_PER_ROW = 2
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_data(
     storage_key: str, _settings: Settings
-) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None]:
-    """Series, observations and last fetch time; empty frames if there is no local database.
+) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None, datetime]:
+    """Series, observations, last fetch time and when this snapshot was read.
 
-    Streamlit caches by `storage_key` only; the leading underscore keeps `_settings` (which
-    holds secrets) out of the cache key.
+    The connection is opened only on a cache miss and closed right after reading. A pooled
+    connection kept open across the app's sleep would go stale, while one short read per hour
+    is cheap. Streamlit caches by `storage_key` only; the leading underscore keeps `_settings`
+    (which holds secrets) out of the cache key.
     """
+    loaded_at = datetime.now(UTC)
     if _settings.database_url is None and not Path(_settings.db_path).exists():
-        return pd.DataFrame(), pd.DataFrame(), None
+        return pd.DataFrame(), pd.DataFrame(), None, loaded_at
     with open_repository(_settings) as repo:
-        return repo.list_series(), repo.get_observations(), repo.last_fetched_at()
+        return repo.list_series(), repo.get_observations(), repo.last_fetched_at(), loaded_at
 
 
 def storage_key(settings: Settings) -> str:
@@ -63,7 +74,13 @@ def main() -> None:
     lang = render_header()
 
     settings = get_settings()
-    series, observations, fetched_at = load_data(storage_key(settings), settings)
+    try:
+        series, observations, fetched_at, loaded_at = load_data(storage_key(settings), settings)
+    except (StorageError, psycopg.Error):
+        # Details (host, role) go to the server log only; visitors see a plain message.
+        logger.exception("dashboard could not read the database")
+        st.error(text("db_unavailable", lang))
+        st.stop()
     if observations.empty:
         st.info(text("no_data", lang))
         st.stop()
@@ -73,7 +90,7 @@ def main() -> None:
     observations = observations[observations["series_id"].isin(series["id"])]
     selected_ids, start, end = render_filters(series, observations, lang)
     selected = observations[observations["series_id"].isin(selected_ids)]
-    render_status(selected, fetched_at, lang)
+    render_status(selected, fetched_at, loaded_at, lang)
 
     # The table uses full history up to `end`, so yearly % works even for a short date range.
     render_summary_table(summarize(selected, as_of=end), series, lang, theme)
@@ -143,13 +160,21 @@ def render_filters(
     return selected_ids, start, end
 
 
-def render_status(observations: pd.DataFrame, fetched_at: datetime | None, lang: Lang) -> None:
+def render_status(
+    observations: pd.DataFrame, fetched_at: datetime | None, loaded_at: datetime, lang: Lang
+) -> None:
+    """Newest week, when the fetch job last wrote data, and when this page read it.
+
+    Showing the read time as well keeps the cached page honest: "last fetch" is as of that read.
+    """
     week = format_date(observations["date"].max(), lang, long=True)
     updated = "-"
     if fetched_at:
         local = fetched_at.astimezone(DISPLAY_TZ)
         updated = f"{format_date(local, lang, long=True)} {local:%H:%M}"
+    loaded = loaded_at.astimezone(DISPLAY_TZ).strftime("%H:%M")
     st.markdown(text("status", lang).format(week=week, updated=updated))
+    st.caption(text("freshness_note", lang).format(loaded=loaded))
 
 
 def render_summary_table(

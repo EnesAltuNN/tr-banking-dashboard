@@ -1,6 +1,10 @@
 # Turkish Banking Market Dashboard
 
 [![CI](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml)
+[![Weekly fetch](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/fetch.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/fetch.yml)
+[![Open the dashboard](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tr-banking-dashboard.streamlit.app/)
+
+**Live dashboard: [tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)** (Turkish/English)
 
 A learning/portfolio project that tracks the Turkish banking market in one place.
 Three data modules feed **one database** and **one Streamlit dashboard**, with a weekly
@@ -78,8 +82,9 @@ the previous Friday.
 
 ### Automatic fetch (GitHub Actions)
 
-[`.github/workflows/fetch.yml`](.github/workflows/fetch.yml) runs `db migrate`, `fetch`,
-`check-freshness` and `scan-raw` against Supabase.
+[`.github/workflows/fetch.yml`](.github/workflows/fetch.yml) runs `db check`,
+`db migrate --check`, `fetch`, `check-freshness` and `scan-raw` against Supabase, as the
+least-privilege `fetch_writer` role.
 
 - **When:** every **Tuesday and Friday at 04:00 UTC** (07:00 Istanbul; Türkiye is UTC+3 all
   year). CBRT and BDDK publish on Thursdays, so the Friday run brings the new week. The Tuesday
@@ -95,13 +100,14 @@ the previous Friday.
   - `tr-banking scan-raw` checks every file against the real secret values, and the upload is
     skipped unless that scan passes.
 
-**Secrets:** add both under *Settings → Secrets and variables → Actions → New repository
-secret*.
+**Secrets:** add them **one by one, by name** under *Settings → Secrets and variables →
+Actions*, or with `gh secret set NAME` (it prompts for the value). Do not use
+`gh secret set -f .env`: it turns every `.env` line into a secret, whatever it is.
 
 | Name | Value |
 |---|---|
 | `EVDS_API_KEY` | your EVDS API key (same as in `.env`) |
-| `DATABASE_URL` | the **write-capable** Session pooler string of the `postgres` role: `postgresql://postgres.<project-ref>:<database password>@<pooler-host>:5432/postgres` (the same line as in `.env`), **not** the read-only `dashboard_reader` one |
+| `DATABASE_URL` | the Session pooler string of the least-privilege **`fetch_writer`** role: `postgresql://fetch_writer.<project-ref>:<its password>@<pooler-host>:5432/postgres`. **Not** the owner (`postgres`) string, and not `dashboard_reader`. |
 
 > **Scheduled runs stop after 60 days without repository activity** in public repositories.
 > GitHub then disables the workflow; re-enable it under **Actions → Weekly fetch → Enable
@@ -136,19 +142,29 @@ command, including the dashboard, to Postgres. No other change is needed.
 2. In **Connect**, copy the **Session pooler** connection string:
    - host `aws-0-<region>.pooler.supabase.com`, port `5432`, user `postgres.<project-ref>`;
    - put your database password in place of `[YOUR-PASSWORD]`.
-3. Put it in `.env` as `DATABASE_URL=...`. It never goes into the repo; GitHub and Streamlit
-   get it as secrets later.
-4. Run these commands:
+   This is the **owner** string. Keep it in your password manager only, never in a file.
+3. Create the schema and load the history once with it. `Read-Host` keeps it out of files and
+   out of the shell history:
 
    ```powershell
+   $env:DATABASE_URL = Read-Host "postgres URL"
    uv run tr-banking db check                     # expect "Supabase session pooler (IPv4)"
-   uv run tr-banking db migrate                   # create tables, RLS and the read-only role
+   uv run tr-banking db migrate                   # tables, RLS, the two limited roles
    uv run tr-banking backfill --start 2014-01-03  # fill it (EVDS + BDDK, about 15 seconds)
-   uv run tr-banking db check                     # expect row counts and RLS "on"
+   Remove-Item Env:DATABASE_URL
    ```
 
-5. In Supabase's **SQL Editor**, run [`sql/enable_dashboard_reader.sql`](sql/enable_dashboard_reader.sql).
-   Type a strong password into the editor only; never save it in the file.
+4. In Supabase's **SQL Editor**, enable the two limited roles with a different strong password
+   each:
+   - [`sql/enable_fetch_writer.sql`](sql/enable_fetch_writer.sql) for the scheduled job and
+     your daily local work;
+   - [`sql/enable_dashboard_reader.sql`](sql/enable_dashboard_reader.sql) for the dashboard.
+
+   Type passwords into the editor only, never into the files, and delete the queries from the
+   editor history afterwards.
+5. For daily work, put the **`fetch_writer`** string in `.env` as `DATABASE_URL=...`. It is
+   enough for `fetch`, `backfill`, `db check` and the local dashboard; check with
+   `uv run tr-banking db check` (expect `connected as fetch_writer`).
 
 Filling Supabase with `backfill` is simpler than copying the SQLite file. It uses exactly the
 code path of the weekly job, and the sources keep the full history anyway.
@@ -164,9 +180,32 @@ code path of the weekly job, and the sources keep the full history anyway.
 
 | Who | Connects as | Can do |
 |---|---|---|
-| Fetch job (local / GitHub Actions) | `postgres` (table owner) | read and write |
+| You, one-off (owner string from your password manager) | `postgres` (table owner) | everything: applying migrations (DDL) |
+| You, daily (`.env`) | `fetch_writer` | same as the scheduled fetch |
+| Scheduled fetch (GitHub Actions) | `fetch_writer` | `SELECT`/`INSERT`/`UPDATE` on `series` and `observations`; no delete, no schema changes |
 | Dashboard (Streamlit Cloud) | `dashboard_reader` | `SELECT` on `series` and `observations` only; sessions are read-only |
 | Supabase REST API (`anon`, `authenticated`) | - | nothing |
+
+The owner string is stored in no file at all, only in your password manager. If a GitHub
+secret or your `.env` leaked, it could add or correct rows but not delete data or alter
+tables.
+
+**Applying a new migration:**
+1. Run it once as the owner, **before** pushing code that needs it:
+
+   ```powershell
+   $env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL
+   ```
+
+2. Then push.
+
+Checks along the way:
+- `db migrate` first checks read-only. With nothing pending it only says "up to date", even as
+  `fetch_writer`.
+- With a migration pending and a limited role, it stops with a message saying the owner is
+  needed.
+- The scheduled job runs `db migrate --check` and fails loudly if a migration is still
+  pending.
 
 How the REST API is locked out:
 - Row Level Security is enabled on every table.
@@ -183,6 +222,50 @@ Invoke-RestMethod "https://<project-ref>.supabase.co/rest/v1/series?select=*" -H
 
 Schema changes are numbered files in `src/tr_banking/db/migrations/`. `db migrate` applies
 the missing ones in order and records them in `schema_migrations`.
+
+## Dashboard hosting (Streamlit Community Cloud)
+
+The public dashboard runs on [Streamlit Community Cloud](https://share.streamlit.io) at
+**[tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)** and reads Supabase as the read-only
+`dashboard_reader` role.
+
+**How the deployment works:**
+- **Dependencies:** Community Cloud reads `uv.lock` first and installs with `uv sync`, which
+  also installs this package, so no `requirements.txt` is needed.
+- **Settings:** `.streamlit/config.toml` in the repo root applies there too.
+- **Database connection:** root-level Streamlit secrets become environment variables before
+  the app starts. A secret named `DATABASE_URL` is therefore picked up by `Settings` like
+  everywhere else.
+- **Load on Supabase:**
+  - Query results are cached for 1 hour in a cache shared by all visitors, so the database
+    sees at most one short connection per hour.
+  - The page shows both the last data fetch and the time it read the database.
+- **Errors:** visitors only see a plain "database not reachable" message and, for unexpected
+  errors, the exception type. Details stay in the app log.
+
+**Deploy steps:**
+
+1. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub, then click
+   **Create app** → **Deploy a public app from GitHub**.
+2. Fill in:
+   - Repository `EnesAltuNN/tr-banking-dashboard`, branch `main`
+   - Main file path `src/tr_banking/app/dashboard.py`
+   - App URL: a short name, e.g. `tr-banking-dashboard`
+3. Open **Advanced settings**:
+   - **Python version:** 3.13, the version in `.python-version`.
+   - **Secrets:** TOML, so the value is **quoted**. GitHub Secrets take the bare value
+     instead; that is the one difference.
+
+     ```toml
+     DATABASE_URL = "postgresql://dashboard_reader.<project-ref>:<reader password>@<pooler-host>:5432/postgres"
+     ```
+
+     Use the `dashboard_reader` session-pooler string, **not** the `postgres` one. No
+     `EVDS_API_KEY` is needed; the dashboard never fetches.
+4. Click **Deploy**. Later pushes to `main` redeploy automatically. Secrets can be edited
+   under the app's **Settings → Secrets**.
+
+Apps without traffic for 12 hours go to sleep; any visitor can wake them with one click.
 
 ## Tests and linting
 
@@ -310,4 +393,4 @@ tests/                     pytest suite with real EVDS and BDDK response fixture
 3. Card spending from BKM monthly statistics (researched; series list pending)
 4. Bank loan/deposit rates and campaigns (daily scraping)
 5. Weekly AI-generated market summary combining all modules
-6. ~~Postgres/Supabase storage~~ ✔ (GitHub Actions and Streamlit Cloud next)
+6. ~~Postgres/Supabase storage, scheduled GitHub Actions fetch, public dashboard~~ ✔

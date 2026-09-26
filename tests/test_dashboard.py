@@ -1,15 +1,17 @@
 """Smoke tests: run the Streamlit script headlessly against a temporary database."""
 
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from tr_banking import db as db_module
 from tr_banking import settings as settings_module
 from tr_banking.config import load_series_config
-from tr_banking.db import SqliteRepository
+from tr_banking.db import Repository, SqliteRepository
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import parse_bddk_response
 from tr_banking.sources.evds import parse_evds_response
@@ -134,3 +136,58 @@ def test_turkish_charts_use_turkish_number_format(use_db: Callable, tmp_path: Pa
 
     spec = json.loads(app.get("vega_lite_chart")[0].proto.spec)
     assert spec["config"]["locale"]["number"]["decimal"] == ","
+
+
+# --- caching, freshness line and database errors (phase E) ---
+
+
+def page_text(app: AppTest) -> str:
+    elements = [*app.title, *app.markdown, *app.caption, *app.info, *app.error, *app.warning]
+    return "\n".join(str(element.value) for element in elements)
+
+
+def test_status_shows_fetch_time_and_page_read_time(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    text = page_text(app)
+    assert "Son veri çekimi" in text
+    assert re.search(r"Bu sayfa veriyi \d{2}:\d{2} \(TSİ\) itibarıyla gösteriyor", text)
+    assert "en geç saatte bir yenilenir" in text
+
+
+def test_database_is_read_once_per_cache_period(
+    use_db: Callable, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    opened: list[Path] = []
+    real_open = db_module.open_repository
+
+    def counting_open(settings: Settings) -> Repository:
+        opened.append(settings.db_path)
+        return real_open(settings)
+
+    monkeypatch.setattr(db_module, "open_repository", counting_open)
+    use_db(populated_db(tmp_path / "cache.db"))
+
+    first, second = run_dashboard(), run_dashboard()  # e.g. two visitors within the hour
+
+    assert not first.exception and not second.exception
+    assert opened == [tmp_path / "cache.db"]
+
+
+def test_unreachable_database_shows_a_plain_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Port 1 on localhost refuses at once; the message must reveal neither host nor password.
+    settings = Settings(
+        _env_file=None,
+        database_url="postgresql://dashboard_reader.ref:pw-must-not-leak@127.0.0.1:1/postgres",
+    )
+    monkeypatch.setattr(settings_module, "get_settings", lambda: settings)
+
+    app = run_dashboard()
+
+    assert not app.exception
+    assert "Veritabanına şu anda ulaşılamıyor" in app.error[0].value
+    text = page_text(app)
+    for leak in ("pw-must-not-leak", "127.0.0.1", "dashboard_reader.ref"):
+        assert leak not in text

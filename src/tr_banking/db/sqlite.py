@@ -31,6 +31,10 @@ class SqliteRepository(Repository):
         sql = files("tr_banking.db").joinpath("schema.sql").read_text(encoding="utf-8")
         self._conn.executescript(sql)
 
+    def pending_migrations(self) -> list[str]:
+        # schema.sql is idempotent and applied by ensure_ready(); there is nothing to track.
+        return []
+
     def _fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]:
         return self._conn.execute(sql, params).fetchall()
 
