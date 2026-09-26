@@ -11,71 +11,105 @@ database and one Streamlit dashboard, plus a planned weekly AI-generated summary
 
 ## Working agreement
 
-- The user is learning: briefly explain *why* behind key decisions.
-- Work in small steps; run tests after each step, list what to check manually,
-  suggest a commit point, then stop and wait for approval before the next step.
+- **At the start of every session, read "Calendar" below.** If something is due today or
+  overdue, tell the user first.
+- The user is learning: keep explanations short, but say *why* behind key decisions.
+- Work in phases or small steps:
+  1. Show the plan first.
+  2. At the end of each step, run tests + ruff, give a short manual checklist and a suggested
+     commit.
+  3. Then stop and wait for approval.
+
+  The user usually pushes; commits may be made locally when the user asks for uninterrupted
+  work.
 - The user is on Windows: give PowerShell commands, not bash.
 - Never print, log or read the contents of `.env`, not even key names. Running project
   commands that load `.env` internally (`tr-banking ...`, the dashboard) is agreed; they never
   print its values.
 - Never ask for passwords, API keys or connection strings in chat. Tell the user where to
-  enter them (`.env`, GitHub Secrets, Streamlit secrets) and let them do it.
-- Keep explanations short. Larger work is split into phases: show the plan first, stop at the
-  end of each phase with tests + ruff, a short manual checklist and a suggested commit, then
-  wait for approval. The user usually commits and pushes themselves.
+  enter them and let them do it:
+  - `.env`;
+  - GitHub Secrets, **one by one, by name**: `gh secret set NAME --repo ...` prompts for the
+    value, or use the web UI. Never `gh secret set -f .env`: it turns every `.env` line into a
+    secret and would overwrite the least-privilege `DATABASE_URL` with the owner string;
+  - Streamlit secrets.
 
-## Project status (updated 2026-09-26, after phase E)
+## Calendar
+
+Check at the start of every session.
+
+| Date (UTC) | Event | What to do |
+|---|---|---|
+| 2026-09-29 Tue 04:00 | First scheduled fetch | Check the run (`gh run list --workflow fetch.yml`). |
+| 2026-10-02 Fri 04:00 | Second scheduled fetch | If both runs are green, remind the user to remove the Windows task (Backlog 4). |
+| 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the first CI and fetch runs after it. |
+| 2026-11-15 | BDDK TLS certificate expires and gets renewed | Check the next BDDK fetch. On a certificate error, update the bundled intermediate (see [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)). |
+
+## Project status (updated 2026-09-26)
 
 Hosting:
 - Repo: `github.com/EnesAltuNN/tr-banking-dashboard` (**public**).
 - Database: Supabase, project in Frankfurt, reached through the session pooler.
-- Dashboard: **https://tr-banking-dashboard.streamlit.app/** on Streamlit Community Cloud, connected as `dashboard_reader`, Python
-  3.13. Its secret `DATABASE_URL` is set in the Streamlit app settings.
+- Dashboard: **https://tr-banking-dashboard.streamlit.app/** on Streamlit Community Cloud,
+  connected as `dashboard_reader`, Python 3.13.
 
-Cloud migration phases for module 1:
+Cloud migration of module 1 (phases A–E) is done:
+- Supabase is backfilled.
+- The REST API is closed (401).
+- CI is green.
+- The Tue/Fri fetch workflow runs in GitHub Actions.
+- The dashboard is live.
 
-| Phase | Scope | Status |
-|---|---|---|
-| A | Finish docs, disable Streamlit email prompt | done |
-| B | Postgres/Supabase backend, migrations, RLS, `dashboard_reader` | done: Supabase backfilled (13 series, 5,350 rows); REST API returns 401; reader role verified |
-| C | GitHub push, history secret scan, CI | done: history clean, CI green |
-| D | Scheduled fetch workflow (Tue/Fri 04:00 UTC) | done: manual run 36237384894 green; BDDK OK on Linux; public artifact holds response bodies only |
-| E | Streamlit Community Cloud deployment with `dashboard_reader` | done: live, tables/charts/TR-EN verified by the user; HTTP 200 |
+## Next steps
 
-**Next steps:**
-1. **GitHub CLI** is installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as
-   EnesAltuNN. It is not on the PATH of old terminals, so call it by full path.
-   - Use it to trigger runs (`gh workflow run fetch.yml`) and read logs and artifacts.
-   - Never use it to read or set secret values. The user sets secrets with
-     `gh secret set -f .env` or through the web UI.
-2. **Reminder owed to the user:** after the first scheduled Tuesday **and** Friday runs succeed,
-   remind them to remove the Windows task (Backlog 4). Do not remove it before that.
-   The first scheduled runs are Tue 2026-09-29 and Fri 2026-10-02, 04:00 UTC.
-3. **Phase E is done.** Facts to keep:
-     - Community Cloud reads `uv.lock` first and uses `uv sync` (supported since 2024-11), so
-       no `requirements.txt` is needed.
-     - `streamlit run` promotes root-level string secrets to `os.environ` at bootstrap,
-       before the script runs.
-   - Secret: TOML with a quoted value,
-     `DATABASE_URL = "postgresql://dashboard_reader.<ref>:<pw>@<pooler-host>:5432/postgres"`.
-     GitHub Secrets take the bare value.
+1. **README as a portfolio showcase** (planned for the next session).
 
-Local setup notes:
-- `.env` holds `EVDS_API_KEY` and `DATABASE_URL`, the write-capable `postgres.<ref>` string.
-  Local commands and the local dashboard therefore use Supabase. Comment the line out to go
-  back to SQLite.
-- The Windows task still runs locally on Thursdays 15:00 and writes to Supabase. That is
-  harmless, because upserts are idempotent.
-- Local Postgres tests: the repo has no Docker. A throwaway `pgserver` (Python 3.12, initdb
-  with `--no-locale` because the Turkish Windows locale crashes initdb) worked; point
-  `TEST_DATABASE_URL` at it.
+## Deployment facts
+
+- **Streamlit Community Cloud:**
+  - It reads `uv.lock` first and installs with `uv sync` (supported since 2024-11), so no
+    `requirements.txt` is needed.
+  - `streamlit run` promotes root-level string secrets to `os.environ` at bootstrap, before
+    the script runs.
+  - Its secret is TOML with a quoted value:
+    `DATABASE_URL = "postgresql://dashboard_reader.<ref>:<pw>@<pooler-host>:5432/postgres"`.
+    GitHub Secrets take the bare value.
+- **GitHub Actions secrets:**
+  - `EVDS_API_KEY`.
+  - `DATABASE_URL`, the least-privilege role's session pooler string (see Data model).
+- **GitHub CLI:**
+  - Installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as EnesAltuNN. It is not
+    on the PATH of old terminals, so call it by full path.
+  - Use it to trigger runs (`gh workflow run fetch.yml`) and to read logs and artifacts.
+  - Never use it to read or set secret values.
+- **Local `.env`:**
+  - Holds `EVDS_API_KEY` and the **owner** (`postgres.<ref>`) `DATABASE_URL`. That is
+    intended: local runs are where `tr-banking db migrate` and large backfills happen.
+  - Local commands and the local dashboard therefore use Supabase. Comment the line out to go
+    back to SQLite.
+- **Windows task:** it still runs locally on Thursdays at 15:00 and writes to Supabase. That is
+  harmless because upserts are idempotent. It gets removed per the Calendar.
+- **Local Postgres tests:**
+  - The machine has no Docker. A throwaway `pgserver` works: Python 3.12, and initdb with
+    `--no-locale`, because the Turkish Windows locale crashes initdb.
+  - Point `TEST_DATABASE_URL` at it.
+
+## Disaster recovery
+
+If the Supabase data is lost or the project is recreated:
+1. Point `DATABASE_URL` in `.env` at it (owner string).
+2. Run `uv run tr-banking db migrate`.
+3. Run `uv run tr-banking backfill --start 2014-01-03`. This takes about 15 s; the sources keep
+   the full history.
+4. Re-enable the roles' logins (`sql/`).
+5. Update the GitHub and Streamlit secrets.
 
 ## Roadmap (3 modules)
 
 | Module | Source | Frequency | `module` value | Status |
 |---|---|---|---|---|
-| 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done |
-| 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | on hold, see below |
+| 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done, live |
+| 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | on hold, see Data sources |
 | 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | planned |
 
 New modules must plug into the existing tables; do not rewrite the schema for them.
@@ -85,15 +119,29 @@ New modules must plug into the existing tables; do not rewrite the schema for th
 1. Least-privilege writer role for the fetch job (replace the postgres role in GitHub Secrets)
 2. Add .gitattributes (* text=auto eol=lf) if missing
 3. Verify Supabase free-tier project is not paused after a few weeks
-4. Remove the Windows scheduled task once Actions has run reliably
-5. Decide public vs private repo for portfolio
-6. Module 2: BKM (see pending decision)
-7. Module 3: bank rates/campaigns scraping, start with 3 banks
-8. Weekly AI summary: compute changes in Python, LLM only writes text
-9. `.devcontainer/devcontainer.json`: added by Streamlit's deploy flow (commit ebc1b7b).
-   - It uses Python 3.11 + pip + `requirements.txt` and would not install this uv project in
-     Codespaces. It does not affect Streamlit Cloud.
-   - The user has not decided yet: rewrite it for uv/3.13, or delete it.
+4. Remove the Windows scheduled task once Actions has run reliably (see Calendar)
+5. ~~Decide public vs private repo for portfolio~~ **closed**: public, dashboard live
+6. Module 2: BKM (see Data sources)
+7. Module 3: bank rates/campaigns scraping, start with 3 banks (see Open questions)
+8. Weekly AI summary: compute changes in Python, LLM only writes text (see Open questions)
+9. `.devcontainer/devcontainer.json` from Streamlit's deploy flow (Python 3.11 + pip, not uv):
+   rewrite or delete
+10. Real, inflation-adjusted values: deflate by CPI (TÜFE) from EVDS, next to the nominal view
+11. Revision history is not kept. This is a deliberate choice: upserts overwrite revised
+    values. A "vintage" table (value per fetch date) could be added later if revisions matter.
+
+## Open questions
+
+- **Module 3 (bank sites):**
+  - Check each bank's terms of use and `robots.txt` before scraping.
+  - Decide rate limits.
+  - Decide whether campaign text needs its own table.
+- **AI summary:**
+  - Which model?
+  - Where does it run? Likely a GitHub Actions step after the fetch, with its own API-key
+    secret.
+  - Which table stores the generated summaries, with inputs and date, so the dashboard can
+    show them?
 
 ## Architecture
 
@@ -161,80 +209,26 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - Use the **session pooler** (port 5432, user `<role>.<project-ref>`). The direct host is
     IPv6-only and GitHub Actions has no IPv6.
 
-## Pending decision: BKM card spending (module 2)
+## Data sources
 
-Research is done (2026-09-24). **No code has been written.** The user put module 2 on hold and
-still has to confirm the series list below before implementation starts.
+Full, verified details: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md). Read it before touching
+a source client.
 
-- **Source page:** one page per month:
-  `https://bkm.com.tr/secilen-aya-ait-istatistikler/?filter_year=YYYY&filter_month=M&List=Listele`
-  (`robots.txt` allows it).
-- **The "Excel" download (`&xls=1`) is really an HTML table** with an `.xls` name, so parse the
-  HTML with the stdlib `html.parser`; no Excel library is needed.
-- **Coverage:** 2017-01 onward, with the same table layout every month. Publication lags about
-  1.5 to 2 months (on 2026-09-24 the latest month was 2026-07).
-- **Values:** amounts are in million TL, written in Turkish format (`2.450.238,01`). Card counts
-  are plain integers.
-- **Proposed series** (July 2026 values):
-  - Credit card shopping amount, domestic cards used domestically: 2,450,238 million TL.
-  - Debit card shopping amount, domestic cards used domestically: 418,421 million TL.
-  - Online card payments (internetten kartli odemeler), amount: 908,899 million TL.
-  - Foreign cards used domestically, shopping amount, credit + debit (a tourism signal):
-    128,787 million TL.
-  - Number of credit cards: 151.7 million.
-  - Number of debit cards: 223.2 million.
-- **Implementation plan:**
-  - Locate cells by row and column labels, not by position.
-  - Monthly metrics: month-over-month % and 12-month %.
-  - Add dashboard tabs per module.
-  - Backfill with one request per month, 1 s apart.
-
-## EVDS3 facts (verified 2026-09-24)
-
-- Base URL `https://evds3.tcmb.gov.tr/igmevdsms-dis/`.
-- The EVDS2 service URL now 302-redirects to EVDS3. The client never follows redirects, so the
-  key header can't leak to another host.
-- The API key goes in the `key` HTTP header; a request without it gets 403.
-- Parameters are appended to the path **without `?`**:
-  - Data: `series=A-B&startDate=DD-MM-YYYY&endDate=DD-MM-YYYY&type=json`.
-  - Metadata: `categories/type=json`, `datagroups/mode=0&type=json`,
-    `serieList/type=json&code=<datagroup>`.
-- Response format:
-  - Shape: `{"totalCount", "items": [{"Tarih": "DD-MM-YYYY", "YEARWEEK", "<CODE_WITH_UNDERSCORES>": "123.00000000" | null, "UNIXTIME"}]}`.
-  - Values are strings. Weeks outside a series' range are null.
-- Tracked series come from data group `bie_hpbitablo6` (weekly Friday, thousand TRY, TRY+FX) and
-  start on 2024-06-28.
-  - The older groups `bie_kredi` / `bie_tukkre` were archived on 2025-01-31 with a different
-    methodology; do not stitch them together.
-- New weekly data appears on Thursdays around 14:30 Istanbul time.
-- Never guess series codes: discover them through the metadata endpoints and show the official
-  name, frequency and unit before using them.
-
-## BDDK weekly bulletin facts (verified 2026-09-24)
-
-- There is no official API. The client uses the endpoint behind the "advanced" page's charts:
-  - `POST https://www.bddk.org.tr/BultenHaftalik/tr/Gelismis/KiyaslamaJsonGetir`
-  - Form fields: `dil=tr`, `baslangicTarihi`/`bitisTarihi` (`DD.MM.YYYY`), `id` (row, e.g.
-    `1.0.4`), `parabirimi` (`TRY`|`USD`), `sutun` (1 TL, 2 FX, 3 total), `tarafKodu` (bank group).
-  - No token or cookie is needed.
-  - Response: `{"Baslik", "XEkseni": ["D.MM.YYYY"...], "YEkseni": [numbers]}`.
-  - One request returns the full range; data starts 2014-01-03.
-- An unknown row or bank group returns HTTP 200 with **empty lists**, so the parser treats an
-  empty series as an error.
-- The home-page variant `tr/Home/KiyaslamaJsonGetir` caps results at 13 weeks; don't use it.
-- Series code in config: `<row>:<group>:<currency>:<column>`.
-  - Bank groups: 10001 sector, 10002 deposit, 10003 development & investment, 10004
-    participation, 10005 state, 10006 foreign, 10007 domestic private.
-  - State + foreign + domestic private = sector (checked).
-- Rows come from the bulletin table *Krediler* (tabloId 1 on the page). Row 1.0.3 (consumer
-  loans) excludes credit cards; 1.0.2 includes them.
-- `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV SSL CA
-  2018" is missing.
-  - `bddk_ssl_context()` trusts certifi plus the bundled public intermediate
-    (`sources/certs/`). It works on Windows and Linux CI. Never use `verify=False`.
-  - The leaf expires 2026-11-15. If the renewal changes the issuer, download the new
-    intermediate from the leaf's "CA Issuers" URL.
-- It is a public website, not an API: keep the 1 s delay between requests.
+- **TCMB EVDS3:**
+  - API key in the `key` header; parameters go in the path without `?`.
+  - Six weekly series from data group `bie_hpbitablo6`, in thousand TRY, from 2024-06-28.
+  - Never guess series codes; discover them through the metadata endpoints.
+- **BDDK weekly bulletin:**
+  - No official API: one POST per series to the charts' JSON endpoint, 1 s apart.
+  - Seven sector series in million TRY from 2014-01-03.
+  - The site omits its TLS intermediate, which is bundled in `sources/certs/`.
+- **BKM (module 2, on hold):**
+  - Researched; 6 proposed series; the monthly "Excel" is really HTML.
+  - Before coding:
+    - Monthly freshness must allow the 1.5–2 month publication lag. The current
+      `MAX_AGE_DAYS["monthly"] = 75` is too tight; use roughly 100 days.
+    - Dashboard scaling and labels must follow each series' unit (million TL, card counts),
+      not assume TRY.
 
 ## Coding conventions
 
@@ -259,8 +253,7 @@ still has to confirm the series list below before implementation starts.
   - Never put secrets in file names.
 - **Scheduled fetch** (`.github/workflows/fetch.yml`):
   - Runs Tue and Fri 04:00 UTC, plus `workflow_dispatch`.
-  - Secrets `EVDS_API_KEY` and `DATABASE_URL` (the write-capable `postgres.<ref>` session
-    pooler string) go only to the steps that need them.
+  - Secrets `EVDS_API_KEY` and `DATABASE_URL` go only to the steps that need them.
   - Steps: migrate → fetch → check-freshness → scan-raw → upload artifact (only if the scan
     passed).
 - **CI** (`.github/workflows/ci.yml`):
@@ -299,7 +292,7 @@ uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```
 
-The GitHub Actions workflow is the main scheduler. The optional local Windows task ("tr-banking
-weekly fetch", Thursdays 15:00) runs `scripts\scheduled_fetch.ps1`,
-which logs to `data\logs\fetch.log`. Keep `.ps1` files pure ASCII: Windows PowerShell 5.1 reads
-BOM-less files as ANSI.
+The GitHub Actions workflow is the main scheduler. The optional local Windows task
+("tr-banking weekly fetch", Thursdays 15:00) runs `scripts\scheduled_fetch.ps1`, which logs to
+`data\logs\fetch.log`. Keep `.ps1` files pure ASCII: Windows PowerShell 5.1 reads BOM-less
+files as ANSI.
