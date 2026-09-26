@@ -249,3 +249,14 @@ def test_scan_raw_passes_on_clean_files(
     assert cli.main(["scan-raw"]) == 0
 
     assert "scanned 1 raw files: no secrets found" in caplog.text
+
+
+def test_db_migrate_check_reports_no_pending_migrations(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    use_settings(monkeypatch, db_path=tmp_path / "t.db")
+
+    assert cli.main(["db", "migrate", "--check"]) == 0
+
+    assert "no pending migrations" in caplog.text

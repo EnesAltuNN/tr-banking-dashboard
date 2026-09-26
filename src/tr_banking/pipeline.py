@@ -64,7 +64,8 @@ def run_update(
     written: dict[str, int] = {}
     failed: list[str] = []
     with open_repository(settings) as repo:
-        repo.init_schema()
+        # Check (Postgres) or create (SQLite) the schema; the fetch never runs migrations.
+        repo.ensure_ready()
         for source in sources:
             specs = config.for_source(source)
             logger.info("updating %d %s series for %s..%s", len(specs), source, start, end)

@@ -28,6 +28,11 @@ SESSION_POOLER_PORT = 5432
 TRANSACTION_POOLER_PORT = 6543
 
 
+def migration_names() -> list[str]:
+    """Packaged migration files in the order they must be applied."""
+    return sorted(path.name for path in MIGRATIONS.iterdir() if path.name.endswith(".sql"))
+
+
 @dataclass(frozen=True)
 class ConnectionInfo:
     """What a connection string points to, without the password."""
@@ -94,9 +99,28 @@ class PostgresRepository(Repository):
         """Apply pending migrations in file-name order, each in its own transaction."""
         with self._conn.transaction():
             self._conn.execute(CREATE_MIGRATIONS_TABLE_SQL)
-        for migration in sorted(MIGRATIONS.iterdir(), key=lambda path: path.name):
-            if migration.name.endswith(".sql"):
-                self._apply(migration.name, migration.read_text(encoding="utf-8"))
+        for name in migration_names():
+            self._apply(name, MIGRATIONS.joinpath(name).read_text(encoding="utf-8"))
+
+    def pending_migrations(self) -> list[str]:
+        """Migration files not yet recorded in schema_migrations (all of them on a new database)."""
+        [(has_table,)] = self._fetch_all("SELECT to_regclass('schema_migrations') IS NOT NULL")
+        applied = set()
+        if has_table:
+            applied = {name for (name,) in self._fetch_all("SELECT version FROM schema_migrations")}
+        return [name for name in migration_names() if name not in applied]
+
+    def ensure_ready(self) -> None:
+        """Check only: schema changes are applied by hand with `tr-banking db migrate`.
+
+        The scheduled job runs as a role without DDL rights, so it must never try to migrate;
+        a pending migration fails it loudly instead.
+        """
+        if pending := self.pending_migrations():
+            raise StorageError(
+                f"pending migrations {pending}: run `uv run tr-banking db migrate` with the owner "
+                "connection (DATABASE_URL in .env), then re-run"
+            )
 
     def _apply(self, version: str, sql: str) -> None:
         with self._conn.transaction():

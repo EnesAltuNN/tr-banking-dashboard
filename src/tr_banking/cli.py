@@ -35,7 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         if args.command == "db":
-            run_db_command(args.db_command)
+            return run_db_command(args.db_command, getattr(args, "check_only", False))
         elif args.command == "check-freshness":
             return check_freshness(args.source)
         elif args.command == "scan-raw":
@@ -54,16 +54,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def run_db_command(command: str) -> None:
+def run_db_command(command: str, check_only: bool = False) -> int:
     settings = get_settings()
     if command == "check" and settings.database_url is not None:
         report_connection(settings.database_url.get_secret_value())
     with open_repository(settings) as repo:
-        if command == "migrate":
-            repo.init_schema()
-            logger.info("%s schema is up to date", repo.backend)
-        else:
+        if command == "check":
             report_status(repo)
+            return 0
+        if check_only:
+            # Read-only: works for the least-privilege role the scheduled job uses.
+            if pending := repo.pending_migrations():
+                logger.error("pending migrations: %s (run `tr-banking db migrate`)", pending)
+                return 1
+            logger.info("%s schema is up to date, no pending migrations", repo.backend)
+            return 0
+        repo.init_schema()
+        logger.info("%s schema is up to date", repo.backend)
+        return 0
 
 
 def check_freshness(source: str | None) -> int:
@@ -138,6 +146,8 @@ def report_status(repo: Repository) -> None:
             )
         else:
             logger.info("migrations: %s", ", ".join(migrations) or "none")
+            if pending := repo.pending_migrations():
+                logger.warning("pending migrations: %s (run `tr-banking db migrate`)", pending)
         for table, enabled in sorted(status["rls"].items()):
             logger.info("row level security on %s: %s", table, "on" if enabled else "OFF")
     try:
@@ -176,7 +186,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     db = commands.add_parser("db", help="database setup and health check")
     db_commands = db.add_subparsers(dest="db_command", required=True)
-    db_commands.add_parser("migrate", help="create or upgrade the schema (safe to re-run)")
+    migrate = db_commands.add_parser(
+        "migrate", help="create or upgrade the schema (safe to re-run; needs the owner role)"
+    )
+    migrate.add_argument(
+        "--check",
+        dest="check_only",
+        action="store_true",
+        help="apply nothing; exit 1 if a migration is pending (works for read-only roles)",
+    )
     db_commands.add_parser("check", help="show connection, schema and row counts")
 
     commands.add_parser(

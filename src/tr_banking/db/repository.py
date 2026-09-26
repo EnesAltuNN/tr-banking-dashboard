@@ -63,7 +63,19 @@ class Repository(ABC):
 
     @abstractmethod
     def init_schema(self) -> None:
-        """Create or upgrade the schema; safe to call on every start."""
+        """Create or upgrade the schema; safe to call on every start (needs DDL rights)."""
+
+    @abstractmethod
+    def pending_migrations(self) -> list[str]:
+        """Schema changes not applied yet; empty when the schema is current."""
+
+    def ensure_ready(self) -> None:
+        """Make sure the schema is usable before reading or writing data.
+
+        The default creates it. Postgres overrides this to only *check*, so a least-privilege
+        role never needs DDL rights.
+        """
+        self.init_schema()
 
     @abstractmethod
     def _fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]: ...

@@ -82,8 +82,9 @@ the previous Friday.
 
 ### Automatic fetch (GitHub Actions)
 
-[`.github/workflows/fetch.yml`](.github/workflows/fetch.yml) runs `db migrate`, `fetch`,
-`check-freshness` and `scan-raw` against Supabase.
+[`.github/workflows/fetch.yml`](.github/workflows/fetch.yml) runs `db check`,
+`db migrate --check`, `fetch`, `check-freshness` and `scan-raw` against Supabase, as the
+least-privilege `fetch_writer` role.
 
 - **When:** every **Tuesday and Friday at 04:00 UTC** (07:00 Istanbul; Türkiye is UTC+3 all
   year). CBRT and BDDK publish on Thursdays, so the Friday run brings the new week. The Tuesday
@@ -99,13 +100,14 @@ the previous Friday.
   - `tr-banking scan-raw` checks every file against the real secret values, and the upload is
     skipped unless that scan passes.
 
-**Secrets:** add both under *Settings → Secrets and variables → Actions → New repository
-secret*.
+**Secrets:** add them **one by one, by name** under *Settings → Secrets and variables →
+Actions*, or with `gh secret set NAME` (it prompts for the value). Do not use
+`gh secret set -f .env`: it would upload the owner string.
 
 | Name | Value |
 |---|---|
 | `EVDS_API_KEY` | your EVDS API key (same as in `.env`) |
-| `DATABASE_URL` | the **write-capable** Session pooler string of the `postgres` role: `postgresql://postgres.<project-ref>:<database password>@<pooler-host>:5432/postgres` (the same line as in `.env`), **not** the read-only `dashboard_reader` one |
+| `DATABASE_URL` | the Session pooler string of the least-privilege **`fetch_writer`** role: `postgresql://fetch_writer.<project-ref>:<its password>@<pooler-host>:5432/postgres`. **Not** the owner string from `.env`, and not `dashboard_reader`. |
 
 > **Scheduled runs stop after 60 days without repository activity** in public repositories.
 > GitHub then disables the workflow; re-enable it under **Actions → Weekly fetch → Enable
@@ -151,8 +153,13 @@ command, including the dashboard, to Postgres. No other change is needed.
    uv run tr-banking db check                     # expect row counts and RLS "on"
    ```
 
-5. In Supabase's **SQL Editor**, run [`sql/enable_dashboard_reader.sql`](sql/enable_dashboard_reader.sql).
-   Type a strong password into the editor only; never save it in the file.
+5. In Supabase's **SQL Editor**, enable the two limited roles with a different strong password
+   each:
+   - [`sql/enable_fetch_writer.sql`](sql/enable_fetch_writer.sql) for the scheduled job;
+   - [`sql/enable_dashboard_reader.sql`](sql/enable_dashboard_reader.sql) for the dashboard.
+
+   Type passwords into the editor only, never into the files, and delete the queries from the
+   editor history afterwards.
 
 Filling Supabase with `backfill` is simpler than copying the SQLite file. It uses exactly the
 code path of the weekly job, and the sources keep the full history anyway.
@@ -168,9 +175,18 @@ code path of the weekly job, and the sources keep the full history anyway.
 
 | Who | Connects as | Can do |
 |---|---|---|
-| Fetch job (local / GitHub Actions) | `postgres` (table owner) | read and write |
+| You, locally (`.env`) | `postgres` (table owner) | everything: `db migrate` (DDL), large backfills |
+| Scheduled fetch (GitHub Actions) | `fetch_writer` | `SELECT`/`INSERT`/`UPDATE` on `series` and `observations`; no delete, no schema changes |
 | Dashboard (Streamlit Cloud) | `dashboard_reader` | `SELECT` on `series` and `observations` only; sessions are read-only |
 | Supabase REST API (`anon`, `authenticated`) | - | nothing |
+
+The owner string exists only in your local `.env`. If a GitHub secret leaked, it could add or
+correct rows but not delete data or alter tables. Schema changes are applied by hand:
+
+1. Run `uv run tr-banking db migrate` locally.
+2. Then push.
+
+The scheduled job runs `db migrate --check` and fails loudly if a migration is still pending.
 
 How the REST API is locked out:
 - Row Level Security is enabled on every table.

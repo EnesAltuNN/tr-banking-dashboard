@@ -63,6 +63,10 @@ Cloud migration of module 1 (phases A–E) is done:
 ## Next steps
 
 1. **README as a portfolio showcase** (planned for the next session).
+2. **Verify the `fetch_writer` switch** if not confirmed yet: the user sets its password
+   (`sql/enable_fetch_writer.sql`) and the GitHub secret `DATABASE_URL`. Then run
+   `gh workflow run fetch.yml`: every step must be green, and `db check` in the log must say
+   `connected as fetch_writer`.
 
 ## Deployment facts
 
@@ -76,7 +80,9 @@ Cloud migration of module 1 (phases A–E) is done:
     GitHub Secrets take the bare value.
 - **GitHub Actions secrets:**
   - `EVDS_API_KEY`.
-  - `DATABASE_URL`, the least-privilege role's session pooler string (see Data model).
+  - `DATABASE_URL`, the **`fetch_writer`** session pooler string
+    (`postgresql://fetch_writer.<ref>:<pw>@<pooler-host>:5432/postgres`). It never holds the
+    owner string.
 - **GitHub CLI:**
   - Installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as EnesAltuNN. It is not
     on the PATH of old terminals, so call it by full path.
@@ -84,7 +90,9 @@ Cloud migration of module 1 (phases A–E) is done:
   - Never use it to read or set secret values.
 - **Local `.env`:**
   - Holds `EVDS_API_KEY` and the **owner** (`postgres.<ref>`) `DATABASE_URL`. That is
-    intended: local runs are where `tr-banking db migrate` and large backfills happen.
+    intended and it stays that way: local runs are the only place where
+    `tr-banking db migrate` (DDL) and large backfills happen. The owner string lives only in
+    `.env`, never in GitHub or Streamlit.
   - Local commands and the local dashboard therefore use Supabase. Comment the line out to go
     back to SQLite.
 - **Windows task:** it still runs locally on Thursdays at 15:00 and writes to Supabase. That is
@@ -101,7 +109,8 @@ If the Supabase data is lost or the project is recreated:
 2. Run `uv run tr-banking db migrate`.
 3. Run `uv run tr-banking backfill --start 2014-01-03`. This takes about 15 s; the sources keep
    the full history.
-4. Re-enable the roles' logins (`sql/`).
+4. Re-enable both roles' logins in the SQL editor: `sql/enable_fetch_writer.sql` and
+   `sql/enable_dashboard_reader.sql`.
 5. Update the GitHub and Streamlit secrets.
 
 ## Roadmap (3 modules)
@@ -116,8 +125,10 @@ New modules must plug into the existing tables; do not rewrite the schema for th
 
 ## Backlog
 
-1. Least-privilege writer role for the fetch job (replace the postgres role in GitHub Secrets)
-2. Add .gitattributes (* text=auto eol=lf) if missing
+1. ~~Least-privilege writer role for the fetch job~~ **done**: `fetch_writer` (migration 0003);
+   GitHub `DATABASE_URL` switched to it
+2. ~~Add .gitattributes (* text=auto eol=lf)~~ **done**: index was already LF, nothing
+   renormalized
 3. Verify Supabase free-tier project is not paused after a few weeks
 4. Remove the Windows scheduled task once Actions has run reliably (see Calendar)
 5. ~~Decide public vs private repo for portfolio~~ **closed**: public, dashboard live
@@ -167,7 +178,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
 - `cli.py`:
   - `tr-banking fetch [--weeks N] [--source evds|bddk]`
   - `tr-banking backfill --start YYYY-MM-DD [--end] [--source ...]`
-  - `tr-banking db migrate` (idempotent)
+  - `tr-banking db migrate` (idempotent; needs the owner role)
+  - `tr-banking db migrate --check`: applies nothing, exit 1 if a migration is pending. It works
+    for `fetch_writer`.
   - `tr-banking db check`: connection kind, migrations, RLS, row counts. It never logs the
     connection string.
   - `tr-banking check-freshness [--source]`: exit 1 if a configured series has no data or data
@@ -203,9 +216,20 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     it, grant SELECT plus add a `dashboard_reader` policy.
   - Keep `db/schema.sql` (SQLite) in step with the migrations.
 - **Supabase access model:**
-  - The fetch job connects as `postgres`, the table owner, which bypasses RLS.
-  - The dashboard connects as `dashboard_reader`: SELECT only, read-only sessions. Its password
-    is set by hand with `sql/enable_dashboard_reader.sql` and never stored in the repo.
+  - **Owner `postgres`:** only from the local `.env`. It is used for `db migrate` (DDL) and
+    large backfills, and bypasses RLS as the table owner.
+  - **`fetch_writer`** (GitHub Actions):
+    - SELECT, INSERT and UPDATE on `series` and `observations`, plus SELECT on
+      `schema_migrations`.
+    - No DELETE or TRUNCATE, no DDL. RLS policies exist per command.
+    - `statement_timeout` is 60 s.
+  - **`dashboard_reader`** (Streamlit): SELECT only; sessions are read-only.
+  - Both non-owner roles are created NOLOGIN by migrations. Their passwords are set by hand
+    with `sql/enable_*.sql` and never stored in the repo.
+  - `Repository.ensure_ready()` creates the schema on SQLite but only *checks* it on Postgres.
+    The fetch never runs DDL; a pending migration fails it with a clear message.
+  - Every new table needs grants and policies for `fetch_writer` and `dashboard_reader` in its
+    migration.
   - Use the **session pooler** (port 5432, user `<role>.<project-ref>`). The direct host is
     IPv6-only and GitHub Actions has no IPv6.
 
@@ -253,9 +277,14 @@ a source client.
   - Never put secrets in file names.
 - **Scheduled fetch** (`.github/workflows/fetch.yml`):
   - Runs Tue and Fri 04:00 UTC, plus `workflow_dispatch`.
-  - Secrets `EVDS_API_KEY` and `DATABASE_URL` go only to the steps that need them.
-  - Steps: migrate → fetch → check-freshness → scan-raw → upload artifact (only if the scan
-    passed).
+  - Secrets `EVDS_API_KEY` and `DATABASE_URL` (`fetch_writer`) go only to the steps that need
+    them.
+  - Steps: db check → `db migrate --check` → fetch → check-freshness → scan-raw → upload
+    artifact (only if the scan passed).
+  - **Adding a migration:**
+    1. Run `uv run tr-banking db migrate` locally (owner `.env`) **before** pushing code that
+       needs it.
+    2. Otherwise the scheduled run fails at the schema check.
 - **CI** (`.github/workflows/ci.yml`):
   - Runs on every push: `uv sync --locked`, ruff check/format and pytest, against a
     `postgres:17` service container.
@@ -284,7 +313,8 @@ uv run ruff check .                                   # lint
 uv run ruff format .                                  # format
 uv run tr-banking backfill --start 2014-01-03         # load history (all sources)
 uv run tr-banking fetch [--source evds|bddk]          # latest 8 weeks
-uv run tr-banking db migrate                          # create/upgrade schema (SQLite or Postgres)
+uv run tr-banking db migrate                          # create/upgrade schema (owner role only)
+uv run tr-banking db migrate --check                  # exit 1 if a migration is pending
 uv run tr-banking db check                            # connection, migrations, RLS, row counts
 uv run tr-banking check-freshness                     # exit 1 if data is stale
 uv run tr-banking scan-raw                            # exit 1 if a raw file holds a secret

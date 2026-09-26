@@ -54,11 +54,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run tr-banking db check
 
-      - name: Migrate
-        id: migrate
+      # DATABASE_URL is the least-privilege fetch_writer role: it can upsert data but has no
+      # DDL rights. Migrations are applied by hand as the owner (`tr-banking db migrate`
+      # locally); this step only fails loudly if one is still pending.
+      - name: Check schema is up to date
+        id: schema
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: uv run tr-banking db migrate
+        run: uv run tr-banking db migrate --check
 
       - name: Fetch latest weeks
         env:
@@ -69,7 +72,7 @@ jobs:
       # Runs even if the fetch failed, to show which series are stale. Fails the job when no
       # new data arrived, so a silent outage turns the run red.
       - name: Check data freshness
-        if: ${{ !cancelled() && steps.migrate.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.schema.outcome == 'success' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run tr-banking check-freshness
