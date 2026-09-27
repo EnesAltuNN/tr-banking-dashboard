@@ -40,7 +40,7 @@ def test_series_without_data_is_stale() -> None:
 
 
 def test_limits_depend_on_frequency() -> None:
-    frame = latest(("M", "monthly", "2026-07-31"), ("D", "daily", "2026-09-24"))
+    frame = latest(("M", "monthly", "2026-08-31"), ("D", "daily", "2026-09-24"))
 
     assert find_stale(frame, TUESDAY)["code"].tolist() == ["D"]
 
@@ -54,3 +54,14 @@ def test_custom_limits() -> None:
 def test_unknown_frequency_fails_loudly() -> None:
     with pytest.raises(ValueError, match="hourly"):
         find_stale(latest(("A", "hourly", "2026-09-28")), TUESDAY)
+
+
+def test_series_limit_overrides_the_frequency_limit() -> None:
+    # CPI for August is published in early September; 45 days from the month's end is enough,
+    # while a 20-day limit would already call it stale.
+    frame = latest(("CPI", "monthly", "2026-08-31"), ("X", "monthly", "2026-08-31"))
+    frame["max_age_days"] = [20, None]
+
+    stale = find_stale(frame, TUESDAY)
+
+    assert stale["code"].tolist() == ["CPI"]

@@ -29,8 +29,20 @@ def test_project_series_yaml_loads() -> None:
         "TP.HPBITABLO6.11",
         "TP.HPBITABLO6.16",
         "TP.HPBITABLO6.20",
+        "TP.TUKFIY2025.GENEL",
     ]
-    assert all(spec.module == "credit" for spec in config.series)
+    assert {spec.module for spec in config.series} == {"credit", "macro"}
+
+
+def test_project_deflator_is_the_2025_based_cpi() -> None:
+    config = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
+
+    deflator = config.deflator
+    assert deflator is not None
+    assert (deflator.source, deflator.code) == ("evds", "TP.TUKFIY2025.GENEL")
+    assert (deflator.frequency, deflator.module) == ("monthly", "macro")
+    # The old 2003=100 index must never be mixed in (see docs/DATA_SOURCES.md).
+    assert all(spec.code != "TP.GENENDEKS.T1" for spec in config.series)
 
 
 def test_project_bddk_series_have_valid_codes() -> None:
@@ -83,3 +95,22 @@ def test_same_code_in_different_sources_is_allowed() -> None:
 def test_empty_series_list_is_rejected() -> None:
     with pytest.raises(ValidationError):
         SeriesConfig.model_validate({"series": []})
+
+
+def test_only_one_deflator_is_allowed() -> None:
+    other = {**VALID_SPEC, "code": "TP.TEST.2", "deflator": True}
+
+    with pytest.raises(ValidationError, match="at most one series may be the deflator"):
+        SeriesConfig.model_validate({"series": [{**VALID_SPEC, "deflator": True}, other]})
+
+
+def test_optional_fields_default_to_off() -> None:
+    config = SeriesConfig.model_validate({"series": [VALID_SPEC]})
+
+    assert config.series[0].max_age_days is None
+    assert config.deflator is None
+
+
+def test_max_age_days_must_be_positive() -> None:
+    with pytest.raises(ValidationError, match="max_age_days"):
+        SeriesConfig.model_validate({"series": [{**VALID_SPEC, "max_age_days": 0}]})

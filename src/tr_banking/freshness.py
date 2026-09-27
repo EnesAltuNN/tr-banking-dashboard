@@ -7,7 +7,8 @@ import pandas as pd
 
 # Weekly data (week ending Friday) is published the next Thursday. A run on Tuesday therefore
 # sees data 11 days old and a run on Friday 7 days old; 13 days means one missed release.
-MAX_AGE_DAYS: Mapping[str, int] = {"daily": 4, "weekly": 13, "monthly": 75}
+# Monthly series differ a lot in publication lag, so they usually set `max_age_days` in config.
+MAX_AGE_DAYS: Mapping[str, int] = {"daily": 4, "weekly": 13, "monthly": 45}
 
 
 def find_stale(
@@ -15,10 +16,13 @@ def find_stale(
 ) -> pd.DataFrame:
     """Rows of `latest` (source, code, frequency, latest_date) that are too old or empty.
 
-    Adds `age_days` (NaN for a series with no data at all, which always counts as stale).
+    An optional `max_age_days` column overrides the per-frequency limit per series. Adds
+    `age_days` (NaN for a series with no data at all, which always counts as stale).
     """
     ages = (pd.Timestamp(today) - pd.to_datetime(latest["latest_date"])).dt.days
     limits = latest["frequency"].map(max_age_days)
+    if "max_age_days" in latest:
+        limits = pd.to_numeric(latest["max_age_days"]).fillna(limits)
     if limits.isna().any():
         unknown = sorted(set(latest.loc[limits.isna(), "frequency"]))
         raise ValueError(f"no freshness limit for frequency {unknown}")

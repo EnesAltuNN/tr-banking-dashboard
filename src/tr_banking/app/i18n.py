@@ -4,6 +4,8 @@ import math
 from datetime import date, datetime
 from typing import Literal
 
+import pandas as pd
+
 Lang = Literal["tr", "en"]
 LANGUAGES: dict[Lang, str] = {"tr": "TR", "en": "EN"}
 
@@ -42,6 +44,28 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "Data is fetched automatically on Tuesday and Friday mornings. This page shows it "
             "as of {loaded} (TRT) and refreshes at least hourly."
         ),
+    },
+    "value_mode": {"tr": "Değerler", "en": "Values"},
+    "mode_nominal": {"tr": "Nominal", "en": "Nominal"},
+    "mode_real": {"tr": "Reel (enflasyondan arındırılmış)", "en": "Real (inflation-adjusted)"},
+    "real_unit": {"tr": "{unit}, {month} fiyatlarıyla", "en": "{unit}, {month} prices"},
+    "real_note": {
+        "tr": (
+            "Reel değerler **{month} fiyatlarıyla** gösterilir (TÜFE, 2025=100). Haftalık stoklar "
+            "içinde bulundukları ayın ortalama TÜFE'siyle düzeltilir. TÜFE'si henüz açıklanmamış "
+            "haftalar gösterilmez: tablo, TÜFE'si olan son haftayı (**{week}**) gösterir. TÜFE "
+            "aylık olduğu için haftalık % bu görünümde gizlidir."
+        ),
+        "en": (
+            "Real values are shown in **{month} prices** (CPI, 2025=100). Weekly stocks are "
+            "deflated by the average CPI of their month. Weeks whose CPI is not published yet "
+            "are left out: the table shows the last week with CPI (**{week}**). Weekly % is "
+            "hidden in this view because CPI is monthly."
+        ),
+    },
+    "real_unavailable": {
+        "tr": "Reel görünüm için TÜFE verisi henüz yok; nominal değerler gösteriliyor.",
+        "en": "No CPI data for the real view yet; showing nominal values.",
     },
     "db_unavailable": {
         "tr": "Veritabanına şu anda ulaşılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.",
@@ -202,6 +226,11 @@ def change_direction(value: float) -> int:
         return 0
     rounded = round(value, 1)
     return (rounded > 0) - (rounded < 0)
+
+
+def format_month(month: date | datetime | pd.Period, lang: Lang) -> str:
+    """Ağustos 2026 / Aug 2026."""
+    return f"{MONTHS[lang][month.month - 1]} {month.year}"
 
 
 def format_date(day: date | datetime, lang: Lang, long: bool = False) -> str:

@@ -3,6 +3,7 @@
 import json
 import re
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,8 @@ from tr_banking.sources.evds import parse_evds_response
 DASHBOARD = PROJECT_ROOT / "src" / "tr_banking" / "app" / "dashboard.py"
 FIXTURES = Path(__file__).parent / "fixtures"
 CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
-SPECS = CONFIG.for_source("evds")
+SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
+CPI_SPEC = CONFIG.deflator
 BDDK_SPECS = CONFIG.for_source("bddk")
 TR_COLUMNS = ["Seri", "Tarih", "Son değer (milyar TL)", "Haftalık %", "Yıllık %"]
 
@@ -39,14 +41,21 @@ def run_dashboard() -> AppTest:
     return AppTest.from_file(str(DASHBOARD), default_timeout=60).run()
 
 
-def populated_db(path: Path) -> Path:
+def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
+    """Weekly credit data 2024-06-14 .. 2024-07-12 and monthly CPI for 2024 up to `cpi_until`."""
     evds = json.loads((FIXTURES / "evds_hpbitablo6_2024.json").read_text(encoding="utf-8"))
+    cpi = json.loads((FIXTURES / "evds_cpi_2024.json").read_text(encoding="utf-8"))
     bddk = json.loads((FIXTURES / "bddk_konut_2024.json").read_text(encoding="utf-8"))
+    cpi_rows = parse_evds_response(cpi, [CPI_SPEC.code])
+    cpi_rows = cpi_rows[cpi_rows["date"] <= date.fromisoformat(cpi_until)]
     with SqliteRepository(path) as repo:
         repo.init_schema()
-        for spec in SPECS + BDDK_SPECS:
+        for spec in [*SPECS, CPI_SPEC, *BDDK_SPECS]:
             repo.upsert_series(spec)
         repo.upsert_observations("evds", parse_evds_response(evds, [s.code for s in SPECS]))
+        repo.upsert_observations(
+            "evds", cpi_rows[cpi_rows["date"] <= date.fromisoformat(cpi_until)]
+        )
         for spec in BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
     return path
@@ -191,3 +200,70 @@ def test_unreachable_database_shows_a_plain_message(monkeypatch: pytest.MonkeyPa
     text = page_text(app)
     for leak in ("pw-must-not-leak", "127.0.0.1", "dashboard_reader.ref"):
         assert leak not in text
+
+
+# --- real (inflation-adjusted) view ---
+
+
+def test_price_index_is_not_shown_as_a_credit_series(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    assert CPI_SPEC.name_tr not in app.dataframe[0].value["Seri"].tolist()
+    assert CPI_SPEC.name_tr not in app.multiselect[0].options
+
+
+def test_real_view_uses_prices_of_the_latest_cpi_month(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+    nominal = app.dataframe[0].value["Son değer (milyar TL)"].iloc[0]
+
+    app.radio(key="value_mode").set_value("real").run()
+
+    assert not app.exception
+    table = app.dataframe[0].value
+    # The weekly % is hidden: real values move in monthly CPI steps.
+    assert list(table.columns) == [
+        "Seri",
+        "Tarih",
+        "Son değer (milyar TL, Aralık 2024 fiyatlarıyla)",
+        "Yıllık %",
+    ]
+    # The last week is in July 2024; December 2024 prices are higher, so the real value is too.
+    assert table.iloc[0, 2] > nominal
+    assert "Aralık 2024 fiyatlarıyla" in page_text(app)
+
+
+def test_real_view_ends_at_the_last_week_with_cpi(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db", cpi_until="2024-06-30"))
+    app = run_dashboard()
+
+    app.radio(key="value_mode").set_value("real").run()
+
+    table = app.dataframe[0].value
+    assert set(table["Tarih"]) == {date(2024, 6, 28)}  # July weeks have no CPI yet
+    assert "Haziran 2024 fiyatlarıyla" in table.columns[2]
+    assert "TÜFE'si olan son haftayı (**28 Haziran 2024**)" in page_text(app)
+
+
+def test_real_view_without_cpi_falls_back_to_nominal(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db", cpi_until="2023-12-31"))
+    app = run_dashboard()
+
+    app.radio(key="value_mode").set_value("real").run()
+
+    assert not app.exception
+    assert "TÜFE verisi henüz yok" in app.info[0].value
+    assert list(app.dataframe[0].value.columns) == TR_COLUMNS
+
+
+def test_english_real_view(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+
+    app.radio(key="lang").set_value("en").run()
+    app.radio(key="value_mode").set_value("real").run()
+
+    columns = list(app.dataframe[0].value.columns)
+    assert columns == ["Series", "Date", "Last value (billion TRY, Dec 2024 prices)", "Yearly %"]

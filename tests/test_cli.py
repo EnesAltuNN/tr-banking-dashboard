@@ -203,7 +203,7 @@ def test_check_freshness_passes_with_recent_data(
 def test_check_freshness_fails_with_old_data(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    seed(tmp_path / "t.db", date.today() - timedelta(days=30))
+    seed(tmp_path / "t.db", date.today() - timedelta(days=60))  # older than every limit
     use_settings(monkeypatch, db_path=tmp_path / "t.db")
 
     assert cli.main(["check-freshness"]) == 1

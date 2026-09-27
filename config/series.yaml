@@ -4,7 +4,7 @@
 # Allowed values (validated in src/tr_banking/config.py):
 #   source:    evds | bddk | bkm | bank_site
 #   frequency: daily | weekly | monthly
-#   module:    credit | cards | rates
+#   module:    credit | cards | rates | macro (inputs such as CPI, not shown as a module)
 #
 # EVDS codes below were verified on 2026-09-24 via the EVDS3 metadata endpoints:
 #   category 4502 "Para ve Banka Istatistikleri (Haftalik)"
@@ -66,6 +66,20 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+
+  # Consumer price index, used to deflate TRY values into real values. Data group
+  # bie_tukfiy2025 (TUIK), verified 2026-09-27: Tuketici Fiyat Endeksi (2025=100), Genel Endeks,
+  # monthly, 2005-01 onward. TUIK already back-cast the new base to 2005, so no own chaining.
+  # Published around the 3rd of the next month, hence max_age_days 45 (from the month's end).
+  - source: evds
+    code: TP.TUKFIY2025.GENEL
+    name_tr: Tüketici fiyat endeksi (TÜFE)
+    name_en: Consumer price index (CPI)
+    unit: index (2025=100)
+    frequency: monthly
+    module: macro
+    max_age_days: 45
+    deflator: true
 
 # ---------------------------------------------------------------------------------------------
 # BDDK weekly bulletin (https://www.bddk.org.tr/BultenHaftalik), table 1 "Krediler".

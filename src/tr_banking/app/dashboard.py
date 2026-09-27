@@ -18,12 +18,14 @@ from tr_banking.app.i18n import (
     Lang,
     change_direction,
     format_date,
+    format_month,
     format_number,
     format_pct,
     text,
     unit_label,
 )
-from tr_banking.app.metrics import display_unit, summarize
+from tr_banking.app.metrics import deflate, display_unit, summarize
+from tr_banking.config import SeriesConfig, load_series_config
 from tr_banking.db import StorageError, open_repository
 from tr_banking.settings import Settings, get_settings
 
@@ -85,20 +87,88 @@ def main() -> None:
         st.info(text("no_data", lang))
         st.stop()
 
-    source = render_source_picker(series, lang)
+    price_index = deflator_observations(
+        series, observations, load_series_config(settings.series_config_path)
+    )
+    credit = series[series["module"] == "credit"]
+    render_credit_view(credit, observations, price_index, fetched_at, loaded_at, lang, theme)
+
+
+def deflator_observations(
+    series: pd.DataFrame, observations: pd.DataFrame, config: SeriesConfig
+) -> pd.DataFrame:
+    """date/value rows of the price index marked `deflator: true` in config (may be empty)."""
+    spec = config.deflator
+    if spec is None:
+        return pd.DataFrame(columns=["date", "value"])
+    ids = series.loc[(series["source"] == spec.source) & (series["code"] == spec.code), "id"]
+    rows = observations[observations["series_id"].isin(ids)]
+    return rows[["date", "value"]].reset_index(drop=True)
+
+
+def render_credit_view(
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    price_index: pd.DataFrame,
+    fetched_at: datetime | None,
+    loaded_at: datetime,
+    lang: Lang,
+    theme: str,
+) -> None:
+    source_column, mode_column = st.columns([2, 1])
+    with source_column:
+        source = render_source_picker(series, lang)
+    with mode_column:
+        real = render_value_mode(lang) == "real"
     series = series[series["source"] == source]
     observations = observations[observations["series_id"].isin(series["id"])]
     selected_ids, start, end = render_filters(series, observations, lang)
     selected = observations[observations["series_id"].isin(selected_ids)]
     render_status(selected, fetched_at, loaded_at, lang)
 
+    reference = None
+    if real:
+        real_rows, reference = (
+            deflate(selected, price_index) if not price_index.empty else (selected.iloc[0:0], None)
+        )
+        if real_rows.empty:
+            st.info(text("real_unavailable", lang))
+            reference = None
+        else:
+            selected = real_rows
+    month = format_month(reference, lang) if reference is not None else None
+
     # The table uses full history up to `end`, so yearly % works even for a short date range.
-    render_summary_table(summarize(selected, as_of=end), series, lang, theme)
-    st.caption(text("inflation_note", lang))
+    summary = summarize(selected, as_of=end)
+    render_summary_table(summary, series, lang, theme, month, show_weekly=month is None)
+    if month is None:
+        st.caption(text("inflation_note", lang))
+    else:
+        week = format_date(summary["last_date"].max(), lang, long=True)
+        st.caption(text("real_note", lang).format(month=month, week=week))
 
     in_range = selected[selected["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
-    render_charts(in_range, series.set_index("id"), selected_ids, lang, theme)
+    render_charts(in_range, series.set_index("id"), selected_ids, lang, theme, month)
     st.caption(f"{SOURCE_NOTES[source][lang]} {text('comparison_note', lang)}")
+
+
+def render_value_mode(lang: Lang) -> str:
+    return st.radio(
+        text("value_mode", lang),
+        options=["nominal", "real"],
+        format_func=lambda mode: text(f"mode_{mode}", lang),
+        horizontal=True,
+        key="value_mode",
+    )
+
+
+def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, str]:
+    """Display multiplier and label; real values get "..., Aug 2026 prices"."""
+    factor, unit = display_unit(stored_unit)
+    label = unit_label(unit, lang)
+    if month is not None:
+        label = text("real_unit", lang).format(unit=label, month=month)
+    return factor, label
 
 
 def render_header() -> Lang:
@@ -178,11 +248,16 @@ def render_status(
 
 
 def render_summary_table(
-    summary: pd.DataFrame, series: pd.DataFrame, lang: Lang, theme: str
+    summary: pd.DataFrame,
+    series: pd.DataFrame,
+    lang: Lang,
+    theme: str,
+    month: str | None = None,
+    show_weekly: bool = True,
 ) -> None:
     table = summary.merge(series, left_on="series_id", right_on="id")
-    factors = table["unit"].map(lambda unit: display_unit(unit)[0])
-    units = table["unit"].map(lambda unit: unit_label(display_unit(unit)[1], lang))
+    factors = table["unit"].map(lambda unit: shown_unit(unit, lang, month)[0])
+    units = table["unit"].map(lambda unit: shown_unit(unit, lang, month)[1])
 
     series_col, date_col = text("col_series", lang), text("col_date", lang)
     wow_col, yoy_col = text("col_wow", lang), text("col_yoy", lang)
@@ -202,6 +277,11 @@ def render_summary_table(
     )
     if units.nunique() > 1:
         frame.insert(3, text("col_unit", lang), units)
+    pct_cols = [wow_col, yoy_col]
+    if not show_weekly:
+        # Real values move in monthly CPI steps, so a weekly % would mislead.
+        frame = frame.drop(columns=[wow_col])
+        pct_cols = [yoy_col]
 
     colors = DELTA_COLORS.get(theme, DELTA_COLORS["light"])
 
@@ -212,9 +292,9 @@ def render_summary_table(
     # The Styler changes only what is displayed; cells stay numeric, so sorting still works.
     styled = (
         frame.style.format(lambda value: format_number(value, lang), subset=[last_col])
-        .format(lambda value: format_pct(value, lang), subset=[wow_col, yoy_col])
+        .format(lambda value: format_pct(value, lang), subset=pct_cols)
         .format(lambda day: format_date(day, lang), subset=[date_col])
-        .map(delta_style, subset=[wow_col, yoy_col])
+        .map(delta_style, subset=pct_cols)
     )
     st.dataframe(styled, hide_index=True)
 
@@ -225,18 +305,19 @@ def render_charts(
     selected_ids: list[int],
     lang: Lang,
     theme: str,
+    month: str | None = None,
 ) -> None:
     color = LINE_COLORS.get(theme, LINE_COLORS["light"])
     for row_start in range(0, len(selected_ids), CHARTS_PER_ROW):
         row_ids = selected_ids[row_start : row_start + CHARTS_PER_ROW]
         for column, series_id in zip(st.columns(CHARTS_PER_ROW), row_ids, strict=False):
             meta = series.loc[series_id]
-            factor, unit = display_unit(meta["unit"])
+            factor, unit = shown_unit(meta["unit"], lang, month)
             data = observations[observations["series_id"] == series_id]
             data = data.assign(value=data["value"] * factor)
             with column:
                 st.markdown(f"**{meta[f'name_{lang}']}**")
-                st.altair_chart(line_chart(data, unit_label(unit, lang), color, lang))
+                st.altair_chart(line_chart(data, unit, color, lang))
 
 
 def line_chart(data: pd.DataFrame, unit: str, color: str, lang: Lang) -> alt.LayerChart:

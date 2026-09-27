@@ -6,6 +6,7 @@ and links here. Update the "verified" dates when you re-check a fact.
 | Source | Series | Unit (stored) | History from | Access |
 |---|---|---|---|---|
 | [TCMB EVDS3](#tcmb-evds3-verified-2026-09-24) | 6 weekly loan series | thousand TRY | 2024-06-28 | official API, free key |
+| [TCMB EVDS3, CPI](#consumer-price-index-verified-2026-09-27) | 1 monthly price index (deflator) | index, 2025=100 | 2005-01 | official API, free key |
 | [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series | million TRY | 2014-01-03 | public website, no API |
 | [BKM](#bkm-card-spending-module-2-pending-decision) | 6 proposed monthly card series | million TL, counts | 2017-01 | public website (not built yet) |
 
@@ -16,8 +17,9 @@ Values are stored exactly as published; the dashboard converts both TRY units to
 - **EVDS and BDDK agree closely:** within about 0.3% on common series (checked 2026-09-24).
   - Their bank coverage differs slightly.
   - BDDK *commercial and other loans* is broader than EVDS *commercial loans*.
-- **Values are nominal TRY.** Inflation, and the TRY value of FX loans, drive much of the growth.
-  Inflation-adjusted values are on the roadmap.
+- **Values are stored nominal.** Inflation, and the TRY value of FX loans, drive much of the
+  growth. The dashboard can also show real values, deflated by CPI (see
+  [Consumer price index](#consumer-price-index-verified-2026-09-27)).
 - **Consumer loans (total) include individual credit cards in both sources.**
   - EVDS `TP.HPBITABLO6.2` (1.1 Tüketici Kredileri) is the sum of housing, auto, general
     purpose *and* individual credit cards (1.1.1 to 1.1.4). The four rows add up to the total
@@ -65,6 +67,55 @@ The key is sent only as an HTTP header, never in the URL, and it is never logged
   previous Friday.
 - Never guess series codes: discover them through the metadata endpoints and show the official
   name, frequency and unit before using them.
+- **Monthly series** (checked 2026-09-27):
+  - Dates come as `YYYY-M` (`"2026-1"`, `"2026-12"`). They are stored as the month's last day.
+  - A monthly request must start on the **1st of a month**. A mid-month `startDate` returns an
+    empty `items` list, so the pipeline aligns monthly windows to the 1st, 3 months back.
+- **Never mix frequencies in one request.** A request with weekly and monthly codes silently
+  returns every series converted to monthly (averaged). The pipeline sends one request per
+  frequency.
+
+## Consumer price index (verified 2026-09-27)
+
+Used only to compute real (inflation-adjusted) values; stored like any other series with
+`module: macro` and `deflator: true` in `config/series.yaml`.
+
+| Code | Series | Data group | Unit | From |
+|---|---|---|---|---|
+| `TP.TUKFIY2025.GENEL` | Tüketici Fiyat Endeksi, Genel Endeks (TÜİK) | `bie_tukfiy2025` | index, 2025=100 | 2005-01 |
+
+- Monthly, published by TÜİK around the 3rd of the next month (freshness limit 45 days from the
+  month's end, via `max_age_days`).
+- **Base change, January 2026.** TÜİK moved the CPI from 2003=100 (`TP.GENENDEKS.T1`) to
+  2025=100 and **back-cast the new base to 2005**. Across 260 overlapping months, the two
+  bases' month-over-month changes differ by at most 0.007 pp, including the transition month
+  (January 2026: +4.84% in both). So the project uses only the 2025=100 series and does **no
+  own chaining**. The old series lives only in a test fixture
+  (`tests/fixtures/evds_cpi_bases_2025_2026.json`), which a test uses to prove this continuity.
+- **How real values are computed** (`app/metrics.py: deflate`):
+  - Real value = nominal value × CPI(reference month) / CPI(month of the value).
+  - The reference month is the latest month with CPI, so real values read as "in August 2026
+    prices" and the latest real value is close to today's nominal one.
+  - Weeks whose month has no CPI yet are left out of the real view; the table then shows the
+    last week that has CPI, and says so.
+  - Weekly % is hidden in the real view: every week of a month uses the same CPI, so a weekly
+    real change would show a jump at each month boundary and none inside the month.
+- **Timing mismatch.** Weekly loan stocks are point-in-time (Friday) values, while CPI is a
+  monthly *average* price level. Deflating a stock by its month's average CPI is the usual
+  approximation, but it is off by up to half a month of inflation (roughly 1% at 2% a month).
+  Yearly real changes are hardly affected; do not read week-to-week real changes into it.
+- **Guard against mixed bases.** `check_price_index` fails loudly if the index moves more than
+  20% in one month. A base mix-up gives a jump of tens of percent (2003=100 is about 3,500,
+  2025=100 about 110), while real monthly changes since 2005 stay well below 20%.
+- **If TÜİK changes the base again** and does *not* back-cast the new series:
+  1. Keep the old-base series and add the new one as a second series in `series.yaml`
+     (only one of them may have `deflator: true`).
+  2. Pick a link month present in both (ideally the last month of the old base).
+  3. Chain: `chained(t) = old(t) × new(link) / old(link)` for months up to the link month, and
+     `new(t)` after it. Do this in one pure function next to `deflate`, with a test like the
+     existing continuity test (new vs chained month-over-month changes equal across the link).
+  4. Store the raw published values only; chaining happens at display time, so a later
+     back-cast by TÜİK just replaces the input.
 
 ## BDDK weekly bulletin (verified 2026-09-24)
 

@@ -9,7 +9,7 @@ from pydantic import SecretStr
 from tr_banking import pipeline
 from tr_banking.config import load_series_config
 from tr_banking.db import SqliteRepository
-from tr_banking.pipeline import UpdateError, load_source, run_update
+from tr_banking.pipeline import UpdateError, fetch_window_start, load_source, run_update
 from tr_banking.security import files_containing_secrets, secret_values
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import BddkClient
@@ -17,10 +17,13 @@ from tr_banking.sources.evds import EvdsClient, EvdsResponseError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EVDS_BYTES = (FIXTURES / "evds_hpbitablo6_2024.json").read_bytes()
+CPI_BYTES = (FIXTURES / "evds_cpi_2024.json").read_bytes()  # 12 monthly values
 BDDK_BYTES = (FIXTURES / "bddk_konut_2024.json").read_bytes()
 CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
-EVDS_SPECS = CONFIG.for_source("evds")
+WEEKLY_EVDS_SPECS = [spec for spec in CONFIG.for_source("evds") if spec.frequency == "weekly"]
+CPI_SPEC = CONFIG.deflator
 BDDK_SPECS = CONFIG.for_source("bddk")
+EVDS_ROWS = 18 + 12  # 6 weekly series x 3 weeks + 12 CPI months
 START, END = date(2024, 6, 14), date(2024, 7, 12)
 
 
@@ -35,10 +38,23 @@ def mock_transport(status: int = 200, body: bytes = b"") -> httpx.MockTransport:
     return httpx.MockTransport(lambda request: httpx.Response(status, content=body))
 
 
-def evds_client(tmp_path: Path, body: bytes = EVDS_BYTES) -> EvdsClient:
-    return EvdsClient(
-        SecretStr("fake"), "https://evds.test/x/", tmp_path, transport=mock_transport(body=body)
-    )
+def evds_transport(requests: list[httpx.Request] | None = None) -> httpx.MockTransport:
+    """Answers CPI requests with the CPI fixture and everything else with the weekly one."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if requests is not None:
+            requests.append(request)
+        cpi = "TUKFIY2025" in str(request.url)
+        return httpx.Response(200, content=CPI_BYTES if cpi else EVDS_BYTES)
+
+    return httpx.MockTransport(handler)
+
+
+def evds_client(
+    tmp_path: Path, body: bytes | None = None, requests: list[httpx.Request] | None = None
+) -> EvdsClient:
+    transport = mock_transport(body=body) if body is not None else evds_transport(requests)
+    return EvdsClient(SecretStr("fake"), "https://evds.test/x/", tmp_path, transport=transport)
 
 
 def bddk_client(tmp_path: Path, status: int = 200) -> BddkClient:
@@ -57,17 +73,17 @@ def bddk_client(tmp_path: Path, status: int = 200) -> BddkClient:
 
 def test_load_source_stores_series_and_observations(repo: SqliteRepository, tmp_path: Path) -> None:
     with evds_client(tmp_path) as client:
-        written = load_source(repo, "evds", client, EVDS_SPECS, START, END)
+        written = load_source(repo, "evds", client, WEEKLY_EVDS_SPECS, START, END)
 
     assert written == 18
-    assert repo.list_series()["code"].tolist() == [spec.code for spec in EVDS_SPECS]
+    assert repo.list_series()["code"].tolist() == [spec.code for spec in WEEKLY_EVDS_SPECS]
     assert len(repo.get_observations()) == 18
 
 
 def test_load_source_twice_is_idempotent(repo: SqliteRepository, tmp_path: Path) -> None:
     with evds_client(tmp_path) as client:
-        load_source(repo, "evds", client, EVDS_SPECS, START, END)
-        load_source(repo, "evds", client, EVDS_SPECS, START, END)
+        load_source(repo, "evds", client, WEEKLY_EVDS_SPECS, START, END)
+        load_source(repo, "evds", client, WEEKLY_EVDS_SPECS, START, END)
 
     assert len(repo.list_series()) == 6
     assert len(repo.get_observations()) == 18
@@ -80,7 +96,7 @@ def test_load_source_writes_nothing_when_response_is_bad(
         evds_client(tmp_path, body=b'{"items": []}') as client,
         pytest.raises(EvdsResponseError),
     ):
-        load_source(repo, "evds", client, EVDS_SPECS, START, END)
+        load_source(repo, "evds", client, WEEKLY_EVDS_SPECS, START, END)
 
     assert repo.get_observations().empty
 
@@ -125,7 +141,7 @@ def test_run_update_loads_all_sources(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
     written = run_update(settings, START, END)
 
-    assert written == {"evds": 18, "bddk": 3 * len(BDDK_SPECS)}
+    assert written == {"evds": EVDS_ROWS, "bddk": 3 * len(BDDK_SPECS)}
     assert stored_rows_per_source(settings.db_path) == written
 
 
@@ -138,7 +154,7 @@ def test_failing_source_does_not_block_others(
     with pytest.raises(UpdateError, match="update failed for: bddk"):
         run_update(settings, START, END)
 
-    assert stored_rows_per_source(settings.db_path) == {"evds": 18}
+    assert stored_rows_per_source(settings.db_path) == {"evds": EVDS_ROWS}
     assert "bddk update failed: BDDK returned HTTP 404" in caplog.text
 
 
@@ -168,9 +184,7 @@ def test_raw_files_hold_no_secrets(repo: SqliteRepository, tmp_path: Path) -> No
     key = "fake-evds-key-must-not-leak"
     url = "postgresql://postgres.ref:db-password-must-not-leak@h.pooler.supabase.com:5432/postgres"
     raw_dir = tmp_path / "raw"
-    evds = EvdsClient(
-        SecretStr(key), "https://evds.test/x/", raw_dir, transport=mock_transport(body=EVDS_BYTES)
-    )
+    evds = EvdsClient(SecretStr(key), "https://evds.test/x/", raw_dir, transport=evds_transport())
     bddk = BddkClient(
         raw_dir,
         base_url="https://bddk.test/",
@@ -179,10 +193,53 @@ def test_raw_files_hold_no_secrets(repo: SqliteRepository, tmp_path: Path) -> No
     )
 
     with evds, bddk:
-        load_source(repo, "evds", evds, EVDS_SPECS, START, END)
+        load_source(repo, "evds", evds, CONFIG.for_source("evds"), START, END)
         load_source(repo, "bddk", bddk, BDDK_SPECS, START, END)
 
     saved = [path for path in raw_dir.rglob("*") if path.is_file()]
     secrets = secret_values(Settings(_env_file=None, evds_api_key=key, database_url=url))
-    assert len(saved) == 1 + len(BDDK_SPECS)
+    assert len(saved) == 2 + len(BDDK_SPECS)  # EVDS: one weekly and one monthly request
     assert files_containing_secrets(raw_dir, [*secrets, "key:"]) == []
+
+
+# --- mixed frequencies (EVDS converts a mixed request to the lowest frequency) ---
+
+
+def test_weekly_and_monthly_series_are_requested_separately(
+    repo: SqliteRepository, tmp_path: Path
+) -> None:
+    requests: list[httpx.Request] = []
+
+    with evds_client(tmp_path, requests=requests) as client:
+        written = load_source(repo, "evds", client, CONFIG.for_source("evds"), START, END)
+
+    urls = sorted(str(request.url) for request in requests)
+    [monthly_url] = [url for url in urls if "TUKFIY2025" in url]
+    [weekly_url] = [url for url in urls if "TUKFIY2025" not in url]
+    assert "HPBITABLO6" not in monthly_url
+    assert "startDate=01-03-2024" in monthly_url  # month-aligned, 3 months back
+    assert "startDate=14-06-2024" in weekly_url
+    assert written == EVDS_ROWS
+
+
+def test_monthly_cpi_is_stored_at_month_end(repo: SqliteRepository, tmp_path: Path) -> None:
+    with evds_client(tmp_path) as client:
+        load_source(repo, "evds", client, [CPI_SPEC], START, END)
+
+    dates = repo.get_observations()["date"].dt.date.tolist()
+    assert dates[0] == date(2024, 1, 31)
+    assert dates[1] == date(2024, 2, 29)  # leap year
+    assert len(dates) == 12
+
+
+@pytest.mark.parametrize(
+    ("frequency", "start", "expected"),
+    [
+        ("weekly", date(2026, 8, 2), date(2026, 8, 2)),
+        ("monthly", date(2026, 8, 2), date(2026, 5, 1)),
+        ("monthly", date(2026, 2, 15), date(2025, 11, 1)),  # crosses the year
+        ("monthly", date(2014, 1, 1), date(2013, 10, 1)),
+    ],
+)
+def test_fetch_window_start(frequency: str, start: date, expected: date) -> None:
+    assert fetch_window_start(frequency, start) == expected

@@ -1,5 +1,6 @@
 """TCMB EVDS (evds3) source: HTTP client and parsing into long-format observations."""
 
+import calendar
 import logging
 import math
 import re
@@ -20,9 +21,10 @@ logger = logging.getLogger(__name__)
 DATE_COLUMN = "Tarih"
 # Columns EVDS adds next to the series values; any other column must be a requested series.
 META_COLUMNS = frozenset({DATE_COLUMN, "YEARWEEK", "UNIXTIME"})
-# Daily and weekly series use DD-MM-YYYY (monthly series use another format; not supported yet).
-# Request parameters use the same format.
+# Daily and weekly series use DD-MM-YYYY, which is also the request format. Monthly series come
+# back as YYYY-M (e.g. "2026-8") and are stored at the end of the month (period end).
 DATE_FORMAT = "%d-%m-%Y"
+MONTHLY_DATE = re.compile(r"^(\d{4})-(\d{1,2})$")
 
 # Codes are embedded in the URL path, so only allow characters EVDS codes actually use.
 SERIES_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_.]+$")
@@ -169,10 +171,18 @@ def _series_frame(items: list[dict[str, Any]], column: str, code: str) -> pd.Dat
 
 
 def _parse_date(raw: Any) -> date:
+    if isinstance(raw, str) and (monthly := MONTHLY_DATE.match(raw)):
+        year, month = int(monthly.group(1)), int(monthly.group(2))
+        if 1 <= month <= 12:
+            return month_end(year, month)
     try:
         return datetime.strptime(raw, DATE_FORMAT).date()
     except (TypeError, ValueError) as exc:
-        raise EvdsResponseError(f"unexpected date {raw!r}, expected DD-MM-YYYY") from exc
+        raise EvdsResponseError(f"unexpected date {raw!r}, expected DD-MM-YYYY or YYYY-M") from exc
+
+
+def month_end(year: int, month: int) -> date:
+    return date(year, month, calendar.monthrange(year, month)[1])
 
 
 def _parse_value(raw: Any, code: str) -> float:

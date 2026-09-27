@@ -87,8 +87,12 @@ def check_freshness(source: str | None) -> int:
     config = load_series_config(settings.series_config_path)
     sources = (source,) if source else IMPLEMENTED_SOURCES
     expected = pd.DataFrame(
-        [(s.source, s.code, s.frequency) for src in sources for s in config.for_source(src)],
-        columns=["source", "code", "frequency"],
+        [
+            (s.source, s.code, s.frequency, s.max_age_days)
+            for src in sources
+            for s in config.for_source(src)
+        ],
+        columns=["source", "code", "frequency", "max_age_days"],
     )
     with open_repository(settings) as repo:
         latest = repo.latest_dates()[["source", "code", "latest_date"]]
