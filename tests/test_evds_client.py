@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import httpx
+import pandas as pd
 import pytest
 from pydantic import SecretStr
 
@@ -12,7 +13,9 @@ from tr_banking.sources.evds import (
     EvdsApiError,
     EvdsClient,
     EvdsResponseError,
+    add_years,
     build_series_url,
+    request_windows,
 )
 
 FIXTURE_BYTES = (Path(__file__).parent / "fixtures" / "evds_hpbitablo6_2024.json").read_bytes()
@@ -227,3 +230,100 @@ def test_key_echoed_in_an_error_is_masked(tmp_path: Path) -> None:
         client.fetch_observations(CODES, START, END)
 
     assert FAKE_KEY not in str(exc_info.value)
+
+
+# --- EVDS returns at most 1000 items per response, so long ranges go in windows ---
+
+
+def daily_payload(code: str, days: list[str], value: str | None = "1.5") -> dict:
+    column = code.replace(".", "_")
+    return {"items": [{"Tarih": day, column: value} for day in days]}
+
+
+def test_request_windows_cover_the_range_without_overlap() -> None:
+    windows = request_windows(date(2014, 1, 3), date(2019, 6, 30))
+
+    assert windows == [
+        (date(2014, 1, 3), date(2016, 1, 2)),
+        (date(2016, 1, 3), date(2018, 1, 2)),
+        (date(2018, 1, 3), date(2019, 6, 30)),
+    ]
+    assert request_windows(START, END) == [(START, END)]
+
+
+def test_add_years_handles_leap_day() -> None:
+    assert add_years(date(2024, 2, 29), 2) == date(2026, 2, 28)
+    assert add_years(date(2024, 2, 29), 4) == date(2028, 2, 29)
+
+
+def test_long_range_is_fetched_in_windows_and_combined(tmp_path: Path) -> None:
+    code = "TP.PY.P02.1H"
+    recorder = Recorder(
+        # Like the real one-week repo series: no values before September 2018.
+        httpx.Response(200, json=daily_payload(code, ["04-01-2016"], value=None)),
+        httpx.Response(200, json=daily_payload(code, ["14-09-2018", "17-09-2018"])),
+        httpx.Response(200, json=daily_payload(code, ["02-01-2019"])),
+    )
+
+    with make_client(recorder, tmp_path) as client:
+        rows = client.fetch_observations([code], date(2015, 1, 1), date(2019, 6, 30))
+
+    urls = [str(request.url) for request in recorder.requests]
+    assert len(urls) == 3
+    assert "startDate=01-01-2015&endDate=31-12-2016" in urls[0]
+    assert "startDate=01-01-2017&endDate=31-12-2018" in urls[1]
+    assert "startDate=01-01-2019&endDate=30-06-2019" in urls[2]
+    assert rows["date"].tolist() == [date(2018, 9, 14), date(2018, 9, 17), date(2019, 1, 2)]
+    assert len(list((tmp_path / "evds").iterdir())) == 3  # one raw file per window
+
+
+def test_series_without_values_in_any_window_fails(tmp_path: Path) -> None:
+    code = "TP.PY.P02.1H"
+    empty = httpx.Response(200, json=daily_payload(code, ["03-01-2017"], value=None))
+
+    with (
+        make_client(Recorder(empty), tmp_path) as client,
+        pytest.raises(EvdsResponseError, match="returned no values"),
+    ):
+        client.fetch_observations([code], date(2017, 1, 1), date(2019, 6, 30))
+
+
+def test_response_at_the_evds_cap_fails_instead_of_losing_rows(tmp_path: Path) -> None:
+    code = "TP.PY.P02.1H"
+    days = [f"{day:%d-%m-%Y}" for day in pd.date_range("2016-01-01", periods=1000, freq="D")]
+    capped = httpx.Response(200, json=daily_payload(code, days))
+
+    with (
+        make_client(Recorder(capped), tmp_path) as client,
+        pytest.raises(EvdsResponseError, match="EVDS's cap"),
+    ):
+        client.fetch_observations([code], START, END)
+
+
+def test_week_returned_by_two_windows_is_kept_once(tmp_path: Path) -> None:
+    # A request ending Saturday 2016-01-02 and the next starting Sunday 2016-01-03 both return
+    # the week ending Friday 2016-01-01 (seen in a real backfill on 2026-09-27).
+    code = "TP.KTF10"
+    recorder = Recorder(
+        httpx.Response(200, json=daily_payload(code, ["25-12-2015", "01-01-2016"])),
+        httpx.Response(200, json=daily_payload(code, ["01-01-2016", "08-01-2016"])),
+    )
+
+    with make_client(recorder, tmp_path) as client:
+        rows = client.fetch_observations([code], date(2014, 1, 3), date(2016, 1, 10))
+
+    assert rows["date"].tolist() == [date(2015, 12, 25), date(2016, 1, 1), date(2016, 1, 8)]
+
+
+def test_windows_disagreeing_on_a_shared_week_fail(tmp_path: Path) -> None:
+    code = "TP.KTF10"
+    recorder = Recorder(
+        httpx.Response(200, json=daily_payload(code, ["01-01-2016"], value="1.5")),
+        httpx.Response(200, json=daily_payload(code, ["01-01-2016"], value="2.5")),
+    )
+
+    with (
+        make_client(recorder, tmp_path) as client,
+        pytest.raises(EvdsResponseError, match="disagree"),
+    ):
+        client.fetch_observations([code], date(2014, 1, 3), date(2016, 1, 10))

@@ -4,18 +4,23 @@ import logging
 from collections.abc import Sequence
 from datetime import date
 
+import pandas as pd
+
 from tr_banking.config import SeriesSpec, Source, load_series_config
 from tr_banking.db import Repository, open_repository
 from tr_banking.settings import Settings
 from tr_banking.sources import ObservationClient
 from tr_banking.sources.bddk import BddkClient
+from tr_banking.sources.bkm import BkmClient
 from tr_banking.sources.common import SourceApiError
 from tr_banking.sources.evds import EvdsClient
 
 logger = logging.getLogger(__name__)
 
 # Sources with a client today; config.Source also lists the planned ones.
-IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk")
+IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bkm")
+# Monthly data is published with a lag and sometimes revised: re-read a few months.
+MONTHLY_LOOKBACK_MONTHS = 3
 
 
 class UpdateError(RuntimeError):
@@ -35,17 +40,37 @@ def load_source(
         raise ValueError(f"no {source} series configured")
     for spec in specs:
         repo.upsert_series(spec)
-    observations = client.fetch_observations([spec.code for spec in specs], start, end)
-    return repo.upsert_observations(source, observations)
+    # One request per frequency: EVDS silently converts every series in a request to the
+    # lowest frequency among them, e.g. weekly loans to monthly values next to a monthly CPI.
+    frames = []
+    for frequency in sorted({spec.frequency for spec in specs}):
+        codes = [spec.code for spec in specs if spec.frequency == frequency]
+        window_start = fetch_window_start(frequency, start)
+        frames.append(client.fetch_observations(codes, window_start, end))
+    return repo.upsert_observations(source, pd.concat(frames, ignore_index=True))
 
 
-def open_client(source: Source, settings: Settings) -> EvdsClient | BddkClient:
+def fetch_window_start(frequency: str, start: date) -> date:
+    """Monthly requests start on the first of a month, a few months back.
+
+    EVDS returns nothing for a monthly request starting mid-month, and BKM and TÜİK publish
+    with a lag of one to two months, so the latest fetch re-reads recent months.
+    """
+    if frequency != "monthly":
+        return start
+    month_index = start.year * 12 + start.month - 1 - MONTHLY_LOOKBACK_MONTHS
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
+def open_client(source: Source, settings: Settings) -> EvdsClient | BddkClient | BkmClient:
     if source == "evds":
         if settings.evds_api_key is None:
             raise ValueError("EVDS_API_KEY is not set (add it to .env or the environment)")
         return EvdsClient(settings.evds_api_key, settings.evds_base_url, settings.raw_dir)
     if source == "bddk":
         return BddkClient(settings.raw_dir)
+    if source == "bkm":
+        return BkmClient(settings.raw_dir)
     raise ValueError(f"source {source!r} has no client yet")
 
 

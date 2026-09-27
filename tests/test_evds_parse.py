@@ -97,7 +97,7 @@ def test_all_null_series_fails() -> None:
         parse_evds_response(payload, ["TP.X.1"])
 
 
-@pytest.mark.parametrize("bad_date", ["2026-01-02", "2026-1", "", None])
+@pytest.mark.parametrize("bad_date", ["2026-01-02", "2026-13", "26-1", "", None])
 def test_bad_date_fails(bad_date: Any) -> None:
     with pytest.raises(EvdsResponseError, match="unexpected date"):
         parse_evds_response(make_payload(make_item(bad_date)), ["TP.X.1"])
@@ -114,3 +114,16 @@ def test_duplicate_dates_fail() -> None:
 
     with pytest.raises(EvdsResponseError, match="duplicate dates"):
         parse_evds_response(payload, ["TP.X.1"])
+
+
+def test_monthly_dates_become_month_ends() -> None:
+    # Real EVDS3 monthly response: dates look like "2024-1", "2024-12".
+    payload = json.loads((FIXTURES / "evds_cpi_2024.json").read_text(encoding="utf-8"))
+
+    rows = parse_evds_response(payload, ["TP.TUKFIY2025.GENEL"])
+
+    assert len(rows) == 12
+    assert rows["date"].iloc[0] == date(2024, 1, 31)
+    assert rows["date"].iloc[1] == date(2024, 2, 29)
+    assert rows["date"].iloc[-1] == date(2024, 12, 31)
+    assert rows["value"].iloc[-1] == pytest.approx(84.33417324)

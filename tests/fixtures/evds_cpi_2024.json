@@ -1,0 +1,89 @@
+{
+  "totalCount": 12,
+  "items": [
+    {
+      "Tarih": "2024-1",
+      "TP_TUKFIY2025_GENEL": "62.32727511",
+      "UNIXTIME": {
+        "$numberLong": "1704056400"
+      }
+    },
+    {
+      "Tarih": "2024-2",
+      "TP_TUKFIY2025_GENEL": "65.15019471",
+      "UNIXTIME": {
+        "$numberLong": "1706734800"
+      }
+    },
+    {
+      "Tarih": "2024-3",
+      "TP_TUKFIY2025_GENEL": "67.21068098",
+      "UNIXTIME": {
+        "$numberLong": "1709240400"
+      }
+    },
+    {
+      "Tarih": "2024-4",
+      "TP_TUKFIY2025_GENEL": "69.34781897",
+      "UNIXTIME": {
+        "$numberLong": "1711918800"
+      }
+    },
+    {
+      "Tarih": "2024-5",
+      "TP_TUKFIY2025_GENEL": "71.68349750",
+      "UNIXTIME": {
+        "$numberLong": "1714510800"
+      }
+    },
+    {
+      "Tarih": "2024-6",
+      "TP_TUKFIY2025_GENEL": "72.85966164",
+      "UNIXTIME": {
+        "$numberLong": "1717189200"
+      }
+    },
+    {
+      "Tarih": "2024-7",
+      "TP_TUKFIY2025_GENEL": "75.20979090",
+      "UNIXTIME": {
+        "$numberLong": "1719781200"
+      }
+    },
+    {
+      "Tarih": "2024-8",
+      "TP_TUKFIY2025_GENEL": "77.07079420",
+      "UNIXTIME": {
+        "$numberLong": "1722459600"
+      }
+    },
+    {
+      "Tarih": "2024-9",
+      "TP_TUKFIY2025_GENEL": "79.35840832",
+      "UNIXTIME": {
+        "$numberLong": "1725138000"
+      }
+    },
+    {
+      "Tarih": "2024-10",
+      "TP_TUKFIY2025_GENEL": "81.64382342",
+      "UNIXTIME": {
+        "$numberLong": "1727730000"
+      }
+    },
+    {
+      "Tarih": "2024-11",
+      "TP_TUKFIY2025_GENEL": "83.47592526",
+      "UNIXTIME": {
+        "$numberLong": "1730408400"
+      }
+    },
+    {
+      "Tarih": "2024-12",
+      "TP_TUKFIY2025_GENEL": "84.33417324",
+      "UNIXTIME": {
+        "$numberLong": "1733000400"
+      }
+    }
+  ]
+}

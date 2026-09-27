@@ -23,14 +23,14 @@ def test_week_over_week_and_year_over_year() -> None:
 
     assert row.last_date == pd.Timestamp(LAST)
     assert row.last_value == 132.0
-    assert row.wow_pct == pytest.approx(10.0)
+    assert row.prev_pct == pytest.approx(10.0)
     assert row.yoy_pct == pytest.approx(32.0)
 
 
 def test_short_history_has_no_year_over_year() -> None:
     [row] = summarize(weekly(1, [100.0, 101.0])).itertuples()
 
-    assert row.wow_pct == pytest.approx(1.0)
+    assert row.prev_pct == pytest.approx(1.0)
     assert math.isnan(row.yoy_pct)
 
 
@@ -40,7 +40,7 @@ def test_missing_previous_week_gives_nan_not_another_week() -> None:
 
     [row] = summarize(data).itertuples()
 
-    assert math.isnan(row.wow_pct)
+    assert math.isnan(row.prev_pct)
 
 
 def test_as_of_uses_latest_value_on_or_before_that_date() -> None:
@@ -48,7 +48,7 @@ def test_as_of_uses_latest_value_on_or_before_that_date() -> None:
 
     assert row.last_date == pd.Timestamp(LAST - timedelta(weeks=1))
     assert row.last_value == 110.0
-    assert row.wow_pct == pytest.approx(10.0)
+    assert row.prev_pct == pytest.approx(10.0)
 
 
 def test_one_row_per_series() -> None:
@@ -57,7 +57,7 @@ def test_one_row_per_series() -> None:
     summary = summarize(data)
 
     assert summary["series_id"].tolist() == [1, 2]
-    assert summary["wow_pct"].tolist() == pytest.approx([-50.0, 100.0])
+    assert summary["prev_pct"].tolist() == pytest.approx([-50.0, 100.0])
 
 
 def test_empty_input_gives_empty_summary() -> None:
@@ -75,3 +75,23 @@ def test_display_unit() -> None:
     assert display_unit("thousand TRY") == (1e-6, "billion TRY")
     assert display_unit("million TRY") == (1e-3, "billion TRY")
     assert display_unit("%") == (1.0, "%")
+
+
+def test_monthly_summary_compares_with_previous_month_and_a_year_earlier() -> None:
+    months = pd.to_datetime(["2025-07-31", "2026-06-30", "2026-07-31"])
+    frame = pd.DataFrame({"series_id": 1, "date": months, "value": [50.0, 90.0, 100.0]})
+
+    [row] = summarize(frame, frequency="monthly").itertuples()
+
+    assert row.prev_pct == pytest.approx(100 / 90 * 100 - 100)
+    assert row.yoy_pct == pytest.approx(100.0)
+
+
+def test_monthly_summary_missing_month_gives_nan() -> None:
+    months = pd.to_datetime(["2026-05-31", "2026-07-31"])
+    frame = pd.DataFrame({"series_id": 1, "date": months, "value": [90.0, 100.0]})
+
+    [row] = summarize(frame, frequency="monthly").itertuples()
+
+    assert math.isnan(row.prev_pct)  # June is missing: not compared with May
+    assert math.isnan(row.yoy_pct)

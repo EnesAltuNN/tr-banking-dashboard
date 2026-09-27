@@ -1,0 +1,53 @@
+{
+  "totalCount": 6,
+  "items": [
+    {
+      "Tarih": "2025-10",
+      "TP_TUKFIY2025_GENEL": "108.47758107",
+      "TP_GENENDEKS_T1": "3453.09000000",
+      "UNIXTIME": {
+        "$numberLong": "1759266000"
+      }
+    },
+    {
+      "Tarih": "2025-11",
+      "TP_TUKFIY2025_GENEL": "109.41593639",
+      "TP_GENENDEKS_T1": "3482.96000000",
+      "UNIXTIME": {
+        "$numberLong": "1761944400"
+      }
+    },
+    {
+      "Tarih": "2025-12",
+      "TP_TUKFIY2025_GENEL": "110.38696292",
+      "TP_GENENDEKS_T1": "3513.87000000",
+      "UNIXTIME": {
+        "$numberLong": "1764536400"
+      }
+    },
+    {
+      "Tarih": "2026-1",
+      "TP_TUKFIY2025_GENEL": "115.73000000",
+      "TP_GENENDEKS_T1": "3683.83000000",
+      "UNIXTIME": {
+        "$numberLong": "1767214800"
+      }
+    },
+    {
+      "Tarih": "2026-2",
+      "TP_TUKFIY2025_GENEL": "119.16000000",
+      "TP_GENENDEKS_T1": "3793.05000000",
+      "UNIXTIME": {
+        "$numberLong": "1769893200"
+      }
+    },
+    {
+      "Tarih": "2026-3",
+      "TP_TUKFIY2025_GENEL": "121.47000000",
+      "TP_GENENDEKS_T1": "3866.74000000",
+      "UNIXTIME": {
+        "$numberLong": "1772312400"
+      }
+    }
+  ]
+}
