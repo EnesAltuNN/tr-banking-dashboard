@@ -11,13 +11,14 @@ from tr_banking.db import Repository, open_repository
 from tr_banking.settings import Settings
 from tr_banking.sources import ObservationClient
 from tr_banking.sources.bddk import BddkClient
+from tr_banking.sources.bkm import BkmClient
 from tr_banking.sources.common import SourceApiError
 from tr_banking.sources.evds import EvdsClient
 
 logger = logging.getLogger(__name__)
 
 # Sources with a client today; config.Source also lists the planned ones.
-IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk")
+IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bkm")
 # Monthly data is published with a lag and sometimes revised: re-read a few months.
 MONTHLY_LOOKBACK_MONTHS = 3
 
@@ -50,20 +51,26 @@ def load_source(
 
 
 def fetch_window_start(frequency: str, start: date) -> date:
-    """Monthly requests must start on the first of a month (EVDS returns nothing otherwise)."""
+    """Monthly requests start on the first of a month, a few months back.
+
+    EVDS returns nothing for a monthly request starting mid-month, and BKM and TÜİK publish
+    with a lag of one to two months, so the latest fetch re-reads recent months.
+    """
     if frequency != "monthly":
         return start
     month_index = start.year * 12 + start.month - 1 - MONTHLY_LOOKBACK_MONTHS
     return date(month_index // 12, month_index % 12 + 1, 1)
 
 
-def open_client(source: Source, settings: Settings) -> EvdsClient | BddkClient:
+def open_client(source: Source, settings: Settings) -> EvdsClient | BddkClient | BkmClient:
     if source == "evds":
         if settings.evds_api_key is None:
             raise ValueError("EVDS_API_KEY is not set (add it to .env or the environment)")
         return EvdsClient(settings.evds_api_key, settings.evds_base_url, settings.raw_dir)
     if source == "bddk":
         return BddkClient(settings.raw_dir)
+    if source == "bkm":
+        return BkmClient(settings.raw_dir)
     raise ValueError(f"source {source!r} has no client yet")
 
 

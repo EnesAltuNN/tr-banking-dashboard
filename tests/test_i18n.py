@@ -4,6 +4,7 @@ import pytest
 
 from tr_banking.app.i18n import (
     LANGUAGES,
+    MISSING,
     SOURCE_LABELS,
     SOURCE_NOTES,
     TEXTS,
@@ -12,6 +13,7 @@ from tr_banking.app.i18n import (
     format_date,
     format_number,
     format_pct,
+    format_signed,
     unit_label,
 )
 
@@ -77,3 +79,22 @@ def test_unit_label() -> None:
     assert unit_label("billion TRY", "tr") == "milyar TL"
     assert unit_label("billion TRY", "en") == "billion TRY"
     assert unit_label("%", "tr") == "%"
+
+
+@pytest.mark.parametrize(
+    ("value", "decimals", "tr", "en"),
+    [
+        (1.254, 2, "+1,25", "+1.25"),
+        (-0.004, 2, "0,00", "0.00"),
+        (-12.5, 1, "-12,5", "-12.5"),
+        (float("nan"), 2, MISSING, MISSING),
+    ],
+)
+def test_format_signed(value: float, decimals: int, tr: str, en: str) -> None:
+    assert format_signed(value, "tr", decimals) == tr
+    assert format_signed(value, "en", decimals) == en
+
+
+def test_change_direction_uses_the_given_decimals() -> None:
+    assert change_direction(0.04) == 0  # shown as 0,0
+    assert change_direction(0.04, decimals=2) == 1  # shown as +0,04

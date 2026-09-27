@@ -28,9 +28,11 @@ class SeriesSpec(BaseModel):
     module: Module
     # Optional overrides that live only in config (not in the database):
     # max_age_days replaces the per-frequency freshness limit, e.g. for publication lags;
-    # deflator marks the price index used for real (inflation-adjusted) values.
+    # deflator marks the price index used for real (inflation-adjusted) values;
+    # policy_rate marks the central bank rate whose changes are marked on the rate charts.
     max_age_days: int | None = Field(default=None, ge=1)
     deflator: bool = False
+    policy_rate: bool = False
 
 
 class SeriesConfig(BaseModel):
@@ -46,13 +48,18 @@ class SeriesConfig(BaseModel):
             if key in seen:
                 raise ValueError(f"duplicate series: source={spec.source} code={spec.code}")
             seen.add(key)
-        if len([spec for spec in self.series if spec.deflator]) > 1:
-            raise ValueError("at most one series may be the deflator")
+        for role in ("deflator", "policy_rate"):
+            if len([spec for spec in self.series if getattr(spec, role)]) > 1:
+                raise ValueError(f"at most one series may be the {role}")
         return self
 
     @property
     def deflator(self) -> SeriesSpec | None:
         return next((spec for spec in self.series if spec.deflator), None)
+
+    @property
+    def policy_rate(self) -> SeriesSpec | None:
+        return next((spec for spec in self.series if spec.policy_rate), None)
 
     def for_source(self, source: Source) -> list[SeriesSpec]:
         return [spec for spec in self.series if spec.source == source]

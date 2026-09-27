@@ -7,11 +7,14 @@ and links here. Update the "verified" dates when you re-check a fact.
 |---|---|---|---|---|
 | [TCMB EVDS3](#tcmb-evds3-verified-2026-09-24) | 6 weekly loan series | thousand TRY | 2024-06-28 | official API, free key |
 | [TCMB EVDS3, CPI](#consumer-price-index-verified-2026-09-27) | 1 monthly price index (deflator) | index, 2025=100 | 2005-01 | official API, free key |
+| [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, daily policy rate | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
 | [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series | million TRY | 2014-01-03 | public website, no API |
-| [BKM](#bkm-card-spending-module-2-pending-decision) | 6 proposed monthly card series | million TL, counts | 2017-01 | public website (not built yet) |
+| [BKM](#bkm-card-statistics-verified-2026-09-27) | 4 monthly card spending series, 2 card counts | million TRY, cards | 2017-01 | public website (HTML), no API |
 
 Series codes, names and units are configured in [`config/series.yaml`](../config/series.yaml).
-Values are stored exactly as published; the dashboard converts both TRY units to billion TRY.
+Values are stored exactly as published; the dashboard converts TRY units to billion TRY and
+card counts to million cards.
+Rates stay in % and their changes are shown in percentage points.
 
 **Cross-source notes:**
 - **EVDS and BDDK agree closely:** within about 0.3% on common series (checked 2026-09-24).
@@ -74,6 +77,16 @@ The key is sent only as an HTTP header, never in the URL, and it is never logged
 - **Never mix frequencies in one request.** A request with weekly and monthly codes silently
   returns every series converted to monthly (averaged). The pipeline sends one request per
   frequency.
+- **A response holds at most 1000 items** (checked 2026-09-27). A longer range silently returns
+  only the newest 1000 rows, and `totalCount` then also says 1000. For example, a daily series
+  requested from 2014 came back from 2022-11-28 only. The client therefore:
+  - splits every request into 2-year windows (about 520 business days, 105 weeks, 24 months);
+  - fails on a response with 1000 items instead of storing a cut series;
+  - accepts a window in which a series has no values, but fails if it has none in the whole
+    range.
+- **A period that touches two windows comes back from both.** A window ending on Saturday
+  2016-01-02 and the next one starting on Sunday 2016-01-03 both return the week ending Friday
+  2016-01-01. The client keeps one copy and fails if the two copies differ.
 
 ## Consumer price index (verified 2026-09-27)
 
@@ -117,6 +130,64 @@ Used only to compute real (inflation-adjusted) values; stored like any other ser
   4. Store the raw published values only; chaining happens at display time, so a later
      back-cast by TÜİK just replaces the input.
 
+## Interest rates (verified 2026-09-27)
+
+Stored with `module: rates` and unit `%`. The dashboard's *Interest rates* tab shows levels in %,
+weekly and yearly changes in percentage points, and no real or billion-TRY conversion.
+
+**Loan rates:** data group `bie_kt100h`, *Kredi Faiz Oranları (Akım)* (Interest Rates on Loans,
+Flow Data). These are the weighted average rates banks applied to **new** TRY loans opened that
+week, not the rate on the whole loan stock. Weekly (Friday), published with the weekly credit
+data.
+
+| Code | Official name | From |
+|---|---|---|
+| `TP.KTF10` | İhtiyaç Kredisi (TL, Akım, %) | 2002-01-04 |
+| `TP.KTF11` | Taşıt Kredisi (TL, Akım, %) | 2002-01-04 |
+| `TP.KTF12` | Konut Kredisi (TL, Akım, %) | 2002-01-04 |
+| `TP.KTF18` | Ticari Krediler (Tüzel Kişi KMH ve Kurumsal Kredi Kartları Hariç) (TL, Akım, %) | 2012-07-27 |
+
+- The personal and commercial rates both exclude overdrafts (KMH) and corporate credit cards,
+  whose rates sit near the legal maximum. The variants that include them are `TP.KTF101`
+  (personal) and `TP.KTF17` (commercial, about 3 pp higher in September 2026).
+- EUR/USD commercial rates (`TP.KTF17.EUR`, `TP.KTF17.USD`) exist but are not used.
+
+**Policy rate:** `TP.PY.P02.1H` in data group `bie_pyintbnk`, *(1H) TCMB Kotasyonları SATIŞ
+(%) (1 Haftalık İşlem)*: the CBRT one-week repo lending rate, on business days.
+- Its change dates match the MPC (PPK) decisions, e.g. 2023-06-22 → 15%, 2024-03-21 → 50%,
+  2024-12-26 → 47.5%, 2025-04-17 → 46%, 2026-01-22 → 37%.
+- The metadata says the series starts in 1996, but **the first value is 2018-09-14** (24%, the
+  day after the 13 September 2018 decision). All earlier days since at least 2014 are null, so
+  the dashboard has no policy rate and no decision markers before then.
+- Holidays are null (e.g. 2025-01-01) and are skipped. Long holidays can last 9 days, so the
+  series has `max_age_days: 14`.
+- The monthly BIS series `TP.BISPOLFAIZ.TUR` has the same values but lags about two months
+  and has no decision dates, so it is not used.
+- **2016–2018: the one-week repo rate was not the effective funding cost.** In that period
+  the CBRT funded banks mostly through other facilities, and its weighted average funding
+  cost (`TP.APIFON4`, data group `bie_apifon`) was at times well above the one-week repo
+  rate. In 2017 it was about 12% while the one-week repo rate stayed at 8%. So even where a
+  one-week repo value exists, it does not show that period's actual funding cost. The
+  series used here has no values before 2018-09-14 anyway.
+
+**Decision markers** are computed from the data (`app/metrics.py: rate_changes`): every day
+on which the policy rate differs from the previous business day. MPC decisions that kept the
+rate unchanged leave no trace in the data, so they are not marked (see the Backlog item on
+the MPC calendar).
+
+**Yearly inflation and real rates:**
+- Yearly inflation is `CPI(month) / CPI(same month a year earlier) − 1`, from
+  `TP.TUKFIY2025.GENEL`. It matches TÜİK's published figures, e.g. June 2024 71.60%, July
+  2024 61.78%, December 2024 44.38%.
+- The rate charts draw it as a dashed reference line on the same % axis (one axis, never a
+  dual axis).
+- The table's *real rate ≈ rate − yearly inflation* is a **simple difference, not the Fisher
+  equation** `(1 + i) / (1 + π) − 1`. At these levels the two differ by several points, e.g.
+  63% and 33% give 30 pp vs 22.6%.
+- The real rate is shown for loan rates only, using the inflation of the rate's own month. It
+  stays empty while that month's CPI is not published yet, which is most of the month for the
+  latest week.
+
 ## BDDK weekly bulletin (verified 2026-09-24)
 
 [bddk.org.tr/BultenHaftalik](https://www.bddk.org.tr/BultenHaftalik), table *Krediler*, whole
@@ -159,30 +230,60 @@ sector. Values are weekly (Friday), in million TRY, TRY + FX, from 2014-01-03.
     certificate error. Download the new intermediate from the leaf's "CA Issuers" URL and
     replace the bundled file.
 
-## BKM card spending (module 2, pending decision)
+## BKM card statistics (verified 2026-09-27)
 
-Research is done (2026-09-24). **No code has been written.** The user put module 2 on hold and
-still has to confirm the series list below before implementation starts.
+Module 2 (`module: cards`, the dashboard's *Cards* tab). Client: `sources/bkm.py`.
 
 - **Source page:** one page per month:
-  `https://bkm.com.tr/secilen-aya-ait-istatistikler/?filter_year=YYYY&filter_month=M&List=Listele`
-  (`robots.txt` allows it).
-- **The "Excel" download (`&xls=1`) is really an HTML table** with an `.xls` name, so parse the
-  HTML with the stdlib `html.parser`; no Excel library is needed.
-- **Coverage:** 2017-01 onward, with the same table layout every month. Publication lags about
-  1.5 to 2 months (on 2026-09-24 the latest month was 2026-07).
-- **Values:** amounts are in million TL, written in Turkish format (`2.450.238,01`). Card counts
-  are plain integers.
-- **Proposed series** (July 2026 values):
-  - Credit card shopping amount, domestic cards used domestically: 2,450,238 million TL.
-  - Debit card shopping amount, domestic cards used domestically: 418,421 million TL.
-  - Online card payments (internetten kartli odemeler), amount: 908,899 million TL.
-  - Foreign cards used domestically, shopping amount, credit + debit (a tourism signal):
-    128,787 million TL.
-  - Number of credit cards: 151.7 million.
-  - Number of debit cards: 223.2 million.
-- **Implementation plan:**
-  - Locate cells by row and column labels, not by position.
-  - Monthly metrics: month-over-month % and 12-month %.
-  - Add dashboard tabs per module.
-  - Backfill with one request per month, 1 s apart.
+  `https://bkm.com.tr/secilen-aya-ait-istatistikler/?filter_year=YYYY&filter_month=M&List=Listele&xls=1`.
+  `robots.txt` allows it. Requests go 1 s apart with a descriptive User-Agent.
+- **The "Excel" download (`xls=1`) is really an HTML table** with an `.xls` content type. It is
+  parsed with the standard library `html.parser`; no Excel library is needed. Raw pages are
+  saved as `.html`.
+- **Coverage:** 2017-01 onward. The client never asks for earlier months. The labels and
+  layout were identical in 2017-01, 2021-03 and 2026-07, and a backfill of all 115 months up to
+  2026-07 parsed without error.
+- **Unpublished months** (and months before 2017) return a page with only "Lütfen listeyi
+  görebilmek için yukarıdan tarih seçiniz." The client skips such a month, but fails if no month
+  in the range has data, or if a page has neither the tables nor that text.
+- **Publication lag:** about 1.5 to 2 months. On 2026-09-27 the latest month was 2026-07.
+  Freshness limit: `max_age_days: 100`, counted from the month's end.
+- **Values:** amounts are in million TL in Turkish format (`2.450.238,01`); card counts are
+  integers (`151.730.027`). Stored as published, dated at the month's end.
+
+**Cells are found by labels, not positions.** Each table becomes a grid with `rowspan`/`colspan`
+expanded. A value is the one numeric cell whose row starts with the row labels and whose
+column carries all the column labels. No match, or more than one, raises an error. Units are
+part of the labels (`İşlem Tutarı (Milyon TL)`), so a unit change fails loudly instead of
+mixing units.
+
+Series codes (the label mapping lives in `sources/bkm.py`):
+- `cards:<card>`: *KART SAYILARI*, card = `credit` (Toplam Kredi Kartı) or `debit` (Toplam Banka
+  Kartı).
+- `txn:<card>:<usage>:<measure>:<kind>`: *İŞLEM ADET VE TUTARLARI*.
+  - card: `credit` (Kredi Kartı) or `debit` (Banka Kartı). `credit+debit` sums both rows.
+  - usage: `domestic` (Yerli Kartların Yurt İçi Kullanımı), `abroad` (Yerli Kartların
+    Yurtdışı Kullanımı), `foreign` (Yabancı Kartların Yurt İçi Kullanımı), `domestic_all`,
+    `in_country`.
+  - measure: `count` (İşlem Adedi) or `amount` (İşlem Tutarı, million TL).
+  - kind: `shopping` (Alışveriş), `cash` (Nakit Çekme) or `total` (Toplam).
+- `vpos:<channel>:<measure>`: *Sanal POS İşlemleri*, channel = `internet` (İnternetten Kartlı
+  Ödemeler) or `mail_phone`.
+
+| Code | Series | Unit | July 2026 |
+|---|---|---|---|
+| `txn:credit:domestic:amount:shopping` | Credit card spending, domestic cards in Türkiye | million TRY | 2,450,238.01 |
+| `txn:debit:domestic:amount:shopping` | Debit card spending, domestic cards in Türkiye | million TRY | 418,420.61 |
+| `vpos:internet:amount` | Online card payments | million TRY | 908,898.53 |
+| `txn:credit+debit:foreign:amount:shopping` | Foreign cards' spending in Türkiye (a tourism signal) | million TRY | 128,787.02 |
+| `cards:credit` | Number of credit cards | cards | 151,730,027 |
+| `cards:debit` | Number of debit cards | cards | 223,234,663 |
+
+**On the dashboard:**
+- Amounts are shown in billion TL and card counts in million cards.
+- Changes are monthly % (vs the previous month) and yearly % (vs the same month a year
+  earlier).
+- The real view deflates the amounts by the CPI of their own month. Card counts are not money
+  and stay unchanged.
+- Amounts are nominal flows and are not seasonally adjusted: December and the summer
+  (tourism) months stand out, so compare yearly % rather than monthly % across seasons.

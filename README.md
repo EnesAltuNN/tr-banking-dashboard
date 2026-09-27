@@ -1,7 +1,8 @@
 # Turkish Banking Market Dashboard
 
-Weekly Turkish banking-sector loan data from two official sources, fetched automatically and
-shown in a bilingual public dashboard.
+Turkish banking-market data from three public sources: weekly loans, loan and policy interest
+rates, and monthly card spending. It is fetched automatically and shown in a bilingual public
+dashboard, in nominal and inflation-adjusted terms.
 
 [![CI](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/ci.yml)
 [![Weekly fetch](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/fetch.yml/badge.svg)](https://github.com/EnesAltuNN/tr-banking-dashboard/actions/workflows/fetch.yml)
@@ -13,12 +14,24 @@ shown in a bilingual public dashboard.
 
 ## Highlights
 
-- **Two official sources, cross-checked:**
-  - [TCMB EVDS3](https://evds3.tcmb.gov.tr/) (the central bank's data API) and the
-    [BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) (the banking regulator);
-    13 weekly series in total.
-  - BDDK history goes back to **2014**.
-  - Where both sources cover the same item, they agree within **about 0.3%**.
+- **Official sources, cross-checked:**
+  - [TCMB EVDS3](https://evds3.tcmb.gov.tr/) (the central bank's data API): weekly loans, loan
+    interest rates, the policy rate and CPI.
+  - The [BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) (the banking
+    regulator): weekly loans back to **2014**. Where it covers the same item as EVDS, the two
+    agree within **about 0.3%**.
+  - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
+    counts back to **2017**.
+  - 25 series in total, all defined in one YAML file.
+- **Nominal and real:**
+  - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
+  - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
+    proves the new series continues the old one, so no hand-made chaining is needed.
+- **Interest rates in percentage points:**
+  - Loan rates and the policy rate are shown with yearly inflation as a reference line on the
+    same axis.
+  - MPC rate decisions are marked on the charts.
+  - The table shows an approximate real rate (rate minus inflation).
 - **Automatic, and loud when it breaks:**
   - GitHub Actions fetches every Tuesday and Friday.
   - If a source stops publishing, a freshness check turns the run red instead of passing
@@ -30,11 +43,13 @@ shown in a bilingual public dashboard.
     schema.
   - Public workflow artifacts are scanned for secrets before upload.
 - **Bilingual dashboard:**
+  - Three tabs: loans, interest rates, cards.
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).
-  - Weekly and yearly change, and one chart per series.
+  - Weekly or monthly and yearly change, and one chart per series.
   - A one-hour shared cache keeps the public page light on the database.
-- **Tested:** 230+ tests. CI runs them against a real Postgres 17 container, including tests
-  that prove what each database role can and cannot do.
+- **Tested:** 320+ tests, most of them on real recorded API responses. CI runs them against a
+  real Postgres 17 container, including tests that prove what each database role can and
+  cannot do.
 
 ## Architecture
 
@@ -42,6 +57,7 @@ shown in a bilingual public dashboard.
 flowchart LR
     EVDS["TCMB EVDS3 API"] --> GHA
     BDDK["BDDK weekly bulletin"] --> GHA
+    BKM["BKM monthly card statistics"] --> GHA
     GHA["GitHub Actions<br/>Tue + Fri 04:00 UTC<br/>role: fetch_writer"] -->|"upsert"| DB[("Supabase Postgres<br/>RLS on every table")]
     DB -->|"SELECT, cached 1 h"| APP["Streamlit Community Cloud<br/>role: dashboard_reader"]
     APP --> USERS(("Visitors"))
@@ -84,7 +100,8 @@ For EVDS data:
 1. Copy `.env.example` to `.env` (`Copy-Item` in PowerShell, `cp` in bash).
 2. Add a free EVDS key; [DATA_SOURCES.md](docs/DATA_SOURCES.md#tcmb-evds3-verified-2026-09-24)
    explains how to get one.
-3. Run the backfill again without `--source`.
+3. Run the backfill again without `--source`. It loads every source, including BKM's monthly
+   pages 1 s apart; this takes about 3 minutes.
 
 Supabase, the scheduled fetch and hosting are described in [docs/SETUP.md](docs/SETUP.md).
 
@@ -112,6 +129,18 @@ Supabase, the scheduled fetch and hosting are described in [docs/SETUP.md](docs/
 - **Least privilege needed a split in the workflow.** The first version gave GitHub Actions
   the database owner. It now uses `fetch_writer`, which can upsert but not delete or run DDL.
   Migrations moved to a one-off manual step, and the job only checks that none is pending.
+- **EVDS drops rows without saying so.** A response holds at most 1000 rows, and a longer
+  range quietly returns only the newest ones, with a matching `totalCount`. A policy-rate
+  backfill from 2014 came back starting in 2022. The client now requests two-year windows and
+  treats a 1000-row response as an error. A request that mixes weekly and monthly series is
+  also silently converted to monthly, so each frequency gets its own request.
+- **A CPI base change, checked instead of assumed.** In January 2026 TÜİK rebased the CPI to
+  2025=100. Before using it, the new series was compared with the old one over 260 months,
+  with the largest difference in monthly change at 0.007 points. A guard rejects any mixed
+  index that jumps more than 20% in a month.
+- **An "Excel" file that is HTML.** BKM's monthly download is an HTML table. It is parsed
+  with the standard library, and every cell is found by its row and column labels, units
+  included. A renamed row or a unit change fails the fetch instead of storing a wrong number.
 - **A public page needs a cache.** Streamlit reruns the script on every click. A one-hour
   cache shared by all visitors turns that into at most one short database read per hour. The
   page shows both the last data fetch and the time it read the database, so the cache never
@@ -122,23 +151,22 @@ Supabase, the scheduled fetch and hosting are described in [docs/SETUP.md](docs/
 This is a learning and portfolio project. Three data modules are planned to feed one database
 and one dashboard, with a weekly AI-generated summary on top.
 
-✔ **Module 1, credit market:**
-- EVDS + BDDK weekly loans.
-- Supabase storage.
-- Twice-weekly automatic fetch.
-- Live bilingual dashboard.
+Done:
+- ✔ **Module 1, credit market:** EVDS + BDDK weekly loans, Supabase storage, twice-weekly
+  automatic fetch, live bilingual dashboard.
+- ✔ **Real values:** inflation-adjusted view with CPI from EVDS.
+- ✔ **Interest rates:** official weekly loan rates and the policy rate from EVDS, with
+  inflation reference and MPC decision markers.
+- ✔ **Module 2, card spending:** BKM monthly statistics from 2017 (see
+  [DATA_SOURCES.md](docs/DATA_SOURCES.md#bkm-card-statistics-verified-2026-09-27)).
 
 Planned, in order:
-1. **Real values:** inflation-adjusted series (CPI from EVDS) next to the nominal view.
-2. **Loan interest rates:** the official weekly loan rates from EVDS.
-3. **Module 2, card spending:** BKM monthly statistics (researched; see
-   [DATA_SOURCES.md](docs/DATA_SOURCES.md#bkm-card-spending-module-2-pending-decision)).
-4. **Module 3, bank rates and campaigns:** daily, from bank websites, starting with three
+1. **Module 3, bank rates and campaigns:** daily, from bank websites, starting with three
    banks.
-5. **Weekly AI summary:** changes computed in Python; a language model only writes the text.
+2. **Weekly AI summary:** changes computed in Python; a language model only writes the text.
 
 Other ideas:
-- policy-rate decision markers on the charts;
+- the MPC meeting calendar, so decisions that kept the rate unchanged are marked too;
 - BDDK bank groups (state, domestic private, foreign);
 - deposits and non-performing loans;
 - alerts on unusual weekly changes.

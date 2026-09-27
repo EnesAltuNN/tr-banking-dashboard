@@ -1,10 +1,11 @@
 """Helpers shared by source clients: HTTP retries and raw response archiving."""
 
+import calendar
 import logging
 import re
 import time
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,9 +58,14 @@ def request_with_retries(
 
 
 def save_raw_response(
-    directory: Path, content: bytes, name: str, *, redact: Sequence[str] = ()
+    directory: Path,
+    content: bytes,
+    name: str,
+    *,
+    redact: Sequence[str] = (),
+    suffix: str = ".json",
 ) -> Path:
-    """Write a response body to <directory>/<UTC timestamp>_<name>.json for debugging.
+    """Write a response body to <directory>/<UTC timestamp>_<name><suffix> for debugging.
 
     Only the body is stored: never request headers, URLs with credentials or connection info.
     CI uploads this directory as a public artifact, so known secret values are masked too, in
@@ -72,10 +78,15 @@ def save_raw_response(
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     # Series codes may contain characters Windows does not allow in file names (e.g. ':').
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", name)
-    path = directory / f"{stamp}_{safe_name}.json"
+    path = directory / f"{stamp}_{safe_name}{suffix}"
     path.write_bytes(content)
     logger.info("raw response saved to %s", path)
     return path
+
+
+def month_end(year: int, month: int) -> date:
+    """Monthly values are stored at the period end, e.g. 2026-07 -> 2026-07-31."""
+    return date(year, month, calendar.monthrange(year, month)[1])
 
 
 def redact_text(text: str, secrets: Sequence[str]) -> str:

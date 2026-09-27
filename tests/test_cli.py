@@ -74,7 +74,7 @@ def test_backfill_end_defaults_to_today(fake_run: FakeRun) -> None:
         ["backfill", "--start", "2024-12-31", "--end", "2024-01-01"],
         ["fetch", "--weeks", "0"],
         ["fetch", "--weeks", "abc"],
-        ["fetch", "--source", "bkm"],
+        ["fetch", "--source", "bank_site"],
     ],
 )
 def test_invalid_arguments_exit_with_usage_error(fake_run: FakeRun, argv: list[str]) -> None:
@@ -98,7 +98,7 @@ def test_known_failure_returns_exit_code_1(
 def test_all_sources_by_default(fake_run: FakeRun) -> None:
     cli.main(["fetch"])
 
-    assert fake_run.sources == [("evds", "bddk")]
+    assert fake_run.sources == [("evds", "bddk", "bkm")]
 
 
 def test_source_option_limits_the_update(fake_run: FakeRun) -> None:
@@ -176,7 +176,7 @@ SPECS = load_series_config(PROJECT_ROOT / "config" / "series.yaml").series
 KEY = "fake-evds-key-must-not-leak"
 
 
-def seed(db_path: Path, day: date, sources: tuple[str, ...] = ("evds", "bddk")) -> None:
+def seed(db_path: Path, day: date, sources: tuple[str, ...] = ("evds", "bddk", "bkm")) -> None:
     with SqliteRepository(db_path) as repo:
         repo.init_schema()
         for spec in SPECS:
@@ -203,7 +203,7 @@ def test_check_freshness_passes_with_recent_data(
 def test_check_freshness_fails_with_old_data(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    seed(tmp_path / "t.db", date.today() - timedelta(days=60))  # older than every limit
+    seed(tmp_path / "t.db", date.today() - timedelta(days=120))  # older than every limit
     use_settings(monkeypatch, db_path=tmp_path / "t.db")
 
     assert cli.main(["check-freshness"]) == 1

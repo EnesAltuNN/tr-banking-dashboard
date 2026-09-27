@@ -40,7 +40,7 @@ cp .env.example .env          # then put your EVDS key in .env
 ```
 
 - **EVDS key:** [DATA_SOURCES.md](DATA_SOURCES.md#tcmb-evds3-verified-2026-09-24) explains how
-  to get one. BDDK needs no key, so `--source bddk` works without it.
+  to get one. BDDK and BKM need no key, so `--source bddk` and `--source bkm` work without it.
 - **Where data goes:** by default to a local SQLite file, `data/tr_banking.db`. Setting
   `DATABASE_URL` switches every command, including the dashboard, to Postgres; see
   [Cloud database](#cloud-database-supabase).
@@ -48,12 +48,13 @@ cp .env.example .env          # then put your EVDS key in .env
 ## Usage
 
 ```powershell
-# Load history (BDDK goes back to 2014-01-03; EVDS data simply starts on 2024-06-28)
+# Load history: BDDK and the EVDS rates from 2014-01-03, EVDS loans from 2024-06-28, the
+# policy rate from 2018-09-14 and BKM from 2017-01. About 3 minutes: BKM pages go 1 s apart.
 uv run tr-banking backfill --start 2014-01-03
 
 # Fetch the latest 8 weeks from all sources (safe to run repeatedly)
 uv run tr-banking fetch
-uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk
+uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk | bkm
 
 # Open the dashboard
 uv run streamlit run src/tr_banking/app/dashboard.py
@@ -76,11 +77,16 @@ uv run tr-banking scan-raw          # exit 1 if a raw response file contains a s
 - **Debug logging:** add `-v`, e.g. `uv run tr-banking -v fetch`.
 
 The dashboard runs in Turkish or English, with a TR/EN switch and Turkish number formats. It
-offers:
-- a source picker, date range and series filters;
-- one line chart per series;
-- a table with the last value and the weekly % and yearly % change, rises green and falls red;
-- a note that values are nominal TRY.
+has three tabs:
+- **Loans:** a source picker (EVDS or BDDK), weekly % and yearly % change, and a nominal/real
+  switch. The real view shows TRY values in the prices of the latest CPI month.
+- **Interest rates:** loan rates and the policy rate in %, with changes in percentage points,
+  yearly inflation as a reference line, MPC decision markers, and an approximate real rate.
+- **Cards:** BKM monthly card spending and card counts, with monthly % and yearly % change.
+  The real view deflates the amounts only.
+
+Every tab has date range and series filters, one line chart per series, and a table where
+rises are green and falls red, always with a +/- sign.
 
 ## Configuration
 
@@ -280,7 +286,7 @@ uv run ruff format .
 
 If the Supabase data is lost or the project is recreated:
 1. Rerun step 3 of [Cloud database](#cloud-database-supabase) with the owner string:
-   `db migrate` plus `backfill --start 2014-01-03`, about 15 seconds.
+   `db migrate` plus `backfill --start 2014-01-03`, about 3 minutes.
 2. Re-enable both roles (step 4).
 3. Update `.env` and the GitHub and Streamlit secrets if the project ref or passwords changed.
 
@@ -293,7 +299,8 @@ src/tr_banking/
   config.py                series.yaml loading and validation
   sources/evds.py          EVDS3 client and response parser
   sources/bddk.py          BDDK weekly bulletin client and parser
-  sources/common.py        shared HTTP retries and raw-response saving
+  sources/bkm.py           BKM monthly card statistics client and label-based HTML parser
+  sources/common.py        shared HTTP retries, raw-response saving, month ends
   sources/certs/           public TLS intermediate that bddk.org.tr does not send
   db/repository.py         storage interface: validation, upserts, queries (shared)
   db/sqlite.py, schema.sql local SQLite backend

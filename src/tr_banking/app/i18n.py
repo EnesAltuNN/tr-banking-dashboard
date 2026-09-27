@@ -15,8 +15,43 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "en": "Turkish Banking Market Dashboard",
     },
     "subtitle": {
-        "tr": "Kredi piyasası · bankacılık sektörü haftalık kredi verileri",
-        "en": "Credit market · weekly banking sector loans",
+        "tr": "Krediler, faizler ve kart harcamaları · Türkiye bankacılık sektörü verileri",
+        "en": "Loans, interest rates and card spending · Turkish banking sector data",
+    },
+    "tab_credit": {"tr": "Krediler", "en": "Loans"},
+    "tab_rates": {"tr": "Faizler", "en": "Interest rates"},
+    "tab_cards": {"tr": "Kartlar", "en": "Cards"},
+    "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},
+    "latest_month": {"tr": "Son veri: **{month}**", "en": "Latest data: **{month}**"},
+    "col_mom": {"tr": "Aylık %", "en": "Monthly %"},
+    "col_month": {"tr": "Ay", "en": "Month"},
+    "cards_note": {
+        "tr": (
+            "Kaynak: BKM (Bankalararası Kart Merkezi) aylık istatistikleri, Ocak 2017'den "
+            "itibaren; veriler ay bittikten yaklaşık 1,5-2 ay sonra yayımlanır. Alışveriş "
+            "tutarları Türkiye'de çıkarılmış kartların yurt içi kullanımıdır. Yabancı kart "
+            "harcaması, yabancı kredi ve banka kartlarının Türkiye'deki alışverişlerinin "
+            "toplamıdır. İnternetten kartlı ödemeler BKM'nin *Sanal POS işlemleri* tablosundan "
+            "gelir. Aylık % bir önceki ayla, yıllık % 12 ay önceki aynı ayla karşılaştırır."
+        ),
+        "en": (
+            "Source: BKM (Interbank Card Center) monthly statistics, from January 2017; data "
+            "is published about 1.5 to 2 months after the month ends. Spending amounts are "
+            "the domestic use of cards issued in Türkiye. Foreign card spending is the sum of "
+            "foreign credit and debit card purchases in Türkiye. Online card payments come "
+            "from BKM's *virtual POS transactions* table. Monthly % compares with the previous "
+            "month; yearly % with the same month a year earlier."
+        ),
+    },
+    "cards_real_note": {
+        "tr": (
+            "Tutarlar **{month} fiyatlarıyla** gösterilir (TÜFE, 2025=100): her ayın tutarı "
+            "o ayın TÜFE'siyle düzeltilir. Kart sayıları para olmadığı için değişmez."
+        ),
+        "en": (
+            "Amounts are shown in **{month} prices** (CPI, 2025=100): each month's amount is "
+            "deflated by that month's CPI. Card counts are not money and stay unchanged."
+        ),
     },
     "language": {"tr": "Dil", "en": "Language"},
     "source": {"tr": "Kaynak", "en": "Source"},
@@ -78,6 +113,42 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "col_wow": {"tr": "Haftalık %", "en": "Weekly %"},
     "col_yoy": {"tr": "Yıllık %", "en": "Yearly %"},
     "tooltip_date": {"tr": "Tarih", "en": "Week ending"},
+    "col_wow_pp": {"tr": "Haftalık değişim (puan)", "en": "Weekly change (pp)"},
+    "col_yoy_pp": {"tr": "Yıllık değişim (puan)", "en": "Yearly change (pp)"},
+    "col_real_rate": {"tr": "Reel faiz ≈ (puan)", "en": "Real rate ≈ (pp)"},
+    "inflation_line": {"tr": "Yıllık enflasyon (TÜFE)", "en": "Yearly inflation (CPI)"},
+    "policy_change": {"tr": "PPK kararı", "en": "MPC decision"},
+    "tooltip_previous": {"tr": "Önceki (%)", "en": "Before (%)"},
+    "tooltip_new": {"tr": "Yeni (%)", "en": "After (%)"},
+    "rates_unavailable": {"tr": "Henüz faiz verisi yok.", "en": "No interest rate data yet."},
+    "rates_note": {
+        "tr": (
+            "Kaynak: TCMB EVDS. Kredi faizleri `bie_kt100h` veri grubundan: bankaların o hafta "
+            "verdiği yeni TL kredilere uyguladığı ağırlıklı ortalama faiz (akım), haftalık cuma "
+            "değerleri. İhtiyaç ve ticari kredi faizleri KMH ve kurumsal kredi kartlarını "
+            "içermez. Politika faizi, TCMB'nin bir hafta vadeli repo faizidir (iş günü verisi); "
+            "EVDS'deki serisi 14.09.2018'de başlar, daha önceki yıllarda karar işareti yoktur. "
+            "Dikey kesikli çizgiler politika faizini değiştiren PPK kararlarıdır; faizi sabit "
+            "tutan kararlar işaretlenmez. Gri kesikli çizgi TÜFE'den hesaplanan yıllık "
+            "enflasyondur. Değişimler yüzde puan (puan) cinsindendir: haftalık bir hafta, "
+            "yıllık 52 hafta önceki değerle karşılaştırır. **Reel faiz ≈ faiz − yıllık "
+            "enflasyon**: basit farktır, Fisher denklemi değildir; yalnız kredi faizleri için "
+            "hesaplanır ve TÜFE'si henüz açıklanmamış aylarda boş kalır."
+        ),
+        "en": (
+            "Source: CBRT (TCMB) EVDS. Loan rates come from data group `bie_kt100h`: the "
+            "weighted average rate banks applied to new TRY loans that week (flow data), weekly "
+            "Friday values. General purpose and commercial loan rates exclude overdrafts and "
+            "corporate credit cards. The policy rate is the CBRT one-week repo rate (business "
+            "days); its EVDS series starts on 2018-09-14, so earlier years have no decision "
+            "markers. Dashed vertical lines mark MPC decisions that changed the policy rate; "
+            "decisions that kept it unchanged are not marked. The dashed grey line is yearly "
+            "inflation computed from CPI. Changes are in percentage points (pp): weekly compares "
+            "with a week earlier, yearly with 52 weeks earlier. **Real rate ≈ rate − yearly "
+            "inflation**: a simple difference, not the Fisher equation; shown for loan rates "
+            "only and left empty for months whose CPI is not published yet."
+        ),
+    },
     "inflation_note": {
         "tr": (
             "Değerler **nominal TL**'dir, enflasyondan arındırılmamıştır. Türkiye'de tüketici "
@@ -140,6 +211,7 @@ SOURCE_NOTES: dict[str, dict[Lang, str]] = {
 # Display unit labels produced by metrics.display_unit.
 UNIT_LABELS: dict[str, dict[Lang, str]] = {
     "billion TRY": {"tr": "milyar TL", "en": "billion TRY"},
+    "million cards": {"tr": "milyon adet", "en": "million cards"},
 }
 
 MONTHS: dict[Lang, list[str]] = {
@@ -211,20 +283,26 @@ def format_number(value: float, lang: Lang, decimals: int = 1) -> str:
 
 def format_pct(value: float, lang: Lang) -> str:
     """Signed, one decimal: -1.14 -> '-1,1%' (tr) / '-1.1%' (en); rounds-to-zero -> '0,0%'."""
+    signed = format_signed(value, lang)
+    return signed if signed == MISSING else f"{signed}%"
+
+
+def format_signed(value: float, lang: Lang, decimals: int = 1) -> str:
+    """Signed number: 1.254 -> '+1,3' (tr) / '+1.3' (en); used for pp changes too."""
     if value is None or math.isnan(value):
         return MISSING
-    rounded = round(value, 1)
+    rounded = round(value, decimals)
     if rounded == 0:
-        rounded = 0.0  # round(-0.04, 1) is -0.0, which would print as "-0,0%"
+        rounded = 0.0  # round(-0.04, 1) is -0.0, which would print as "-0,0"
     sign = "+" if rounded > 0 else ""
-    return f"{sign}{format_number(rounded, lang)}%"
+    return f"{sign}{format_number(rounded, lang, decimals)}"
 
 
-def change_direction(value: float) -> int:
-    """1 / -1 / 0 for up / down / flat-or-missing, using the same rounding as format_pct."""
+def change_direction(value: float, decimals: int = 1) -> int:
+    """1 / -1 / 0 for up / down / flat-or-missing, using the same rounding as the display."""
     if value is None or math.isnan(value):
         return 0
-    rounded = round(value, 1)
+    rounded = round(value, decimals)
     return (rounded > 0) - (rounded < 0)
 
 

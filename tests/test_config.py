@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from tr_banking.config import SeriesConfig, load_series_config
 from tr_banking.settings import PROJECT_ROOT
 from tr_banking.sources.bddk import parse_series_code
+from tr_banking.sources.bkm import parse_series_code as bkm_cells
 
 VALID_SPEC = {
     "source": "evds",
@@ -30,8 +31,34 @@ def test_project_series_yaml_loads() -> None:
         "TP.HPBITABLO6.16",
         "TP.HPBITABLO6.20",
         "TP.TUKFIY2025.GENEL",
+        "TP.KTF10",
+        "TP.KTF11",
+        "TP.KTF12",
+        "TP.KTF18",
+        "TP.PY.P02.1H",
     ]
-    assert {spec.module for spec in config.series} == {"credit", "macro"}
+    assert {spec.module for spec in config.series} == {"credit", "macro", "rates", "cards"}
+
+
+def test_project_bkm_series_have_valid_codes() -> None:
+    specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").for_source("bkm")
+
+    assert len(specs) == 6
+    assert all(bkm_cells(spec.code) for spec in specs)  # raises on an invalid code
+    assert {spec.unit for spec in specs} == {"million TRY", "cards"}
+    assert {(spec.frequency, spec.module, spec.max_age_days) for spec in specs} == {
+        ("monthly", "cards", 100)
+    }
+
+
+def test_project_rates_are_percent_and_the_policy_rate_is_marked() -> None:
+    config = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
+
+    rates = [spec for spec in config.series if spec.module == "rates"]
+    assert {spec.unit for spec in rates} == {"%"}
+    policy = config.policy_rate
+    assert policy is not None
+    assert (policy.code, policy.frequency, policy.max_age_days) == ("TP.PY.P02.1H", "daily", 14)
 
 
 def test_project_deflator_is_the_2025_based_cpi() -> None:
@@ -97,11 +124,12 @@ def test_empty_series_list_is_rejected() -> None:
         SeriesConfig.model_validate({"series": []})
 
 
-def test_only_one_deflator_is_allowed() -> None:
-    other = {**VALID_SPEC, "code": "TP.TEST.2", "deflator": True}
+@pytest.mark.parametrize("role", ["deflator", "policy_rate"])
+def test_only_one_series_per_role_is_allowed(role: str) -> None:
+    other = {**VALID_SPEC, "code": "TP.TEST.2", role: True}
 
-    with pytest.raises(ValidationError, match="at most one series may be the deflator"):
-        SeriesConfig.model_validate({"series": [{**VALID_SPEC, "deflator": True}, other]})
+    with pytest.raises(ValidationError, match=f"at most one series may be the {role}"):
+        SeriesConfig.model_validate({"series": [{**VALID_SPEC, role: True}, other]})
 
 
 def test_optional_fields_default_to_off() -> None:
@@ -109,6 +137,7 @@ def test_optional_fields_default_to_off() -> None:
 
     assert config.series[0].max_age_days is None
     assert config.deflator is None
+    assert config.policy_rate is None
 
 
 def test_max_age_days_must_be_positive() -> None:

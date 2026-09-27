@@ -1,5 +1,5 @@
 # Series tracked by the dashboard. Adding a series = adding an entry here; no code change.
-# Sources below: EVDS (TCMB), then BDDK weekly bulletin.
+# Sources below: EVDS (TCMB: loans, CPI, rates), BDDK weekly bulletin, then BKM card statistics.
 #
 # Allowed values (validated in src/tr_banking/config.py):
 #   source:    evds | bddk | bkm | bank_site
@@ -81,6 +81,60 @@ series:
     max_age_days: 45
     deflator: true
 
+  # Loan interest rates. Data group bie_kt100h "Kredi Faiz Oranlari (Akim)", verified 2026-09-27:
+  # weighted average rates banks apply to new TRY loans that week (flow data), weekly (Friday),
+  # percent, 2002-01-04 onward (TP.KTF18 from 2012-07-27). Both personal and commercial rates
+  # exclude overdrafts (KMH) and corporate cards, whose rates sit near the legal maximum.
+  # İhtiyaç Kredisi (TL, Akım, %) - TP.KTF101 would include KMH
+  - source: evds
+    code: TP.KTF10
+    name_tr: İhtiyaç kredisi faizi
+    name_en: General purpose loan rate
+    unit: "%"
+    frequency: weekly
+    module: rates
+
+  # Taşıt Kredisi (TL, Akım, %)
+  - source: evds
+    code: TP.KTF11
+    name_tr: Taşıt kredisi faizi
+    name_en: Auto loan rate
+    unit: "%"
+    frequency: weekly
+    module: rates
+
+  # Konut Kredisi (TL, Akım, %)
+  - source: evds
+    code: TP.KTF12
+    name_tr: Konut kredisi faizi
+    name_en: Housing loan rate
+    unit: "%"
+    frequency: weekly
+    module: rates
+
+  # Ticari Krediler (Tüzel Kişi KMH ve Kurumsal Kredi Kartları Hariç) (TL, Akım, %)
+  # TP.KTF17 would include them (about 3 pp higher in 2026).
+  - source: evds
+    code: TP.KTF18
+    name_tr: Ticari kredi faizi
+    name_en: Commercial loan rate
+    unit: "%"
+    frequency: weekly
+    module: rates
+
+  # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
+  # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
+  # MPC (PPK) decisions. No value on holidays, and long holidays last up to 9 days, hence 14 days.
+  - source: evds
+    code: TP.PY.P02.1H
+    name_tr: TCMB politika faizi (1 hafta vadeli repo)
+    name_en: CBRT policy rate (one-week repo)
+    unit: "%"
+    frequency: daily
+    module: rates
+    max_age_days: 14
+    policy_rate: true
+
 # ---------------------------------------------------------------------------------------------
 # BDDK weekly bulletin (https://www.bddk.org.tr/BultenHaftalik), table 1 "Krediler".
 # Verified on 2026-09-24 from the bulletin page (row ids, bank groups) and its JSON endpoint.
@@ -154,3 +208,72 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+
+# ---------------------------------------------------------------------------------------------
+# BKM monthly card statistics (https://bkm.com.tr/secilen-aya-ait-istatistikler/), module 2.
+# Verified 2026-09-27 on the pages of 2017-01, 2021-03 and 2026-07 (same labels every month).
+# Monthly, 2017-01 onward, published about 1.5 to 2 months after the month ends, hence
+# max_age_days 100 (from the month's end). Amounts in million TL, card counts in cards.
+# code = cards:<card> | txn:<card>:<usage>:<measure>:<kind> | vpos:<channel>:<measure>
+# (label mapping in src/tr_banking/sources/bkm.py; credit+debit sums both card types).
+
+  # İşlem tutarı (Milyon TL) / Alışveriş / Kredi Kartı / Yerli Kartların Yurt İçi Kullanımı
+  - source: bkm
+    code: "txn:credit:domestic:amount:shopping"
+    name_tr: Kredi kartıyla alışveriş (yurt içi)
+    name_en: Credit card spending (domestic)
+    unit: million TRY
+    frequency: monthly
+    module: cards
+    max_age_days: 100
+
+  # İşlem tutarı (Milyon TL) / Alışveriş / Banka Kartı / Yerli Kartların Yurt İçi Kullanımı
+  - source: bkm
+    code: "txn:debit:domestic:amount:shopping"
+    name_tr: Banka kartıyla alışveriş (yurt içi)
+    name_en: Debit card spending (domestic)
+    unit: million TRY
+    frequency: monthly
+    module: cards
+    max_age_days: 100
+
+  # Sanal POS İşlemleri / İnternetten Kartlı Ödemeler / İşlem tutarı (Milyon TL)
+  - source: bkm
+    code: "vpos:internet:amount"
+    name_tr: İnternetten kartlı ödemeler
+    name_en: Online card payments
+    unit: million TRY
+    frequency: monthly
+    module: cards
+    max_age_days: 100
+
+  # İşlem tutarı (Milyon TL) / Alışveriş / Yabancı Kartların Yurt İçi Kullanımı, kredi + banka
+  # kartı toplamı: a tourism signal
+  - source: bkm
+    code: "txn:credit+debit:foreign:amount:shopping"
+    name_tr: Yabancı kartlarla alışveriş (Türkiye'de)
+    name_en: Foreign card spending in Türkiye
+    unit: million TRY
+    frequency: monthly
+    module: cards
+    max_age_days: 100
+
+  # KART SAYILARI / Toplam Kredi Kartı
+  - source: bkm
+    code: "cards:credit"
+    name_tr: Kredi kartı sayısı
+    name_en: Number of credit cards
+    unit: cards
+    frequency: monthly
+    module: cards
+    max_age_days: 100
+
+  # KART SAYILARI / Toplam Banka Kartı
+  - source: bkm
+    code: "cards:debit"
+    name_tr: Banka kartı sayısı
+    name_en: Number of debit cards
+    unit: cards
+    frequency: monthly
+    module: cards
+    max_age_days: 100

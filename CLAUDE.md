@@ -45,7 +45,7 @@ Check at the start of every session.
 | 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the first CI and fetch runs after it. |
 | 2026-11-15 | BDDK TLS certificate expires and gets renewed | Check the next BDDK fetch. On a certificate error, update the bundled intermediate (see [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)). |
 
-## Project status (updated 2026-09-26)
+## Project status (updated 2026-09-27)
 
 Hosting:
 - Repo: `github.com/EnesAltuNN/tr-banking-dashboard` (**public**).
@@ -60,15 +60,27 @@ Cloud migration of module 1 (phases A–E) is done:
 - The Tue/Fri fetch workflow runs in GitHub Actions.
 - The dashboard is live.
 
+Built on 2026-09-27 (sections 1–3), not yet pushed when this was written:
+- Real values: CPI `TP.TUKFIY2025.GENEL` (module `macro`, `deflator: true`), nominal/real switch.
+- Interest rates tab: EVDS loan rates `TP.KTF10/11/12/18` and the policy rate `TP.PY.P02.1H`
+  (module `rates`), yearly inflation line, MPC decision markers, pp changes, real rate ≈.
+- Module 2 cards tab: BKM, 6 monthly series from 2017-01 (module `cards`).
+- Dashboard tabs: Krediler · Faizler · Kartlar.
+
 ## Next steps
 
-1. **User: add the dashboard screenshot and check the README on GitHub.**
+1. **User: push sections 1–3, then run one backfill** with the local `.env` (`fetch_writer`):
+   `uv run tr-banking backfill --start 2014-01-03` (about 3 minutes). It loads the rate, CPI
+   and BKM history. No migration is needed: new series go into the existing tables.
+   - On 2026-09-27 a verification run wrote EVDS rows to Supabase by mistake (see the
+     `DATABASE_URL = " "` note under Deployment facts). Because of the old 1000-row cap bug,
+     the policy rate there starts only in 2022-11; the backfill above completes it.
+2. **User: add the dashboard screenshot and check the README on GitHub.**
    - The screenshot goes to `docs/images/dashboard.png`: about 1600×1000 px, English view,
      light theme, PNG under ~500 KB.
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
-2. **Next roadmap item:** real (inflation-adjusted) values with CPI from EVDS (Backlog 10).
-   Show the plan first.
+3. **Next roadmap item:** module 3, bank rates and campaigns (Backlog 7). Show the plan first.
 
 ## Documentation map
 
@@ -106,6 +118,9 @@ Cloud migration of module 1 (phases A–E) is done:
   - Holds `EVDS_API_KEY` and the **`fetch_writer`** `DATABASE_URL`. Daily work (`fetch`,
     `backfill`, `db check`, the local dashboard) runs as `fetch_writer`. Comment the line out to
     go back to SQLite.
+  - To use SQLite for one command without editing `.env`, set `$env:DATABASE_URL = " "` (a
+    space) and `$env:DB_PATH`. **Never `""`:** Windows PowerShell 5.1 deletes the variable on an
+    empty assignment, `.env` then wins, and the command writes to Supabase.
 - **Owner string (`postgres.<ref>`):** it lives only in the user's password manager, in no file
   at all. It is used one-off for migrations and disaster recovery:
   `$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL`
@@ -128,8 +143,8 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 [docs/SETUP.md](docs/SETUP.md#cloud-database-supabase) describes:
 1. `$env:DATABASE_URL = Read-Host "postgres URL"`
 2. `uv run tr-banking db migrate`
-3. `uv run tr-banking backfill --start 2014-01-03`. This takes about 15 s; the sources keep the
-   full history.
+3. `uv run tr-banking backfill --start 2014-01-03`. This takes about 3 minutes (BKM pages
+   are read 1 s apart); the sources keep the full history.
 4. `Remove-Item Env:DATABASE_URL`
 5. Re-enable both roles' logins in the SQL editor: `sql/enable_fetch_writer.sql` and
    `sql/enable_dashboard_reader.sql`.
@@ -141,10 +156,14 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 | Module | Source | Frequency | `module` value | Status |
 |---|---|---|---|---|
 | 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done, live |
-| 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | on hold, see Data sources |
+| 1b. Official rates | TCMB EVDS3 loan rates + policy rate | weekly, daily | `rates` | done |
+| 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | done |
 | 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | planned |
 
-New modules must plug into the existing tables; do not rewrite the schema for them.
+- New modules must plug into the existing tables; do not rewrite the schema for them.
+- Module 3's bank rates join module `rates` (the "Faizler" tab), next to the official EVDS
+  averages.
+- `macro` holds inputs such as CPI; it has no tab of its own.
 
 ## Backlog
 
@@ -155,21 +174,29 @@ New modules must plug into the existing tables; do not rewrite the schema for th
 3. Verify Supabase free-tier project is not paused after a few weeks
 4. Remove the Windows scheduled task once Actions has run reliably (see Calendar)
 5. ~~Decide public vs private repo for portfolio~~ **closed**: public, dashboard live
-6. Module 2: BKM (see Data sources)
+6. ~~Module 2: BKM~~ **done**: 6 monthly series from 2017-01, "Kartlar" tab
 7. Module 3: bank rates/campaigns scraping, start with 3 banks (see Open questions)
 8. Weekly AI summary: compute changes in Python, LLM only writes text (see Open questions)
 9. ~~`.devcontainer/devcontainer.json` from Streamlit's deploy flow~~ **closed**: deleted (it used
    Python 3.11 + pip and could not install this uv project)
-10. Real, inflation-adjusted values: deflate by CPI (TÜFE) from EVDS, next to the nominal view
+10. ~~Real, inflation-adjusted values~~ **done**: CPI `TP.TUKFIY2025.GENEL`, prices of the
+    latest CPI month
 11. Revision history is not kept. This is a deliberate choice: upserts overwrite revised
     values. A "vintage" table (value per fetch date) could be added later if revisions matter.
-12. Official weekly loan interest rates from EVDS. Data group `bie_kt100h` "Kredi Faiz Oranları
-    (Akım)" was seen on 2026-09-24; verify the series codes via metadata before use.
-13. Other ideas, from the README roadmap:
-    - policy-rate decision markers on the charts;
-    - BDDK bank groups (state / domestic private / foreign);
-    - deposits and non-performing loans;
-    - alerts on unusual weekly changes.
+12. ~~Official weekly loan interest rates from EVDS~~ **done**: `TP.KTF10/11/12/18` and the
+    policy rate `TP.PY.P02.1H` (module `rates`, "Interest rates" tab)
+13. ~~Policy-rate decision markers on the charts~~ **done** (from rate changes only)
+14. MPC (PPK) meeting calendar: put the CBRT's pre-announced meeting dates in a YAML file and
+    mark hold decisions too. Today's markers come from rate changes, so holds are invisible.
+15. BDDK bank groups (state / domestic private / foreign): the codes already allow any group
+    (`tarafKodu` 10005/10007/10006), only config and a dashboard picker are needed.
+16. BDDK deposits and non-performing loans (other bulletin tables); verify row ids first.
+17. Alerts on unusual weekly changes (e.g. a z-score on weekly %), shown on the dashboard and
+    later fed to the AI summary.
+18. Policy rate before 2018-09-14: `TP.PY.P02.1H` is empty then (see DATA_SOURCES). Options:
+    the monthly BIS series `TP.BISPOLFAIZ.TUR`, or a hand-kept YAML of decisions. Decide first.
+19. Seasonal patterns in BKM card spending (December, summer tourism): a seasonally adjusted
+    view or a year-over-year-only default.
 
 ## Open questions
 
@@ -177,6 +204,10 @@ New modules must plug into the existing tables; do not rewrite the schema for th
   - Check each bank's terms of use and `robots.txt` before scraping.
   - Decide rate limits.
   - Decide whether campaign text needs its own table.
+- **Real rate column:** it uses the CPI of the rate's own month, so it is empty for the
+  latest week most of the month (CPI comes about 3 days after the month ends). The user asked
+  for empty cells; an alternative is to show the last week that has CPI, as the loans tab's
+  real view does. Ask before changing.
 - **AI summary:**
   - Which model?
   - Where does it run? Likely a GitHub Actions step after the fetch, with its own API-key
@@ -206,7 +237,7 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - `sqlite.py` and `postgres.py` only add connections, transactions and schema setup.
   - Always open storage via `open_repository(settings)`.
 - `cli.py`:
-  - `tr-banking fetch [--weeks N] [--source evds|bddk]`
+  - `tr-banking fetch [--weeks N] [--source evds|bddk|bkm]`
   - `tr-banking backfill --start YYYY-MM-DD [--end] [--source ...]`
   - `tr-banking db migrate` (idempotent; needs the owner role)
   - `tr-banking db migrate --check`: applies nothing, exit 1 if a migration is pending. It works
@@ -214,7 +245,8 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - `tr-banking db check`: connection kind, migrations, RLS, row counts. It never logs the
     connection string.
   - `tr-banking check-freshness [--source]`: exit 1 if a configured series has no data or data
-    older than `freshness.MAX_AGE_DAYS` for its frequency (weekly: 13 days).
+    older than `freshness.MAX_AGE_DAYS` for its frequency (weekly: 13 days), or than its own
+    `max_age_days` in `series.yaml` (CPI 45, policy rate 14, BKM 100).
   - `tr-banking scan-raw`: exit 1 if any raw file (name or content) contains a configured
     secret. The secrets checked are the EVDS key, the full `DATABASE_URL` and its password.
 - `pipeline.run_update` runs each source independently. A failing source is logged and the
@@ -233,6 +265,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   values.
 - Allowed `source` / `frequency` / `module` values are `Literal`s in `config.py`, not SQL CHECKs,
   so adding one never needs a migration.
+- Config-only roles in `series.yaml` (not stored in the database): `deflator: true` (the CPI
+  used for real values) and `policy_rate: true` (its changes are the decision markers); at
+  most one series each.
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
@@ -270,19 +305,22 @@ a source client.
 
 - **TCMB EVDS3:**
   - API key in the `key` header; parameters go in the path without `?`.
-  - Six weekly series from data group `bie_hpbitablo6`, in thousand TRY, from 2024-06-28.
+  - Six weekly loan series from data group `bie_hpbitablo6`, in thousand TRY, from 2024-06-28.
+  - CPI `TP.TUKFIY2025.GENEL` (monthly, 2025=100, back-cast to 2005; no own chaining).
+  - Loan rates `TP.KTF10/11/12/18` (weekly, %, from 2002/2012) and the policy rate
+    `TP.PY.P02.1H` (business days, %, values only from 2018-09-14).
   - Never guess series codes; discover them through the metadata endpoints.
+  - A response holds at most 1000 items (older rows are silently dropped), so the client
+    requests 2-year windows. Never mix frequencies in one request.
 - **BDDK weekly bulletin:**
   - No official API: one POST per series to the charts' JSON endpoint, 1 s apart.
   - Seven sector series in million TRY from 2014-01-03.
   - The site omits its TLS intermediate, which is bundled in `sources/certs/`.
-- **BKM (module 2, on hold):**
-  - Researched; 6 proposed series; the monthly "Excel" is really HTML.
-  - Before coding:
-    - Monthly freshness must allow the 1.5–2 month publication lag. The current
-      `MAX_AGE_DAYS["monthly"] = 75` is too tight; use roughly 100 days.
-    - Dashboard scaling and labels must follow each series' unit (million TL, card counts),
-      not assume TRY.
+- **BKM (module 2):**
+  - One HTML page per month from 2017-01 (the "Excel" is HTML), requested 1 s apart; cells
+    found by row and column labels (`sources/bkm.py`). Unpublished months are skipped.
+  - 6 series: 4 amounts in million TRY, 2 card counts; `max_age_days: 100` for the 1.5–2
+    month publication lag.
 
 ## Coding conventions
 
@@ -321,7 +359,10 @@ a source client.
   - It uses no secrets. Keep it that way; secrets belong only in the scheduled fetch workflow.
   - `astral-sh/setup-uv` has no floating major tags since v8, so it is pinned to a full version.
 - Dashboard charts use one series per chart, with each series on its own y-scale. Never use a
-  dual axis.
+  dual axis. A reference line in the same unit (yearly inflation on a % rate chart) shares the
+  one axis.
+- Real values deflate only monetary units (`metrics.MONETARY_UNITS`); rates stay in % with
+  changes in pp; card counts stay counts.
 - The dashboard is public:
   - `load_data` is an `st.cache_data` with a 1 h TTL, shared by all visitors. It opens one
     short connection per cache miss, never one per rerun.
@@ -342,7 +383,7 @@ uv run pytest                                         # run tests
 uv run ruff check .                                   # lint
 uv run ruff format .                                  # format
 uv run tr-banking backfill --start 2014-01-03         # load history (all sources)
-uv run tr-banking fetch [--source evds|bddk]          # latest 8 weeks
+uv run tr-banking fetch [--source evds|bddk|bkm]      # latest 8 weeks
 uv run tr-banking db migrate                          # up to date? no-op; else needs the owner (one-off)
 uv run tr-banking db migrate --check                  # exit 1 if a migration is pending
 uv run tr-banking db check                            # connection, migrations, RLS, row counts
