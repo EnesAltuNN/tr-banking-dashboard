@@ -62,7 +62,25 @@ Cloud migration of module 1 (phases A–E) is done:
 
 ## Next steps
 
-1. **README as a portfolio showcase** (planned for the next session).
+1. **User: add the dashboard screenshot and check the README on GitHub.**
+   - The screenshot goes to `docs/images/dashboard.png`: about 1600×1000 px, English view,
+     light theme, PNG under ~500 KB.
+   - Remind the user to check on github.com that the README's Mermaid architecture diagram
+     renders correctly.
+2. **Next roadmap item:** real (inflation-adjusted) values with CPI from EVDS (Backlog 10).
+   Show the plan first.
+
+## Documentation map
+
+- `README.md` is the portfolio showcase: summary, highlights, architecture (Mermaid), quick
+  start, lessons learned, roadmap. Keep it short and move details into `docs/`.
+- [docs/SETUP.md](docs/SETUP.md): setup, CLI usage, Supabase, secrets, scheduled fetch,
+  hosting, development, project layout.
+- [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md): sources, series tables, verified API facts.
+- [docs/SECURITY.md](docs/SECURITY.md): access model, RLS/REST, where secrets live, public
+  artifacts.
+- When behavior changes, update the doc that owns the topic; the README only links to it.
+- The README's roadmap order mirrors the Backlog.
 
 ## Deployment facts
 
@@ -106,8 +124,8 @@ Cloud migration of module 1 (phases A–E) is done:
 
 ## Disaster recovery
 
-If the Supabase data is lost or the project is recreated, run the owner steps one-off, as the
-README's "Cloud database" section describes:
+If the Supabase data is lost or the project is recreated, run the owner steps one-off, as
+[docs/SETUP.md](docs/SETUP.md#cloud-database-supabase) describes:
 1. `$env:DATABASE_URL = Read-Host "postgres URL"`
 2. `uv run tr-banking db migrate`
 3. `uv run tr-banking backfill --start 2014-01-03`. This takes about 15 s; the sources keep the
@@ -145,6 +163,13 @@ New modules must plug into the existing tables; do not rewrite the schema for th
 10. Real, inflation-adjusted values: deflate by CPI (TÜFE) from EVDS, next to the nominal view
 11. Revision history is not kept. This is a deliberate choice: upserts overwrite revised
     values. A "vintage" table (value per fetch date) could be added later if revisions matter.
+12. Official weekly loan interest rates from EVDS. Data group `bie_kt100h` "Kredi Faiz Oranları
+    (Akım)" was seen on 2026-09-24; verify the series codes via metadata before use.
+13. Other ideas, from the README roadmap:
+    - policy-rate decision markers on the charts;
+    - BDDK bank groups (state / domestic private / foreign);
+    - deposits and non-performing loans;
+    - alerts on unusual weekly changes.
 
 ## Open questions
 
