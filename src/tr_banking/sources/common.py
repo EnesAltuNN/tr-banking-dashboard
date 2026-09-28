@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +82,26 @@ def save_raw_response(
     path.write_bytes(content)
     logger.info("raw response saved to %s", path)
     return path
+
+
+def remove_old_files(
+    directory: Path, older_than: timedelta, now: datetime | None = None
+) -> list[Path]:
+    """Delete files under `directory` last modified more than `older_than` ago.
+
+    Only regular files are removed (folders stay, symlinked folders are not followed).
+    """
+    if not directory.exists():
+        return []
+    cutoff = ((now or datetime.now(UTC)) - older_than).timestamp()
+    old = [
+        path
+        for path in directory.rglob("*")
+        if path.is_file() and not path.is_symlink() and path.stat().st_mtime < cutoff
+    ]
+    for path in old:
+        path.unlink()
+    return old
 
 
 def month_end(year: int, month: int) -> date:

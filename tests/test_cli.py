@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -260,3 +261,46 @@ def test_db_migrate_check_reports_no_pending_migrations(
     assert cli.main(["db", "migrate", "--check"]) == 0
 
     assert "no pending migrations" in caplog.text
+
+
+def test_clean_raw_removes_only_old_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    raw = tmp_path / "raw"
+    (raw / "bkm").mkdir(parents=True)
+    old, fresh = raw / "bkm" / "old.html", raw / "evds.json"
+    old.write_text("x", encoding="utf-8")
+    fresh.write_text("x", encoding="utf-8")
+    forty_days_ago = (date.today() - timedelta(days=40)).strftime("%Y-%m-%d")
+    stamp = pd.Timestamp(forty_days_ago).timestamp()
+    os.utime(old, (stamp, stamp))
+    use_settings(monkeypatch, raw_dir=raw)
+
+    assert cli.main(["clean-raw"]) == 0
+
+    assert not old.exists()
+    assert fresh.exists()
+    assert (raw / "bkm").is_dir()  # folders stay
+    assert "removed 1 raw files older than 30 days" in caplog.text
+
+
+def test_clean_raw_days_option(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "a.json").write_text("x", encoding="utf-8")
+    stamp = pd.Timestamp(date.today() - timedelta(days=3)).timestamp()
+    os.utime(raw / "a.json", (stamp, stamp))
+    use_settings(monkeypatch, raw_dir=raw)
+
+    assert cli.main(["clean-raw", "--days", "2"]) == 0
+
+    assert not (raw / "a.json").exists()
+
+
+def test_clean_raw_without_a_raw_folder_is_fine(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    use_settings(monkeypatch, raw_dir=tmp_path / "missing")
+
+    assert cli.main(["clean-raw"]) == 0
