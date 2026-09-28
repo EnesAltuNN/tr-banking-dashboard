@@ -59,6 +59,8 @@ DELTA_COLORS = {
     "dark": {1: "#0ca30c", -1: "#e66767"},
 }
 CHARTS_PER_ROW = 2
+# Streamlit has no size option for tab labels; the labels are the page's main navigation.
+TAB_STYLE = '<style>[data-testid="stTab"] p { font-size: 1.2rem; font-weight: 600; }</style>'
 
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
@@ -104,6 +106,7 @@ def main() -> None:
     price_index = spec_observations(series, observations, config.deflator)
     policy_id = spec_id(series, config.policy_rate)
 
+    st.markdown(TAB_STYLE, unsafe_allow_html=True)
     tab_keys = ["tab_credit", "tab_rates", "tab_cards"]
     credit_tab, rates_tab, cards_tab = st.tabs([text(key, lang) for key in tab_keys])
     with credit_tab:
