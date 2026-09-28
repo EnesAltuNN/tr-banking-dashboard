@@ -98,3 +98,10 @@ def test_format_signed(value: float, decimals: int, tr: str, en: str) -> None:
 def test_change_direction_uses_the_given_decimals() -> None:
     assert change_direction(0.04) == 0  # shown as 0,0
     assert change_direction(0.04, decimals=2) == 1  # shown as +0,04
+
+
+def test_change_direction_accepts_numpy_values() -> None:
+    import numpy as np
+
+    assert change_direction(np.float64(-1.25), 2) == -1
+    assert change_direction(np.float64(0.001), 2) == 0

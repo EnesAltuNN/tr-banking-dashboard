@@ -69,24 +69,49 @@ uv run tr-banking check-freshness   # exit 1 if a series has no or too old data
 uv run tr-banking scan-raw          # exit 1 if a raw response file contains a secret
 ```
 
+Housekeeping:
+
+```powershell
+uv run tr-banking clean-raw             # delete raw response files older than 30 days
+uv run tr-banking clean-raw --days 7    # keep only the last week
+```
+
 - **Upserts are idempotent:** re-running a fetch never duplicates rows, and revised values
   replace old ones.
-- **Raw responses are saved** under `data/raw/` for debugging.
+- **Raw responses are saved** under `data/raw/` for debugging; `clean-raw` removes old ones.
+- **Monthly sources publish late**, so every fetch re-reads at least the last 3 months of CPI
+  and the last 6 months of BKM, whatever `--weeks` says (`MONTHLY_LOOKBACK_MONTHS` in
+  `pipeline.py`).
+- **BKM is stored every 12 months** during a backfill, so stopping it with Ctrl+C keeps the
+  months already downloaded.
 - **Failures:** if one source fails, the others are still loaded. The CLI then exits with code
   1, so a scheduler can detect the failure.
 - **Debug logging:** add `-v`, e.g. `uv run tr-banking -v fetch`.
 
 The dashboard runs in Turkish or English, with a TR/EN switch and Turkish number formats. It
-has three tabs:
-- **Loans:** a source picker (EVDS or BDDK), weekly % and yearly % change, and a nominal/real
-  switch. The real view shows TRY values in the prices of the latest CPI month.
-- **Interest rates:** loan rates and the policy rate in %, with changes in percentage points,
-  yearly inflation as a reference line, MPC decision markers, and an approximate real rate.
-- **Cards:** BKM monthly card spending and card counts, with monthly % and yearly % change.
-  The real view deflates the amounts only.
+has three tabs, each opening with KPI tiles (value, signed change and a one-year sparkline):
+- **Loans:** consumer and commercial loans and their real yearly growth; a source picker
+  (EVDS or BDDK), weekly % and yearly % change, and a nominal/real switch. The real view shows
+  TRY values in the prices of the latest CPI month.
+- **Interest rates:** the policy rate, the personal loan rate, yearly inflation and the real
+  personal loan rate; loan rates and the policy rate in %, with changes in percentage points,
+  yearly inflation as a reference line and MPC decisions as ticks along the time axis.
+- **Cards:** card spending (credit + debit), online payments and foreign cards; BKM monthly
+  card spending and card counts, with monthly % and yearly % change. The real view deflates
+  the amounts only.
 
-Every tab has date range and series filters, one line chart per series, and a table where
-rises are green and falls red, always with a +/- sign.
+Layout:
+- The filters (source, nominal/real, series, date range) live in the sidebar and show only
+  the open tab's controls. Only the open tab runs.
+- Charts sit in a two-column grid of cards (one column on phones). Each has a colored dot in
+  its title and its source below it. Each category (housing, auto, personal, credit/debit
+  card, commercial, policy) keeps one color everywhere.
+- Tables show rises in green and falls in red, always with a +/- sign.
+- Notes on method sit in a "Notes and method" expander; the footer links the sources and the
+  code and explains nominal vs real values.
+- The theme is set in [`.streamlit/config.toml`](../.streamlit/config.toml): light and dark
+  colors, the Inter font and the chart palette. The page follows the visitor's light/dark
+  setting.
 
 ## Configuration
 

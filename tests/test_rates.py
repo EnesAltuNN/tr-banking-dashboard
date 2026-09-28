@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from tr_banking.app.metrics import annual_inflation, rate_changes, summarize_rates
+from tr_banking.app.metrics import annual_inflation, rate_changes, real_rates, summarize_rates
 from tr_banking.sources.evds import parse_evds_response
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -145,3 +145,14 @@ def test_as_of_limits_the_summary() -> None:
     )
 
     assert summary["last_value"].tolist() == [42.5]
+
+
+def test_real_rates_keep_only_weeks_with_cpi() -> None:
+    inflation = annual_inflation(cpi_2023_2024())  # up to December 2024
+    loan = rates(1, {"2024-07-12": 77.90, "2024-12-27": 60.0, "2025-01-03": 59.0})
+
+    real = real_rates(loan, inflation)
+
+    assert real["date"].tolist() == [pd.Timestamp("2024-07-12"), pd.Timestamp("2024-12-27")]
+    assert real["value"].iloc[0] == pytest.approx(77.90 - 61.78, abs=0.01)
+    assert real_rates(loan, inflation.iloc[0:0]).empty

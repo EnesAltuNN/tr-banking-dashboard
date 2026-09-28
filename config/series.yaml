@@ -5,6 +5,9 @@
 #   source:    evds | bddk | bkm | bank_site
 #   frequency: daily | weekly | monthly
 #   module:    credit | cards | rates | macro (inputs such as CPI, not shown as a module)
+#   category:  optional; total | consumer | housing | auto | personal | credit_card |
+#              debit_card | commercial | policy | online | foreign (one color per category
+#              in every dashboard chart; also picks the KPI tiles)
 #
 # EVDS codes below were verified on 2026-09-24 via the EVDS3 metadata endpoints:
 #   category 4502 "Para ve Banka Istatistikleri (Haftalik)"
@@ -21,6 +24,7 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+    category: consumer
 
   # 1.1.1.Konut (TL + YP) / 1.1.1.Housing (TRY + FX)
   - source: evds
@@ -30,6 +34,7 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+    category: housing
 
   # 1.1.2.Taşıt (TL + YP) / 1.1.2.Vehicle (TRY + FX)
   - source: evds
@@ -39,6 +44,7 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+    category: auto
 
   # 1.1.3.İhtiyaç (TL + YP) / 1.1.3.Other (TRY + FX)
   - source: evds
@@ -48,6 +54,7 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+    category: personal
 
   # 1.1.4.Bireysel Kredi Kartları / 1.1.4.Individual Credit Cards
   - source: evds
@@ -57,6 +64,7 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+    category: credit_card
 
   # 1.2.1.Ticari Krediler / 1.2.1.Commercial Loans (to non-financial corporations)
   - source: evds
@@ -66,6 +74,7 @@ series:
     unit: thousand TRY
     frequency: weekly
     module: credit
+    category: commercial
 
   # Consumer price index, used to deflate TRY values into real values. Data group
   # bie_tukfiy2025 (TUIK), verified 2026-09-27: Tuketici Fiyat Endeksi (2025=100), Genel Endeks,
@@ -93,6 +102,7 @@ series:
     unit: "%"
     frequency: weekly
     module: rates
+    category: personal
 
   # Taşıt Kredisi (TL, Akım, %)
   - source: evds
@@ -102,6 +112,7 @@ series:
     unit: "%"
     frequency: weekly
     module: rates
+    category: auto
 
   # Konut Kredisi (TL, Akım, %)
   - source: evds
@@ -111,6 +122,7 @@ series:
     unit: "%"
     frequency: weekly
     module: rates
+    category: housing
 
   # Ticari Krediler (Tüzel Kişi KMH ve Kurumsal Kredi Kartları Hariç) (TL, Akım, %)
   # TP.KTF17 would include them (about 3 pp higher in 2026).
@@ -121,6 +133,7 @@ series:
     unit: "%"
     frequency: weekly
     module: rates
+    category: commercial
 
   # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
   # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
@@ -132,6 +145,7 @@ series:
     unit: "%"
     frequency: daily
     module: rates
+    category: policy
     max_age_days: 14
     policy_rate: true
 
@@ -154,6 +168,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: total
 
   # 2 Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)
   - source: bddk
@@ -163,6 +178,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: consumer
 
   # 4 a) Konut
   - source: bddk
@@ -172,6 +188,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: housing
 
   # 5 b) Taşıt
   - source: bddk
@@ -181,6 +198,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: auto
 
   # 6 c) İhtiyaç
   - source: bddk
@@ -190,6 +208,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: personal
 
   # 7 Bireysel Kredi Kartları (8+9)
   - source: bddk
@@ -199,6 +218,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: credit_card
 
   # 10 Ticari ve Diğer Krediler (broader than EVDS "Ticari Krediler" TP.HPBITABLO6.20)
   - source: bddk
@@ -208,6 +228,7 @@ series:
     unit: million TRY
     frequency: weekly
     module: credit
+    category: commercial
 
 # ---------------------------------------------------------------------------------------------
 # BKM monthly card statistics (https://bkm.com.tr/secilen-aya-ait-istatistikler/), module 2.
@@ -225,6 +246,7 @@ series:
     unit: million TRY
     frequency: monthly
     module: cards
+    category: credit_card
     max_age_days: 100
 
   # İşlem tutarı (Milyon TL) / Alışveriş / Banka Kartı / Yerli Kartların Yurt İçi Kullanımı
@@ -235,6 +257,7 @@ series:
     unit: million TRY
     frequency: monthly
     module: cards
+    category: debit_card
     max_age_days: 100
 
   # Sanal POS İşlemleri / İnternetten Kartlı Ödemeler / İşlem tutarı (Milyon TL)
@@ -245,6 +268,7 @@ series:
     unit: million TRY
     frequency: monthly
     module: cards
+    category: online
     max_age_days: 100
 
   # İşlem tutarı (Milyon TL) / Alışveriş / Yabancı Kartların Yurt İçi Kullanımı, kredi + banka
@@ -256,6 +280,7 @@ series:
     unit: million TRY
     frequency: monthly
     module: cards
+    category: foreign
     max_age_days: 100
 
   # KART SAYILARI / Toplam Kredi Kartı
@@ -266,6 +291,7 @@ series:
     unit: cards
     frequency: monthly
     module: cards
+    category: credit_card
     max_age_days: 100
 
   # KART SAYILARI / Toplam Banka Kartı
@@ -276,4 +302,5 @@ series:
     unit: cards
     frequency: monthly
     module: cards
+    category: debit_card
     max_age_days: 100

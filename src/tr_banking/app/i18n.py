@@ -14,9 +14,81 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "tr": "Türkiye Bankacılık Piyasası Paneli",
         "en": "Turkish Banking Market Dashboard",
     },
-    "subtitle": {
-        "tr": "Krediler, faizler ve kart harcamaları · Türkiye bankacılık sektörü verileri",
-        "en": "Loans, interest rates and card spending · Turkish banking sector data",
+    "tagline": {
+        "tr": (
+            "Türkiye bankacılık piyasasının kredi, faiz ve kart harcaması verileri; resmî "
+            "kaynaklardan otomatik güncellenir, nominal ve enflasyondan arındırılmış olarak."
+        ),
+        "en": (
+            "Loans, interest rates and card spending in Türkiye's banking market, updated "
+            "automatically from official sources, in nominal and inflation-adjusted terms."
+        ),
+    },
+    "info_line": {
+        "tr": (
+            "Son veri çekimi: **{updated}** (TSİ) · Veriler salı ve cuma sabahları otomatik "
+            "çekilir. Bu sayfa veriyi {loaded} (TSİ) itibarıyla gösteriyor; en geç saatte bir "
+            "yenilenir."
+        ),
+        "en": (
+            "Last data fetch: **{updated}** (TRT) · Data is fetched automatically on Tuesday and "
+            "Friday mornings. This page shows it as of {loaded} (TRT) and refreshes at least "
+            "hourly."
+        ),
+    },
+    "filters": {"tr": "Filtreler", "en": "Filters"},
+    "latest_week": {
+        "tr": "Son veri: **{week}** haftası",
+        "en": "Latest data: week ending **{week}**",
+    },
+    "chart_source": {"tr": "Kaynak: {source}", "en": "Source: {source}"},
+    "notes": {"tr": "Notlar ve yöntem", "en": "Notes and method"},
+    "footer_sources": {
+        "tr": (
+            "**Kaynaklar:** [TCMB EVDS](https://evds3.tcmb.gov.tr/) · "
+            "[BDDK haftalık bülteni](https://www.bddk.org.tr/BultenHaftalik) · "
+            "[BKM aylık istatistikler](https://bkm.com.tr/secilen-aya-ait-istatistikler/) · "
+            "Kaynak kod: [GitHub](https://github.com/EnesAltuNN/tr-banking-dashboard)"
+        ),
+        "en": (
+            "**Sources:** [CBRT EVDS](https://evds3.tcmb.gov.tr/) · "
+            "[BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) · "
+            "[BKM monthly statistics](https://bkm.com.tr/secilen-aya-ait-istatistikler/) · "
+            "Source code: [GitHub](https://github.com/EnesAltuNN/tr-banking-dashboard)"
+        ),
+    },
+    "footer_values": {
+        "tr": (
+            "**Nominal ve reel:** Değerler yayımlandığı gibi nominal TL'dir. *Reel* görünüm TL "
+            "tutarlarını TÜFE ile son TÜFE ayının fiyatlarına çevirir; faizlerde reel faiz, "
+            "faiz eksi yıllık enflasyon olarak yaklaşık hesaplanır. Yeşil artışı, kırmızı "
+            "düşüşü gösterir ve her zaman +/- işaretiyle birlikte gelir."
+        ),
+        "en": (
+            "**Nominal and real:** values are nominal TRY, as published. The *real* view "
+            "converts TRY amounts to the prices of the latest CPI month; for interest rates, "
+            "the real rate is approximated as the rate minus yearly inflation. Green marks a "
+            "rise and red a fall, always together with a +/- sign."
+        ),
+    },
+    "pp": {"tr": "puan", "en": "pp"},
+    "desc_yearly": {"tr": "yıllık", "en": "year on year"},
+    "desc_monthly": {"tr": "önceki aya göre", "en": "vs. previous month"},
+    "desc_real_short": {"tr": "reel, yıllık", "en": "real, year on year"},
+    "desc_real": {
+        "tr": "reel, yıllık · {month} fiyatlarıyla",
+        "en": "real, year on year · {month} prices",
+    },
+    "kpi_real_growth": {"tr": "{name}, reel büyüme", "en": "{name}, real growth"},
+    "kpi_inflation": {"tr": "Yıllık enflasyon (TÜFE)", "en": "Yearly inflation (CPI)"},
+    "kpi_real_rate": {"tr": "{name}, reel ≈", "en": "{name}, real ≈"},
+    "kpi_real_rate_desc": {
+        "tr": "TÜFE'si açıklanmış son hafta: {week}",
+        "en": "Latest week with published CPI: {week}",
+    },
+    "kpi_card_spending": {
+        "tr": "Kartla alışveriş (kredi + banka kartı, yurt içi)",
+        "en": "Card spending (credit + debit, domestic)",
     },
     "tab_credit": {"tr": "Krediler", "en": "Loans"},
     "tab_rates": {"tr": "Faizler", "en": "Interest rates"},
@@ -65,20 +137,6 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "pick_end": {
         "tr": "Aralık için bir bitiş tarihi seçin.",
         "en": "Pick an end date for the range.",
-    },
-    "status": {
-        "tr": "Son veri: **{week}** haftası · Son veri çekimi: **{updated}** (TSİ)",
-        "en": "Latest data: week ending **{week}** · Last data fetch: **{updated}** (TRT)",
-    },
-    "freshness_note": {
-        "tr": (
-            "Veriler salı ve cuma sabahları otomatik çekilir. Bu sayfa veriyi {loaded} (TSİ) "
-            "itibarıyla gösteriyor; en geç saatte bir yenilenir."
-        ),
-        "en": (
-            "Data is fetched automatically on Tuesday and Friday mornings. This page shows it "
-            "as of {loaded} (TRT) and refreshes at least hourly."
-        ),
     },
     "value_mode": {"tr": "Değerler", "en": "Values"},
     "mode_nominal": {"tr": "Nominal", "en": "Nominal"},
@@ -177,6 +235,7 @@ TEXTS: dict[str, dict[Lang, str]] = {
 SOURCE_LABELS: dict[str, dict[Lang, str]] = {
     "evds": {"tr": "TCMB EVDS", "en": "CBRT EVDS"},
     "bddk": {"tr": "BDDK haftalık bülteni", "en": "BDDK weekly bulletin"},
+    "bkm": {"tr": "BKM aylık istatistikler", "en": "BKM monthly statistics"},
 }
 
 SOURCE_NOTES: dict[str, dict[Lang, str]] = {
@@ -302,7 +361,7 @@ def change_direction(value: float, decimals: int = 1) -> int:
     """1 / -1 / 0 for up / down / flat-or-missing, using the same rounding as the display."""
     if value is None or math.isnan(value):
         return 0
-    rounded = round(value, decimals)
+    rounded = round(float(value), decimals)  # float(): numpy booleans cannot be subtracted
     return (rounded > 0) - (rounded < 0)
 
 

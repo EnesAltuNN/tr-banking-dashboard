@@ -10,7 +10,7 @@ dashboard, in nominal and inflation-adjusted terms.
 **Live dashboard: [tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)**
 (Turkish/English)
 
-[![Dashboard: summary table and one chart per loan series](docs/images/dashboard.png)](https://tr-banking-dashboard.streamlit.app/)
+[![Dashboard: KPI tiles, a summary table and one chart per series, filters in the sidebar](docs/images/dashboard.png)](https://tr-banking-dashboard.streamlit.app/)
 
 ## Highlights
 
@@ -43,11 +43,14 @@ dashboard, in nominal and inflation-adjusted terms.
     schema.
   - Public workflow artifacts are scanned for secrets before upload.
 - **Bilingual dashboard:**
-  - Three tabs: loans, interest rates, cards.
+  - Three tabs (loans, interest rates, cards), each opening with KPI tiles and sparklines;
+    filters live in the sidebar.
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).
-  - Weekly or monthly and yearly change, and one chart per series.
-  - A one-hour shared cache keeps the public page light on the database.
-- **Tested:** 320+ tests, most of them on real recorded API responses. CI runs them against a
+  - Light and dark themes with a color palette checked for color-vision deficiency; each
+    category (housing, auto, personal, cards, commercial) keeps one color in every chart.
+  - A one-hour shared cache keeps the public page light on the database, and only the open
+    tab runs.
+- **Tested:** 340+ tests, most of them on real recorded API responses. CI runs them against a
   real Postgres 17 container, including tests that prove what each database role can and
   cannot do.
 
@@ -141,6 +144,11 @@ Supabase, the scheduled fetch and hosting are described in [docs/SETUP.md](docs/
 - **An "Excel" file that is HTML.** BKM's monthly download is an HTML table. It is parsed
   with the standard library, and every cell is found by its row and column labels, units
   included. A renamed row or a unit change fails the fetch instead of storing a wrong number.
+- **A tab that forgot every second click.** Streamlit derives a widget's identity from its
+  arguments. The tabs' `default` followed the open tab, so after one switch the widget was
+  rebuilt and the next click went to a widget that no longer existed. The default now changes
+  only with the language. The unit tests could not see it (they set state by key), so the fix
+  was verified by clicking through the tabs in a real browser.
 - **A public page needs a cache.** Streamlit reruns the script on every click. A one-hour
   cache shared by all visitors turns that into at most one short database read per hour. The
   page shows both the last data fetch and the time it read the database, so the cache never

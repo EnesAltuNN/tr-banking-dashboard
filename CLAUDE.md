@@ -45,7 +45,7 @@ Check at the start of every session.
 | 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the first CI and fetch runs after it. |
 | 2026-11-15 | BDDK TLS certificate expires and gets renewed | Check the next BDDK fetch. On a certificate error, update the bundled intermediate (see [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)). |
 
-## Project status (updated 2026-09-27)
+## Project status (updated 2026-09-28)
 
 Hosting:
 - Repo: `github.com/EnesAltuNN/tr-banking-dashboard` (**public**).
@@ -60,24 +60,26 @@ Cloud migration of module 1 (phases A–E) is done:
 - The Tue/Fri fetch workflow runs in GitHub Actions.
 - The dashboard is live.
 
-Built on 2026-09-27 (sections 1–3), not yet pushed when this was written:
+Live since 2026-09-28 (pushed and backfilled: 25 series, 10,866 observations):
 - Real values: CPI `TP.TUKFIY2025.GENEL` (module `macro`, `deflator: true`), nominal/real switch.
 - Interest rates tab: EVDS loan rates `TP.KTF10/11/12/18` and the policy rate `TP.PY.P02.1H`
   (module `rates`), yearly inflation line, MPC decision markers, pp changes, real rate ≈.
 - Module 2 cards tab: BKM, 6 monthly series from 2017-01 (module `cards`).
 - Dashboard tabs: Krediler · Faizler · Kartlar.
 
+Built on 2026-09-28, to be pushed:
+- Robustness: per-source monthly lookback, BKM stored every 12 months, `clean-raw`.
+- Dashboard redesign: KPI tiles, sidebar filters, lazy tabs, category colors, light/dark
+  theme, chart cards with sources, notes expander, footer.
+
 ## Next steps
 
-1. **User: push sections 1–3, then run one backfill** with the local `.env` (`fetch_writer`):
-   `uv run tr-banking backfill --start 2014-01-03` (about 3 minutes). It loads the rate, CPI
-   and BKM history. No migration is needed: new series go into the existing tables.
-   - On 2026-09-27 a verification run wrote EVDS rows to Supabase by mistake (see the
-     `DATABASE_URL = " "` note under Deployment facts). Because of the old 1000-row cap bug,
-     the policy rate there starts only in 2022-11; the backfill above completes it.
-2. **User: add the dashboard screenshot and check the README on GitHub.**
-   - The screenshot goes to `docs/images/dashboard.png`: about 1600×1000 px, English view,
-     light theme, PNG under ~500 KB.
+1. **User: push the 2026-09-28 commits** (robustness, dashboard redesign, docs). No migration
+   and no backfill are needed. After the push, reboot the app on share.streamlit.io if the
+   page shows an ImportError (a running process can keep old modules; seen on 2026-09-28).
+2. **User: add the dashboard screenshot** of the new design and check the README on GitHub.
+   - The screenshot goes to `docs/images/dashboard.png` (the README already links it): about
+     1600×1000 px, English view, light theme, PNG under ~500 KB.
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
 3. **Next roadmap item:** module 3, bank rates and campaigns (Backlog 7). Show the plan first.
@@ -197,6 +199,14 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
     the monthly BIS series `TP.BISPOLFAIZ.TUR`, or a hand-kept YAML of decisions. Decide first.
 19. Seasonal patterns in BKM card spending (December, summer tourism): a seasonally adjusted
     view or a year-over-year-only default.
+20. ~~Robustness: per-source monthly fetch windows, BKM saved every 12 months, `clean-raw`~~
+    **done** (2026-09-28)
+21. ~~Dashboard redesign: KPI tiles, sidebar filters, category colors, theme, footer~~ **done**
+    (2026-09-28)
+22. Keep an automated screenshot check in the repo (the Playwright + Edge script used on
+    2026-09-28 lives only in a scratchpad), e.g. `scripts/screenshots.py`, so the README image
+    and visual regressions are one command away.
+23. Wide tables scroll sideways on phones; consider fewer columns in a narrow layout.
 
 ## Open questions
 
@@ -249,8 +259,15 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     `max_age_days` in `series.yaml` (CPI 45, policy rate 14, BKM 100).
   - `tr-banking scan-raw`: exit 1 if any raw file (name or content) contains a configured
     secret. The secrets checked are the EVDS key, the full `DATABASE_URL` and its password.
+  - `tr-banking clean-raw [--days 30]`: delete raw files older than N days (by modification
+    time), for local housekeeping.
 - `pipeline.run_update` runs each source independently. A failing source is logged and the
   others still load; the CLI then exits 1.
+- Fetch windows: weekly/daily requests start at `--weeks` back; monthly requests reach back
+  at least `MONTHLY_LOOKBACK_MONTHS` before today's month (EVDS 3, BKM 6) to cover the
+  publication lag. A new monthly source must be added there.
+- Clients that read page by page expose `iter_observations` (BKM, 12 months per chunk); the
+  pipeline upserts each chunk, so an interrupted backfill keeps what it has downloaded.
 - `sources/common.py` holds the shared retry logic (transient 429/5xx and network errors only)
   and raw-response saving.
 - Every client implements `ObservationClient.fetch_observations(codes, start, end)`.
@@ -265,9 +282,10 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   values.
 - Allowed `source` / `frequency` / `module` values are `Literal`s in `config.py`, not SQL CHECKs,
   so adding one never needs a migration.
-- Config-only roles in `series.yaml` (not stored in the database): `deflator: true` (the CPI
-  used for real values) and `policy_rate: true` (its changes are the decision markers); at
-  most one series each.
+- Config-only fields in `series.yaml` (not stored in the database): `deflator: true` (the CPI
+  used for real values) and `policy_rate: true` (its changes are the decision markers), at
+  most one series each; `category` (housing, auto, personal, credit_card, debit_card,
+  commercial, policy, total, consumer, online, foreign) for colors and KPI tiles.
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
@@ -363,6 +381,24 @@ a source client.
   one axis.
 - Real values deflate only monetary units (`metrics.MONETARY_UNITS`); rates stay in % with
   changes in pp; card counts stay counts.
+- Dashboard layout (`app/dashboard.py`):
+  - Tabs are stateful and lazy (`on_change="rerun"`): only the open tab runs and only its
+    filters appear in the sidebar. The open tab is kept in `st.session_state["open_section"]`.
+    The tabs' `default` is part of the widget identity, so it changes only when the language
+    changes (changing it on every switch dropped every second click).
+  - KPI tiles are `st.metric` with a sparkline. A change that rounds to zero gets
+    `delta_color="off"` and no arrow (st.metric treats "0,0%" as a rise).
+  - One color per `category`: `PALETTE`/`CATEGORY_HUES` in `dashboard.py`, the same steps as
+    `chartCategoricalColors` in `.streamlit/config.toml`. The palette passed the dataviz
+    validator (CVD and contrast) in both modes; three light steps are below 3:1, so every
+    chart names its series in the title and every tab has a table.
+  - Time axes use `DATE_AXIS` (labels keep the year).
+  - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
+    is often empty as formatted text (e.g. the real-rate column).
+  - Visual checks: run the app on a scratch SQLite (`DATABASE_URL = " "`, `DB_PATH`) and take
+    screenshots with Playwright and the installed Edge (`uv run --no-project --with
+    playwright`, `chromium.launch(channel="msedge")`); AppTest does not see layout or
+    widget-identity bugs.
 - The dashboard is public:
   - `load_data` is an `st.cache_data` with a 1 h TTL, shared by all visitors. It opens one
     short connection per cache miss, never one per rerun.
@@ -389,6 +425,7 @@ uv run tr-banking db migrate --check                  # exit 1 if a migration is
 uv run tr-banking db check                            # connection, migrations, RLS, row counts
 uv run tr-banking check-freshness                     # exit 1 if data is stale
 uv run tr-banking scan-raw                            # exit 1 if a raw file holds a secret
+uv run tr-banking clean-raw [--days 30]               # delete old raw response files
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```

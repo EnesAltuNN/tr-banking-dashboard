@@ -9,7 +9,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
-from streamlit.testing.v1.element_tree import Tab
 
 from tr_banking import db as db_module
 from tr_banking import settings as settings_module
@@ -52,20 +51,19 @@ def use_db(monkeypatch: pytest.MonkeyPatch) -> Callable[[Path], None]:
     return _use
 
 
-def run_dashboard() -> AppTest:
-    return AppTest.from_file(str(DASHBOARD), default_timeout=60).run()
+def run_dashboard(section: str = "credit") -> AppTest:
+    """Run with one tab open; tabs run lazily, so only that tab's content exists."""
+    app = AppTest.from_file(str(DASHBOARD), default_timeout=60)
+    app.session_state["open_section"] = section
+    return app.run()
 
 
-def credit_tab(app: AppTest) -> Tab:
-    return app.tabs[0]
-
-
-def rates_tab(app: AppTest) -> Tab:
-    return app.tabs[1]
-
-
-def cards_tab(app: AppTest) -> Tab:
-    return app.tabs[2]
+def chart_color(spec: dict) -> str:
+    """The line color of a single-series chart (first layer)."""
+    mark = spec["layer"][0]["mark"]
+    if "color" in mark:
+        return mark["color"]
+    return spec["layer"][0]["encoding"]["color"]["scale"]["range"][0]
 
 
 def fixture(name: str) -> dict:
@@ -136,7 +134,7 @@ def test_populated_database_renders_table_and_charts(use_db: Callable, tmp_path:
     assert table["Seri"].tolist() == [spec.name_tr for spec in SPECS]
     # thousand TRY -> billion TRY
     assert table["Son değer (milyar TL)"].iloc[0] == pytest.approx(3223.3)
-    assert len(credit_tab(app).get("vega_lite_chart")) == len(SPECS)
+    assert len(app.get("vega_lite_chart")) == len(SPECS)
 
 
 def test_empty_selection_shows_hint(use_db: Callable, tmp_path: Path) -> None:
@@ -160,7 +158,7 @@ def test_source_picker_switches_to_bddk(use_db: Callable, tmp_path: Path) -> Non
     assert table["Seri"].tolist() == [spec.name_tr for spec in BDDK_SPECS]
     # million TRY -> billion TRY
     assert table["Son değer (milyar TL)"].iloc[0] == pytest.approx(448.6)
-    assert len(credit_tab(app).get("vega_lite_chart")) == len(BDDK_SPECS)
+    assert len(app.get("vega_lite_chart")) == len(BDDK_SPECS)
 
 
 def test_english_switch_translates_table(use_db: Callable, tmp_path: Path) -> None:
@@ -210,15 +208,20 @@ def page_text(app: AppTest) -> str:
     return "\n".join(str(element.value) for element in elements)
 
 
-def test_status_shows_fetch_time_and_page_read_time(use_db: Callable, tmp_path: Path) -> None:
+@pytest.mark.parametrize("section", ["credit", "rates", "cards"])
+def test_info_line_shows_fetch_time_and_page_read_time(
+    use_db: Callable, tmp_path: Path, section: str
+) -> None:
     use_db(populated_db(tmp_path / "test.db"))
 
-    app = run_dashboard()
+    app = run_dashboard(section)
 
     text = page_text(app)
+    assert "resmî kaynaklardan otomatik güncellenir" in text  # the one-line description
     assert "Son veri çekimi" in text
     assert re.search(r"Bu sayfa veriyi \d{2}:\d{2} \(TSİ\) itibarıyla gösteriyor", text)
     assert "en geç saatte bir yenilenir" in text
+    assert "github.com/EnesAltuNN/tr-banking-dashboard" in text  # footer
 
 
 def test_database_is_read_once_per_cache_period(
@@ -330,11 +333,11 @@ def test_english_real_view(use_db: Callable, tmp_path: Path) -> None:
 def test_rates_tab_shows_levels_pp_changes_and_real_rates(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
 
-    app = run_dashboard()
+    app = run_dashboard("rates")
 
     assert not app.exception
     assert [tab.label for tab in app.tabs] == ["Krediler", "Faizler", "Kartlar"]
-    table = rates_tab(app).dataframe[0].value
+    table = app.dataframe[0].value
     assert list(table.columns) == TR_RATE_COLUMNS
     assert table["Seri"].tolist() == [spec.name_tr for spec in RATE_SPECS]
     rows = table.set_index("Seri")
@@ -342,21 +345,21 @@ def test_rates_tab_shows_levels_pp_changes_and_real_rates(use_db: Callable, tmp_
     assert personal["Tarih"] == date(2024, 7, 12)
     assert personal["Son değer (%)"] == pytest.approx(77.90)
     assert personal["Haftalık değişim (puan)"] == pytest.approx(77.90 - 76.92)
-    # July 2024 yearly CPI inflation was 61.78%.
-    assert personal["Reel faiz ≈ (puan)"] == pytest.approx(77.90 - 61.78, abs=0.01)
+    # July 2024 yearly CPI inflation was 61.78%: 77.90 - 61.78 = 16.12.
+    assert personal["Reel faiz ≈ (puan)"] == "+16,12"
     policy = rows.loc["TCMB politika faizi (1 hafta vadeli repo)"]
     assert policy["Son değer (%)"] == 47.5
-    assert pd.isna(policy["Reel faiz ≈ (puan)"])  # real rate only for loan rates
+    assert policy["Reel faiz ≈ (puan)"] == "–"  # real rate only for loan rates
     assert "Fisher denklemi değildir" in page_text(app)
 
 
 def test_rates_without_cpi_leave_the_real_rate_empty(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db", cpi_until="2024-06-30"))
 
-    app = run_dashboard()
+    app = run_dashboard("rates")
 
-    table = rates_tab(app).dataframe[0].value
-    assert table["Reel faiz ≈ (puan)"].isna().all()  # the last loan-rate week is in July
+    table = app.dataframe[0].value
+    assert set(table["Reel faiz ≈ (puan)"]) == {"–"}  # the last loan-rate week is in July
 
 
 def test_rate_charts_share_one_axis_with_inflation_and_decisions(
@@ -364,9 +367,9 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
 ) -> None:
     use_db(populated_db(tmp_path / "test.db"))
 
-    app = run_dashboard()
+    app = run_dashboard("rates")
 
-    charts = [json.loads(chart.proto.spec) for chart in rates_tab(app).get("vega_lite_chart")]
+    charts = [json.loads(chart.proto.spec) for chart in app.get("vega_lite_chart")]
     assert len(charts) == len(RATE_SPECS)
     for spec in charts:
         text = json.dumps(spec, ensure_ascii=False)
@@ -381,12 +384,13 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
 
 def test_rates_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
-    app = run_dashboard()
+    app = run_dashboard("rates")
 
     app.radio(key="lang").set_value("en").run()
 
     assert [tab.label for tab in app.tabs] == ["Loans", "Interest rates", "Cards"]
-    assert list(rates_tab(app).dataframe[0].value.columns) == [
+    # The open tab survives the language switch (its label, and widget, changed).
+    assert list(app.dataframe[0].value.columns) == [
         "Series",
         "Date",
         "Last value (%)",
@@ -396,14 +400,15 @@ def test_rates_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     ]
 
 
-def test_empty_credit_selection_keeps_the_rates_tab(use_db: Callable, tmp_path: Path) -> None:
+def test_empty_selection_keeps_the_kpi_tiles(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
 
     app.multiselect[0].set_value([]).run()
 
-    assert "En az bir seri seçin" in credit_tab(app).info[0].value
-    assert len(rates_tab(app).dataframe) == 1
+    assert "En az bir seri seçin" in app.info[0].value
+    assert len(app.metric) == 4
+    assert len(app.dataframe) == 0
 
 
 # --- cards tab (BKM, monthly) ---
@@ -412,10 +417,10 @@ def test_empty_credit_selection_keeps_the_rates_tab(use_db: Callable, tmp_path: 
 def test_cards_tab_shows_monthly_changes_and_units(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
 
-    app = run_dashboard()
+    app = run_dashboard("cards")
 
     assert not app.exception
-    table = cards_tab(app).dataframe[0].value
+    table = app.dataframe[0].value
     assert list(table.columns) == ["Seri", "Ay", "Son değer", "Birim", "Aylık %", "Yıllık %"]
     assert table["Seri"].tolist() == [spec.name_tr for spec in BKM_SPECS]
     rows = table.set_index("Seri")
@@ -429,20 +434,20 @@ def test_cards_tab_shows_monthly_changes_and_units(use_db: Callable, tmp_path: P
     assert cards["Son değer"] == pytest.approx(151.7)  # cards -> million cards
     assert cards["Birim"] == "milyon adet"
     assert "Son veri: **Temmuz 2024**" in page_text(app)
-    assert len(cards_tab(app).get("vega_lite_chart")) == len(BKM_SPECS)
+    assert len(app.get("vega_lite_chart")) == len(BKM_SPECS)
 
 
 def test_cards_real_view_deflates_amounts_but_not_card_counts(
     use_db: Callable, tmp_path: Path
 ) -> None:
     use_db(populated_db(tmp_path / "test.db"))
-    app = run_dashboard()
-    nominal = cards_tab(app).dataframe[0].value.set_index("Seri")
+    app = run_dashboard("cards")
+    nominal = app.dataframe[0].value.set_index("Seri")
 
     app.radio(key="cards_value_mode").set_value("real").run()
 
     assert not app.exception
-    real = cards_tab(app).dataframe[0].value.set_index("Seri")
+    real = app.dataframe[0].value.set_index("Seri")
     spending = "Kredi kartıyla alışveriş (yurt içi)"
     assert real.loc[spending, "Birim"] == "milyar TL, Aralık 2024 fiyatlarıyla"
     # July 2024 in December 2024 prices: higher than nominal.
@@ -455,10 +460,137 @@ def test_cards_real_view_deflates_amounts_but_not_card_counts(
 
 def test_cards_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
-    app = run_dashboard()
+    app = run_dashboard("cards")
 
     app.radio(key="lang").set_value("en").run()
 
-    table = cards_tab(app).dataframe[0].value
+    table = app.dataframe[0].value
     assert list(table.columns) == ["Series", "Month", "Last value", "Unit", "Monthly %", "Yearly %"]
     assert "million cards" in table["Unit"].tolist()
+
+
+# --- layout: KPI tiles, sidebar filters, one color per category, chart sources ---
+
+
+def metric_values(app: AppTest) -> dict[str, tuple[str, str]]:
+    return {metric.label: (metric.value, metric.delta) for metric in app.metric}
+
+
+def test_credit_kpis(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    kpis = metric_values(app)
+    assert list(kpis) == [
+        "Tüketici kredileri (toplam)",
+        "Ticari krediler",
+        "Tüketici kredileri (toplam), reel büyüme",
+        "Ticari krediler, reel büyüme",
+    ]
+    assert kpis["Tüketici kredileri (toplam)"][0] == "3.223,3 milyar TL"
+    # The fixture covers five weeks only, so there is no yearly change yet: no delta at all.
+    assert not kpis["Tüketici kredileri (toplam)"][1]
+
+
+def test_rate_kpis(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard("rates")
+
+    kpis = metric_values(app)
+    assert list(kpis) == [
+        "TCMB politika faizi (1 hafta vadeli repo)",
+        "İhtiyaç kredisi faizi",
+        "Yıllık enflasyon (TÜFE)",
+        "İhtiyaç kredisi faizi, reel ≈",
+    ]
+    assert kpis["TCMB politika faizi (1 hafta vadeli repo)"][0] == "47,50%"
+    # TÜİK: December 2024 44.38%, November 47.09%.
+    assert kpis["Yıllık enflasyon (TÜFE)"] == ("44,4%", "-2,7 puan")
+    # 12 July 2024: 77.90% minus July's 61.78% inflation.
+    assert kpis["İhtiyaç kredisi faizi, reel ≈"][0] == "+16,12 puan"
+
+
+def test_card_kpis(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard("cards")
+
+    kpis = metric_values(app)
+    assert list(kpis) == [
+        "Kartla alışveriş (kredi + banka kartı, yurt içi)",
+        "İnternetten kartlı ödemeler",
+        "Yabancı kartlarla alışveriş (Türkiye'de)",
+    ]
+    # July 2024 = the July 2026 page; credit 2,450,238.01 + debit 418,420.61 million TRY.
+    assert kpis["Kartla alışveriş (kredi + banka kartı, yurt içi)"] == (
+        "2.868,7 milyar TL",
+        "+100,0%",
+    )
+
+
+def test_filters_live_in_the_sidebar_and_follow_the_open_tab(
+    use_db: Callable, tmp_path: Path
+) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    credit, rates = run_dashboard(), run_dashboard("rates")
+
+    assert [widget.key for widget in credit.sidebar.radio] == ["source", "value_mode"]
+    assert len(credit.sidebar.multiselect) == 1
+    assert [widget.key for widget in rates.sidebar.radio] == []
+    assert [widget.key for widget in rates.sidebar.multiselect] == ["rates_series"]
+
+
+def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    credit, rates = run_dashboard(), run_dashboard("rates")
+
+    credit_charts = [json.loads(chart.proto.spec) for chart in credit.get("vega_lite_chart")]
+    rate_charts = [json.loads(chart.proto.spec) for chart in rates.get("vega_lite_chart")]
+    by_name = dict(zip([s.name_tr for s in SPECS], map(chart_color, credit_charts), strict=True))
+    rate_by_name = dict(
+        zip([s.name_tr for s in RATE_SPECS], map(chart_color, rate_charts), strict=True)
+    )
+    assert by_name["Konut kredileri"] == rate_by_name["Konut kredisi faizi"] == "#eb6834"
+    assert by_name["İhtiyaç kredileri"] == rate_by_name["İhtiyaç kredisi faizi"] == "#4a3aa7"
+    assert by_name["Ticari krediler"] == rate_by_name["Ticari kredi faizi"] == "#008300"
+    assert len(set(by_name.values())) == len(by_name)  # six categories, six colors
+
+
+def test_every_chart_names_its_source(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard("cards")
+
+    captions = [caption.value for caption in app.caption]
+    assert captions.count("Kaynak: BKM aylık istatistikler") == len(BKM_SPECS)
+
+
+def test_switching_tabs_twice_opens_each_tab(use_db: Callable, tmp_path: Path) -> None:
+    # Regression: the tabs' default used to follow the open tab, which recreated the widget
+    # after the first switch and dropped the second one.
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+
+    app.session_state["tabs_tr"] = "Faizler"
+    app.run()
+    assert app.session_state["open_section"] == "rates"
+    assert "TCMB politika faizi (1 hafta vadeli repo)" in [m.label for m in app.metric]
+
+    app.session_state["tabs_tr"] = "Kartlar"
+    app.run()
+    assert app.session_state["open_section"] == "cards"
+    assert list(app.dataframe[0].value.columns)[1] == "Ay"
+
+
+def test_time_axis_labels_keep_the_year(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    spec = json.loads(app.get("vega_lite_chart")[0].proto.spec)
+    label_expr = spec["layer"][0]["encoding"]["x"]["axis"]["labelExpr"]
+    assert "'%b %Y'" in label_expr and "'%Y'" in label_expr
