@@ -1,7 +1,7 @@
 """Glue between config, sources and storage."""
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import date
 
 import pandas as pd
@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 # Sources with a client today; config.Source also lists the planned ones.
 IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bkm")
-# Monthly data is published with a lag and sometimes revised: re-read a few months.
-MONTHLY_LOOKBACK_MONTHS = 3
+# Monthly data is published late and sometimes revised, so every fetch re-reads at least the
+# last N months before today's month, whatever `--weeks` says. TÜİK's CPI (in EVDS) comes about
+# three days after the month ends, BKM about two months after. A new monthly source must be
+# added here (fetch_window_start fails otherwise).
+MONTHLY_LOOKBACK_MONTHS: dict[Source, int] = {"evds": 3, "bkm": 6}
 
 
 class UpdateError(RuntimeError):
@@ -42,24 +45,41 @@ def load_source(
         repo.upsert_series(spec)
     # One request per frequency: EVDS silently converts every series in a request to the
     # lowest frequency among them, e.g. weekly loans to monthly values next to a monthly CPI.
-    frames = []
+    written = 0
     for frequency in sorted({spec.frequency for spec in specs}):
         codes = [spec.code for spec in specs if spec.frequency == frequency]
-        window_start = fetch_window_start(frequency, start)
-        frames.append(client.fetch_observations(codes, window_start, end))
-    return repo.upsert_observations(source, pd.concat(frames, ignore_index=True))
+        window_start = fetch_window_start(source, frequency, start, end)
+        for frame in fetch_chunks(client, codes, window_start, end):
+            written += repo.upsert_observations(source, frame)  # commits each chunk
+    return written
 
 
-def fetch_window_start(frequency: str, start: date) -> date:
-    """Monthly requests start on the first of a month, a few months back.
+def fetch_chunks(
+    client: ObservationClient, codes: Sequence[str], start: date, end: date
+) -> Iterable[pd.DataFrame]:
+    """Clients that read page by page (BKM) hand over chunks as they go, so an interrupted
+    backfill keeps what it has already downloaded. Other clients return one frame."""
+    chunks = getattr(client, "iter_observations", None)
+    return chunks(codes, start, end) if chunks else [client.fetch_observations(codes, start, end)]
 
-    EVDS returns nothing for a monthly request starting mid-month, and BKM and TÜİK publish
-    with a lag of one to two months, so the latest fetch re-reads recent months.
+
+def fetch_window_start(source: Source, frequency: str, start: date, end: date) -> date:
+    """Where a request for this source and frequency starts.
+
+    Monthly requests start on the first of a month (EVDS returns nothing for a mid-month
+    start) and reach back at least MONTHLY_LOOKBACK_MONTHS before `end`'s month; an earlier
+    `start` (a backfill) wins.
     """
     if frequency != "monthly":
         return start
-    month_index = start.year * 12 + start.month - 1 - MONTHLY_LOOKBACK_MONTHS
-    return date(month_index // 12, month_index % 12 + 1, 1)
+    if source not in MONTHLY_LOOKBACK_MONTHS:
+        raise ValueError(f"no monthly lookback defined for source {source!r}")
+    first = min(month_index(start), month_index(end) - MONTHLY_LOOKBACK_MONTHS[source])
+    return date(first // 12, first % 12 + 1, 1)
+
+
+def month_index(day: date) -> int:
+    return day.year * 12 + day.month - 1
 
 
 def open_client(source: Source, settings: Settings) -> EvdsClient | BddkClient | BkmClient:

@@ -14,3 +14,27 @@ gatherUsageStats = false
 # host or role names; the full traceback still goes to the server log. For local debugging:
 #   uv run streamlit run src/tr_banking/app/dashboard.py --client.showErrorDetails=full
 showErrorDetails = "type"
+
+# Theme. Both modes are defined, so the page follows the visitor's light/dark setting (and the
+# theme switch in the ⋮ menu). Colors come from a palette validated for color-vision
+# deficiency and contrast in each mode; the dashboard code uses the same steps per category.
+[theme]
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+baseRadius = "0.6rem"
+# Long values such as "18.445,2 milyar TL" must fit a quarter-width KPI tile.
+metricValueFontSize = "1.7rem"
+showWidgetBorder = true
+
+[theme.light]
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f0efec"
+textColor = "#0b0b0b"
+chartCategoricalColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#1a1a19"
+secondaryBackgroundColor = "#262624"
+textColor = "#ffffff"
+chartCategoricalColors = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"]

@@ -216,3 +216,15 @@ def test_invalid_code_fails_before_any_request(tmp_path: Path) -> None:
         client.fetch_observations(["cards:gold"], date(2026, 7, 1), date(2026, 7, 31))
 
     assert pages.requests == []
+
+
+def test_client_yields_chunks_of_twelve_months(tmp_path: Path) -> None:
+    months = {(2024, month) for month in range(1, 13)} | {(2025, month) for month in range(1, 7)}
+    pages = Pages(published=months)
+
+    with make_client(pages, tmp_path) as client:
+        chunks = list(client.iter_observations(CODES, date(2024, 1, 1), date(2025, 9, 30)))
+
+    # 21 requested months (Jan 2024 to Sep 2025): chunks after month 12 and at the end.
+    assert [len(chunk) // len(CODES) for chunk in chunks] == [12, 6]
+    assert len(pages.requests) == 21

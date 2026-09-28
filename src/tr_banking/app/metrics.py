@@ -143,6 +143,16 @@ def summarize_rates(
     return pd.DataFrame(rows, columns=RATE_SUMMARY_COLUMNS)
 
 
+def real_rates(rates: pd.DataFrame, inflation: pd.DataFrame) -> pd.DataFrame:
+    """date/value rows of rate minus the yearly inflation of the rate's month (simple difference,
+    not Fisher); rows whose month has no CPI yet are dropped."""
+    if inflation.empty:
+        return rates.iloc[0:0][["date", "value"]]
+    month_inflation = rates["date"].dt.to_period("M").map(by_month(inflation))
+    real = rates.assign(value=rates["value"] - month_inflation)[["date", "value"]]
+    return real[month_inflation.notna()].reset_index(drop=True)
+
+
 def value_near(values: pd.Series, target: pd.Timestamp) -> float:
     """Latest value within LOOKBACK_TOLERANCE up to `target`, else NaN."""
     window = values[(values.index > target - LOOKBACK_TOLERANCE) & (values.index <= target)]

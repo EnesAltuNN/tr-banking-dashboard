@@ -11,6 +11,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 Source = Literal["evds", "bddk", "bkm", "bank_site"]
 Frequency = Literal["daily", "weekly", "monthly"]
 Module = Literal["credit", "cards", "rates", "macro"]
+# What a series measures, independent of its source. The dashboard gives each category one
+# color in every chart and uses it to pick the KPI tiles.
+Category = Literal[
+    "total",
+    "consumer",
+    "housing",
+    "auto",
+    "personal",
+    "credit_card",
+    "debit_card",
+    "commercial",
+    "policy",
+    "online",
+    "foreign",
+]
 
 
 class SeriesSpec(BaseModel):
@@ -29,10 +44,12 @@ class SeriesSpec(BaseModel):
     # Optional overrides that live only in config (not in the database):
     # max_age_days replaces the per-frequency freshness limit, e.g. for publication lags;
     # deflator marks the price index used for real (inflation-adjusted) values;
-    # policy_rate marks the central bank rate whose changes are marked on the rate charts.
+    # policy_rate marks the central bank rate whose changes are marked on the rate charts;
+    # category groups series across sources and modules (colors, KPI tiles).
     max_age_days: int | None = Field(default=None, ge=1)
     deflator: bool = False
     policy_rate: bool = False
+    category: Category | None = None
 
 
 class SeriesConfig(BaseModel):

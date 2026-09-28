@@ -16,7 +16,7 @@ Series codes in config:
 import logging
 import re
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
@@ -36,6 +36,9 @@ from tr_banking.sources.common import (
 logger = logging.getLogger(__name__)
 
 BKM_URL = "https://bkm.com.tr/secilen-aya-ait-istatistikler/"
+# Rows are handed to the pipeline every 12 requested months, so an interrupted backfill (about
+# 117 pages, 1 s apart) keeps what it has downloaded.
+CHUNK_MONTHS = 12
 FIRST_MONTH = (2017, 1)  # earlier months return the "pick a date" page
 # Shown instead of the tables for months that are not published (yet).
 NOT_PUBLISHED_TEXT = "tarih seçiniz"
@@ -137,6 +140,15 @@ class BkmClient:
 
     def fetch_observations(self, codes: Sequence[str], start: date, end: date) -> pd.DataFrame:
         """Values of `codes` for every published month from start's month to end's month."""
+        return pd.concat(self.iter_observations(codes, start, end), ignore_index=True)
+
+    def iter_observations(
+        self, codes: Sequence[str], start: date, end: date, chunk_months: int = CHUNK_MONTHS
+    ) -> Iterator[pd.DataFrame]:
+        """Like fetch_observations, but yields the rows of every `chunk_months` requested months.
+
+        Fails at the end if no month in the whole range is published.
+        """
         if not codes:
             raise ValueError("at least one series code is required")
         cells = {code: parse_series_code(code) for code in codes}  # validate before requests
@@ -144,19 +156,23 @@ class BkmClient:
         months = months_between(start, end)
         logger.info("BKM: requesting %d months from %s to %s", len(months), start, end)
 
-        rows = []
+        rows: list[tuple[str, date, float]] = []
+        published = 0
         for index, (year, month) in enumerate(months):
             if index:
                 time.sleep(self._request_interval)  # a public website, not an API: go slowly
             grids = self._fetch_month(year, month)
             if grids is None:
                 logger.info("BKM: %d-%02d is not published yet", year, month)
-                continue
-            day = month_end(year, month)
-            rows += [(code, day, sum_cells(grids, parts)) for code, parts in cells.items()]
-        if not rows:
+            else:
+                day = month_end(year, month)
+                rows += [(code, day, sum_cells(grids, parts)) for code, parts in cells.items()]
+                published += 1
+            if rows and ((index + 1) % chunk_months == 0 or index + 1 == len(months)):
+                yield pd.DataFrame(rows, columns=OBSERVATION_COLUMNS)
+                rows = []
+        if not published:
             raise BkmResponseError(f"no BKM statistics published between {start} and {end}")
-        return pd.DataFrame(rows, columns=OBSERVATION_COLUMNS)
 
     def _fetch_month(self, year: int, month: int) -> list[Grid] | None:
         params = {"filter_year": year, "filter_month": month, "List": "Listele", "xls": 1}

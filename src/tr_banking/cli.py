@@ -16,12 +16,14 @@ from tr_banking.freshness import find_stale
 from tr_banking.pipeline import IMPLEMENTED_SOURCES, UpdateError, run_update
 from tr_banking.security import files_containing_secrets, mask, secret_values
 from tr_banking.settings import get_settings
-from tr_banking.sources.common import SourceApiError
+from tr_banking.sources.common import SourceApiError, remove_old_files
 
 logger = logging.getLogger("tr_banking.cli")
 
 # A few weeks of overlap so revisions to recent weeks are picked up on every fetch.
 DEFAULT_FETCH_WEEKS = 8
+# Raw responses are for debugging recent runs; older ones only fill the disk.
+DEFAULT_RAW_KEEP_DAYS = 30
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -40,6 +42,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return check_freshness(args.source)
         elif args.command == "scan-raw":
             return scan_raw()
+        elif args.command == "clean-raw":
+            return clean_raw(args.days)
         else:
             if args.command == "fetch":
                 start, end = today - timedelta(weeks=args.weeks), today
@@ -129,6 +133,14 @@ def scan_raw() -> int:
     return 0
 
 
+def clean_raw(days: int) -> int:
+    """Delete raw response files older than `days` days from the raw folder."""
+    raw_dir = get_settings().raw_dir
+    removed = remove_old_files(raw_dir, timedelta(days=days))
+    logger.info("removed %d raw files older than %d days from %s", len(removed), days, raw_dir)
+    return 0
+
+
 def report_connection(conninfo: str) -> None:
     """Log where DATABASE_URL points (host, port, role) without ever logging the string."""
     info = describe_connection(conninfo)
@@ -214,6 +226,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 if any series is older than its publishing rhythm allows",
     )
     commands.add_parser("scan-raw", help="exit 1 if a raw response file contains a secret")
+    clean = commands.add_parser("clean-raw", help="delete old raw response files")
+    clean.add_argument(
+        "--days",
+        type=positive_int,
+        default=DEFAULT_RAW_KEEP_DAYS,
+        help=f"keep files younger than this many days (default: {DEFAULT_RAW_KEEP_DAYS})",
+    )
     return parser
 
 
