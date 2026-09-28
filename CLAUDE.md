@@ -67,22 +67,28 @@ Live since 2026-09-28 (pushed and backfilled: 25 series, 10,866 observations):
 - Module 2 cards tab: BKM, 6 monthly series from 2017-01 (module `cards`).
 - Dashboard tabs: Krediler · Faizler · Kartlar.
 
-Built on 2026-09-28, to be pushed:
-- Robustness: per-source monthly lookback, BKM stored every 12 months, `clean-raw`.
-- Dashboard redesign: KPI tiles, sidebar filters, lazy tabs, category colors, light/dark
-  theme, chart cards with sources, notes expander, footer.
+Live since 2026-09-28: robustness (per-source monthly lookback, BKM stored every 12 months,
+`clean-raw`) and the dashboard redesign (KPI tiles, sidebar filters, lazy tabs, category
+colors, light/dark theme, chart cards with sources, notes expander, footer).
+
+Built on 2026-09-29, to be pushed: the "Sektör" (banking sector) tab, module `banking`, 13 BDDK
+series (deposits, NPL, bank groups) and ratios computed on the fly.
 
 ## Next steps
 
-1. **User: push the 2026-09-28 commits** (robustness, dashboard redesign, docs). No migration
-   and no backfill are needed. After the push, reboot the app on share.streamlit.io if the
-   page shows an ImportError (a running process can keep old modules; seen on 2026-09-28).
+1. **User: push the 2026-09-29 commit, then load the new BDDK history once** with the local
+   `.env` (`fetch_writer`): `uv run tr-banking backfill --start 2014-01-03 --source bddk`
+   (about 30 s; 20 series, 1 s apart). No migration is needed. Until then the scheduled fetch
+   loads only the last 8 weeks of the new series. After the push, reboot the app on
+   share.streamlit.io if the page shows an ImportError (seen on 2026-09-28).
 2. **User: add the dashboard screenshot** of the new design and check the README on GitHub.
    - The screenshot goes to `docs/images/dashboard.png` (the README already links it): about
      1600×1000 px, English view, light theme, PNG under ~500 KB.
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
-3. **Next roadmap item:** module 3, bank rates and campaigns (Backlog 7). Show the plan first.
+3. **Next roadmap item:** decide with the user between the weekly AI summary (Backlog 8),
+   alerts on unusual weekly changes (Backlog 17) and resuming module 3 (Backlog 7, see Open
+   questions). Show the plan first.
 
 ## Documentation map
 
@@ -160,7 +166,8 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 | 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done, live |
 | 1b. Official rates | TCMB EVDS3 loan rates + policy rate | weekly, daily | `rates` | done |
 | 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | done |
-| 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | planned |
+| 2b. Banking sector | BDDK deposits, NPL, bank groups | weekly | `banking` | done |
+| 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | postponed (see Open questions) |
 
 - New modules must plug into the existing tables; do not rewrite the schema for them.
 - Module 3's bank rates join module `rates` (the "Faizler" tab), next to the official EVDS
@@ -177,7 +184,8 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 4. Remove the Windows scheduled task once Actions has run reliably (see Calendar)
 5. ~~Decide public vs private repo for portfolio~~ **closed**: public, dashboard live
 6. ~~Module 2: BKM~~ **done**: 6 monthly series from 2017-01, "Kartlar" tab
-7. Module 3: bank rates/campaigns scraping, start with 3 banks (see Open questions)
+7. Module 3: bank rates/campaigns scraping, **postponed on 2026-09-29** (see Open questions
+   for the research findings)
 8. Weekly AI summary: compute changes in Python, LLM only writes text (see Open questions)
 9. ~~`.devcontainer/devcontainer.json` from Streamlit's deploy flow~~ **closed**: deleted (it used
    Python 3.11 + pip and could not install this uv project)
@@ -190,9 +198,10 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 13. ~~Policy-rate decision markers on the charts~~ **done** (from rate changes only)
 14. MPC (PPK) meeting calendar: put the CBRT's pre-announced meeting dates in a YAML file and
     mark hold decisions too. Today's markers come from rate changes, so holds are invisible.
-15. BDDK bank groups (state / domestic private / foreign): the codes already allow any group
-    (`tarafKodu` 10005/10007/10006), only config and a dashboard picker are needed.
-16. BDDK deposits and non-performing loans (other bulletin tables); verify row ids first.
+15. ~~BDDK bank groups (state / domestic private / foreign)~~ **done** (2026-09-29): total
+    loans and deposits per group, shares in the "Sektör" tab
+16. ~~BDDK deposits and non-performing loans~~ **done** (2026-09-29): tables 4 and 2, NPL and
+    FX-share ratios computed on the fly
 17. Alerts on unusual weekly changes (e.g. a z-score on weekly %), shown on the dashboard and
     later fed to the AI summary.
 18. Policy rate before 2018-09-14: `TP.PY.P02.1H` is empty then (see DATA_SOURCES). Options:
@@ -210,10 +219,19 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 
 ## Open questions
 
-- **Module 3 (bank sites):**
-  - Check each bank's terms of use and `robots.txt` before scraping.
-  - Decide rate limits.
-  - Decide whether campaign text needs its own table.
+- **Module 3 (bank sites), postponed.** Research on 2026-09-29 (robots.txt, sitemaps, one
+  fetch per product page):
+  - `robots.txt` allows the product pages at Ziraat, VakıfBank, Halkbank, Garanti BBVA, İş
+    Bankası, Akbank, Yapı Kredi, ING and Enpara (Enpara also sends "ai-train=no").
+  - Comparable rates are rarely in the HTML. İş Bankası states personalised rates ("kişiye özel
+    uygulanacak faiz oranı"); Yapı Kredi and Enpara fill their calculators with JavaScript;
+    Halkbank's product URLs redirect to the home page; Ziraat and Akbank URLs from guesses 404.
+  - Only Garanti BBVA shows a statutory "örnek hesaplama" table in HTML (personal loan, 100,000
+    TRY, 36 months, 3.94% monthly, with an update date); ING shows campaign "from" rates.
+  - Taşıt and konut pages show almost no rates in HTML.
+  - Options when resuming: the JSON endpoints behind the calculators (like BDDK's chart
+    endpoint; undocumented, check each bank's terms), or browser automation (Playwright) in
+    the scheduled job (heavy, fragile). Decide first; campaigns would need their own table.
 - **Real rate column:** it uses the CPI of the rate's own month, so it is empty for the
   latest week most of the month (CPI comes about 3 days after the month ends). The user asked
   for empty cells; an alternative is to show the last week that has CPI, as the loans tab's
@@ -284,8 +302,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   so adding one never needs a migration.
 - Config-only fields in `series.yaml` (not stored in the database): `deflator: true` (the CPI
   used for real values) and `policy_rate: true` (its changes are the decision markers), at
-  most one series each; `category` (housing, auto, personal, credit_card, debit_card,
-  commercial, policy, total, consumer, online, foreign) for colors and KPI tiles.
+  most one series each; `category` for colors, KPI tiles and ratios (the full list is in
+  `config.py`; banking uses deposits, fx_deposits, npl, npl_consumer, npl_commercial,
+  state_banks, private_banks, foreign_banks and others).
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
@@ -332,7 +351,10 @@ a source client.
     requests 2-year windows. Never mix frequencies in one request.
 - **BDDK weekly bulletin:**
   - No official API: one POST per series to the charts' JSON endpoint, 1 s apart.
-  - Seven sector series in million TRY from 2014-01-03.
+  - Seven sector loan series in million TRY from 2014-01-03 (module `credit`), plus 13
+    deposit, NPL and bank-group series (module `banking`). Row ids come from the page's own
+    tables (`ShowModalGraph('<row>', ...)`); prefix `1.` loans, `2.` NPL, `4.` deposits.
+  - A week can appear twice with the same value (row 2.0.9); the parser keeps one copy.
   - The site omits its TLS intermediate, which is bundled in `sources/certs/`.
 - **BKM (module 2):**
   - One HTML page per month from 2017-01 (the "Excel" is HTML), requested 1 s apart; cells

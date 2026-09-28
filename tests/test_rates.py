@@ -8,7 +8,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from tr_banking.app.metrics import annual_inflation, rate_changes, real_rates, summarize_rates
+from tr_banking.app.metrics import (
+    annual_inflation,
+    rate_changes,
+    ratio_pct,
+    real_rates,
+    summarize_rates,
+)
 from tr_banking.sources.evds import parse_evds_response
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -156,3 +162,29 @@ def test_real_rates_keep_only_weeks_with_cpi() -> None:
     assert real["date"].tolist() == [pd.Timestamp("2024-07-12"), pd.Timestamp("2024-12-27")]
     assert real["value"].iloc[0] == pytest.approx(77.90 - 61.78, abs=0.01)
     assert real_rates(loan, inflation.iloc[0:0]).empty
+
+
+# --- ratios (banking sector) ---
+
+
+def frame(values: dict[str, float]) -> pd.DataFrame:
+    return pd.DataFrame({"date": pd.to_datetime(list(values)), "value": list(values.values())})
+
+
+def test_ratio_uses_only_common_dates() -> None:
+    fx = frame({"2026-09-11": 12.0, "2026-09-18": 12.585})
+    total = frame({"2026-09-04": 30.0, "2026-09-18": 32.553})
+
+    share = ratio_pct(fx, total)
+
+    assert share["date"].tolist() == [pd.Timestamp("2026-09-18")]
+    assert share["value"].iloc[0] == pytest.approx(38.66, abs=0.01)
+
+
+def test_npl_ratio_divides_by_loans_plus_npl() -> None:
+    # 2026-09-18, million TRY: NPL 876,498; performing loans 28,237,686 -> 3.01%.
+    npl = frame({"2026-09-18": 876_498.0})
+    loans = frame({"2026-09-18": 28_237_686.0})
+
+    assert ratio_pct(npl, loans, of_total=True)["value"].iloc[0] == pytest.approx(3.01, abs=0.005)
+    assert ratio_pct(npl, loans)["value"].iloc[0] == pytest.approx(3.10, abs=0.005)

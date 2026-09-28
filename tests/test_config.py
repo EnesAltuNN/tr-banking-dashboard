@@ -37,7 +37,13 @@ def test_project_series_yaml_loads() -> None:
         "TP.KTF18",
         "TP.PY.P02.1H",
     ]
-    assert {spec.module for spec in config.series} == {"credit", "macro", "rates", "cards"}
+    assert {spec.module for spec in config.series} == {
+        "credit",
+        "macro",
+        "rates",
+        "cards",
+        "banking",
+    }
 
 
 def test_project_bkm_series_have_valid_codes() -> None:
@@ -75,8 +81,18 @@ def test_project_deflator_is_the_2025_based_cpi() -> None:
 def test_project_bddk_series_have_valid_codes() -> None:
     specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").for_source("bddk")
 
-    assert len(specs) == 7
-    assert {parse_series_code(spec.code).group for spec in specs} == {"10001"}
+    loans = [spec for spec in specs if spec.module == "credit"]
+    banking = [spec for spec in specs if spec.module == "banking"]
+    assert (len(loans), len(banking)) == (7, 13)
+    assert {parse_series_code(spec.code).group for spec in loans} == {"10001"}
+    # Bank groups: state, domestic private and foreign add up to the sector (10001).
+    assert {parse_series_code(spec.code).group for spec in banking} == {
+        "10001",
+        "10005",
+        "10006",
+        "10007",
+    }
+    assert {parse_series_code(spec.code).row.split(".")[0] for spec in banking} == {"1", "2", "4"}
     assert {spec.unit for spec in specs} == {"million TRY"}
 
 

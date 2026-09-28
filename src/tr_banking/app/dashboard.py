@@ -38,6 +38,7 @@ from tr_banking.app.metrics import (
     deflate,
     display_unit,
     rate_changes,
+    ratio_pct,
     real_rates,
     summarize,
     summarize_rates,
@@ -46,6 +47,7 @@ from tr_banking.app.metrics import (
 from tr_banking.config import SeriesConfig, SeriesSpec, load_series_config
 from tr_banking.db import StorageError, open_repository
 from tr_banking.settings import Settings, get_settings
+from tr_banking.sources.bddk import parse_series_code as bddk_key
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,8 @@ DISPLAY_TZ = ZoneInfo("Europe/Istanbul")
 # every visitor, so a public page costs Supabase at most one connection per hour, not one per
 # visitor or click.
 CACHE_TTL = timedelta(hours=1)
-SECTIONS = ("credit", "rates", "cards")
+SECTIONS = ("credit", "rates", "cards", "banking")
+BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
 
 # Categorical palette validated for color-vision deficiency and contrast in each mode (the
 # same steps as chartCategoricalColors in .streamlit/config.toml). Each category keeps one hue
@@ -91,6 +94,15 @@ CATEGORY_HUES = {
     "commercial": "green",
     "personal": "violet",
     "policy": "red",
+    # banking sector tab
+    "fx_deposits": "yellow",
+    "household_deposits": "magenta",
+    "commercial_deposits": "green",
+    "npl": "red",
+    "npl_commercial": "green",
+    "state_banks": "orange",
+    "private_banks": "violet",
+    "foreign_banks": "aqua",
 }
 CROSSHAIR_COLOR = "#898781"
 # Yearly inflation is a reference, not a series of its own: a muted grey, dashed line.
@@ -187,8 +199,10 @@ def main() -> None:
             render_credit_view(module, observations, price_index, lang, theme)
         elif section == "rates":
             render_rates_view(module, observations, price_index, policy_id, lang, theme)
-        else:
+        elif section == "cards":
             render_cards_view(module, observations, price_index, lang, theme)
+        else:
+            render_banking_view(series, observations, price_index, lang, theme)
     render_footer(lang)
 
 
@@ -408,7 +422,235 @@ def render_cards_view(
         st.caption(text("cards_note", lang))
 
 
+class Ratio(NamedTuple):
+    """A ratio of two stored series, computed for display only (never stored)."""
+
+    key: str  # i18n text key, e.g. "ratio_npl"
+    category: str | None  # color of its chart
+    values: pd.DataFrame  # date/value in %
+
+
+def render_banking_view(
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    price_index: pd.DataFrame,
+    lang: Lang,
+    theme: str,
+) -> None:
+    """Deposits, non-performing loans and bank groups (BDDK), with ratios computed on the fly.
+
+    Gets every series, not only module "banking": the ratios need BDDK's loan totals too.
+    """
+    banking = series[series["module"] == "banking"]
+    observations_of_tab = observations[observations["series_id"].isin(banking["id"])]
+    if observations_of_tab.empty:
+        st.info(text("banking_unavailable", lang))
+        return
+    real = render_value_mode(lang, key="banking_value_mode") == "real"
+    ratios = banking_ratios(series, observations)
+    render_kpis(banking_tiles(banking, observations, ratios, lang), theme)
+
+    st.markdown(f"**{text('ratios', lang)}**")
+    render_ratio_table(ratios, lang, theme)
+    headline = [ratio for ratio in ratios if ratio.key in HEADLINE_RATIOS]
+    render_ratio_charts(headline, lang, theme)
+
+    st.markdown(f"**{text('amounts', lang)}**")
+    # Bank-group amounts are a click away in the sidebar; sector series are shown by default.
+    sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(BANK_GROUPS), "id"]]
+    filters = render_filters(banking, observations_of_tab, lang, "banking", sector_ids)
+    if filters is None:
+        return
+    selected_ids, start, end = filters
+    selected = observations_of_tab[observations_of_tab["series_id"].isin(selected_ids)]
+    week = format_date(selected["date"].max(), lang, long=True)
+    st.caption(text("latest_week", lang).format(week=week))
+
+    month = None
+    if real:
+        selected, month = deflate_money(selected, banking, price_index, lang)
+    summary = summarize(selected, as_of=end)
+    render_summary_table(summary, banking, lang, theme, month, show_prev=month is None)
+    in_range = selected[selected["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
+    render_charts(in_range, banking.set_index("id"), selected_ids, lang, theme, month)
+    with st.expander(text("notes", lang)):
+        st.caption(text("banking_note", lang))
+
+
+HEADLINE_RATIOS = ("ratio_npl", "ratio_fx_share", "ratio_loan_deposit", "ratio_loans_state_banks")
+
+
+def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Ratio]:
+    """NPL ratios, FX share of deposits, loan-to-deposit ratio and bank-group shares.
+
+    Loan totals come from BDDK's loan table (module "credit"), so every ratio compares BDDK
+    with BDDK. A ratio whose inputs are not loaded is left out.
+    """
+    bddk_loans = series[(series["source"] == "bddk") & (series["module"] == "credit")]
+    banking = series[series["module"] == "banking"]
+
+    def rows(series_id: int | None) -> pd.DataFrame | None:
+        if series_id is None:
+            return None
+        found = observations[observations["series_id"] == series_id]
+        return found if not found.empty else None
+
+    def group(category: str, row: str) -> int | None:
+        matches = banking[
+            (banking["category"] == category)
+            & (banking["code"].map(lambda code: bddk_key(code).row) == row)
+        ]
+        return int(matches["id"].iloc[0]) if not matches.empty else None
+
+    loans = rows(category_id(bddk_loans, "total"))
+    deposits = rows(category_id(banking, "deposits"))
+    definitions: list[tuple[str, str | None, pd.DataFrame | None, pd.DataFrame | None, bool]] = [
+        ("ratio_npl", "npl", rows(category_id(banking, "npl")), loans, True),
+        (
+            "ratio_npl_consumer",
+            "npl_consumer",
+            rows(category_id(banking, "npl_consumer")),
+            rows(category_id(bddk_loans, "consumer")),
+            True,
+        ),
+        (
+            "ratio_npl_commercial",
+            "npl_commercial",
+            rows(category_id(banking, "npl_commercial")),
+            rows(category_id(bddk_loans, "commercial")),
+            True,
+        ),
+        (
+            "ratio_fx_share",
+            "fx_deposits",
+            rows(category_id(banking, "fx_deposits")),
+            deposits,
+            False,
+        ),
+        ("ratio_loan_deposit", None, loans, deposits, False),
+    ]
+    for bank_group in BANK_GROUPS:
+        definitions.append(
+            (
+                f"ratio_loans_{bank_group}",
+                bank_group,
+                rows(group(bank_group, "1.0.1")),
+                loans,
+                False,
+            )
+        )
+    for bank_group in BANK_GROUPS:
+        definitions.append(
+            (
+                f"ratio_deposits_{bank_group}",
+                bank_group,
+                rows(group(bank_group, "4.0.1")),
+                deposits,
+                False,
+            )
+        )
+    return [
+        Ratio(key, category, ratio_pct(part, base, of_total))
+        for key, category, part, base, of_total in definitions
+        if part is not None and base is not None
+    ]
+
+
+def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
+    if not ratios:
+        return
+    frames = [ratio.values.assign(series_id=index) for index, ratio in enumerate(ratios)]
+    summary = summarize_rates(pd.concat(frames, ignore_index=True), pd.DataFrame())
+    ratio_col, date_col = text("col_ratio", lang), text("col_date", lang)
+    last_col = f"{text('col_last', lang)} (%)"
+    wow_col, yoy_col = text("col_wow_pp", lang), text("col_yoy_pp", lang)
+    frame = pd.DataFrame(
+        {
+            ratio_col: [text(ratios[i].key, lang) for i in summary["series_id"]],
+            date_col: summary["last_date"].dt.date,
+            last_col: summary["last_value"],
+            wow_col: summary["wow_pp"],
+            yoy_col: summary["yoy_pp"],
+        }
+    )
+    styled = (
+        frame.style.format(
+            lambda value: format_number(value, lang, RATE_DECIMALS), subset=[last_col]
+        )
+        .format(
+            lambda value: format_signed(value, lang, RATE_DECIMALS),
+            subset=[wow_col, yoy_col],
+            na_rep=MISSING,
+        )
+        .format(lambda day: format_date(day, lang), subset=[date_col])
+        .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
+    )
+    st.dataframe(styled, hide_index=True, height="content")  # no inner scroll: tables are short
+
+
+def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk"][lang])
+    for row_start in range(0, len(ratios), CHARTS_PER_ROW):
+        row = ratios[row_start : row_start + CHARTS_PER_ROW]
+        for column, ratio in zip(st.columns(CHARTS_PER_ROW), row, strict=False):
+            color = series_color(ratio.category, theme)
+            with column.container(border=True):
+                chart_title(text(ratio.key, lang), color)
+                st.altair_chart(line_chart(ratio.values, "%", color, lang, axis_format=",.1f"))
+                st.caption(source)
+
+
 # --- KPI tiles ---
+
+
+def banking_tiles(
+    banking: pd.DataFrame, observations: pd.DataFrame, ratios: list[Ratio], lang: Lang
+) -> list[Tile]:
+    """Total deposits (level, yearly %), FX share, NPL ratio and loan-to-deposit ratio."""
+    tiles = []
+    deposits_id = category_id(banking, "deposits")
+    if deposits_id is not None:
+        rows = observations[observations["series_id"] == deposits_id]
+        factor, unit = shown_unit("million TRY", lang, None)
+        last = summarize(rows).iloc[0]
+        tiles.append(
+            Tile(
+                label=banking.set_index("id").loc[deposits_id, f"name_{lang}"],
+                value=f"{format_number(last.last_value * factor, lang)} {unit}",
+                change=last.yoy_pct,
+                change_text=format_pct(last.yoy_pct, lang),
+                description=text("desc_yearly", lang),
+                details=text("week_of", lang).format(
+                    week=format_date(last.last_date, lang, long=True)
+                ),
+                sparkline=sparkline(rows, "weekly", factor),
+            )
+        )
+    by_key = {ratio.key: ratio for ratio in ratios}
+    pp = text("pp", lang)
+    for key in ("ratio_fx_share", "ratio_npl", "ratio_loan_deposit"):
+        if key not in by_key:
+            continue
+        values = by_key[key].values
+        last = summarize_rates(values.assign(series_id=0), pd.DataFrame()).iloc[0]
+        tiles.append(
+            Tile(
+                label=text(key, lang),
+                value=f"{format_number(last.last_value, lang, RATE_DECIMALS)}%",
+                change=last.yoy_pp,
+                change_text=f"{format_signed(last.yoy_pp, lang, RATE_DECIMALS)} {pp}",
+                description=text("desc_yearly", lang),
+                details=text("week_of", lang).format(
+                    week=format_date(last.last_date, lang, long=True)
+                ),
+                sparkline=sparkline(values, "weekly"),
+                decimals=RATE_DECIMALS,
+            )
+        )
+    return tiles
+
+
+# --- KPI tiles (other sections) ---
 
 
 def credit_tiles(
@@ -614,17 +856,21 @@ def render_value_mode(lang: Lang, key: str = "value_mode") -> str:
 
 
 def render_filters(
-    series: pd.DataFrame, observations: pd.DataFrame, lang: Lang, key: str
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    lang: Lang,
+    key: str,
+    default_ids: list[int] | None = None,
 ) -> tuple[list[int], date, date] | None:
     """Series and date range pickers in the sidebar; None (after a hint) while the choice is
-    incomplete."""
+    incomplete. All series are selected by default unless `default_ids` says otherwise."""
     labels = {int(row.id): getattr(row, f"name_{lang}") for row in series.itertuples()}
     first, last = observations["date"].min().date(), observations["date"].max().date()
 
     selected_ids = st.sidebar.multiselect(
         text("series", lang),
         options=list(labels),
-        default=list(labels),
+        default=list(labels) if default_ids is None else default_ids,
         format_func=labels.__getitem__,
         key=f"{key}_series",
     )
@@ -731,7 +977,7 @@ def render_summary_table(
         .format(lambda day: format_period(day, lang), subset=[date_col])
         .map(delta_style(theme), subset=pct_cols)
     )
-    st.dataframe(styled, hide_index=True)
+    st.dataframe(styled, hide_index=True, height="content")  # no inner scroll: tables are short
 
 
 def delta_style(theme: str, decimals: int = 1) -> Callable[[float], str]:
@@ -776,17 +1022,20 @@ def render_rates_table(summary: pd.DataFrame, series: pd.DataFrame, lang: Lang, 
         # A real rate is a level, not a change: it keeps its sign but gets no up/down color.
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    st.dataframe(styled, hide_index=True)
+    st.dataframe(styled, hide_index=True, height="content")  # no inner scroll: tables are short
 
 
 # --- charts ---
 
 
 def chart_card(meta: pd.Series, lang: Lang, color: str) -> None:
+    chart_title(str(meta[f"name_{lang}"]), color)
+
+
+def chart_title(name: str, color: str) -> None:
     """Title with the series' color dot (identity is never color alone: the name is there)."""
-    name = html.escape(str(meta[f"name_{lang}"]))
     st.markdown(
-        f'<span style="color:{color}" aria-hidden="true">●</span> **{name}**',
+        f'<span style="color:{color}" aria-hidden="true">●</span> **{html.escape(name)}**',
         unsafe_allow_html=True,
     )
 
@@ -922,14 +1171,19 @@ def rate_chart(
 
 
 def line_chart(
-    data: pd.DataFrame, unit: str, color: str, lang: Lang, monthly: bool = False
+    data: pd.DataFrame,
+    unit: str,
+    color: str,
+    lang: Lang,
+    monthly: bool = False,
+    axis_format: str = ",.0f",
 ) -> alt.LayerChart:
     """2px line with a snapping crosshair; each series gets its own y-scale."""
     hover = alt.selection_point(
         fields=["date"], nearest=True, on="pointerover", clear="pointerout", empty=False
     )
     base = alt.Chart(data).encode(x=alt.X("date:T", title=None, axis=DATE_AXIS))
-    y = alt.Y("value:Q", title=unit, scale=alt.Scale(zero=False), axis=alt.Axis(format=",.0f"))
+    y = alt.Y("value:Q", title=unit, scale=alt.Scale(zero=False), axis=alt.Axis(format=axis_format))
 
     line = base.mark_line(color=color, strokeWidth=2, strokeCap="round", strokeJoin="round")
     # Invisible full-height rules make the whole column the hover target, not the thin line.

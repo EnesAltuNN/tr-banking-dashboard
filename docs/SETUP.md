@@ -89,7 +89,7 @@ uv run tr-banking clean-raw --days 7    # keep only the last week
 - **Debug logging:** add `-v`, e.g. `uv run tr-banking -v fetch`.
 
 The dashboard runs in Turkish or English, with a TR/EN switch and Turkish number formats. It
-has three tabs, each opening with KPI tiles (value, signed change and a one-year sparkline):
+has four tabs, each opening with KPI tiles (value, signed change and a one-year sparkline):
 - **Loans:** consumer and commercial loans and their real yearly growth; a source picker
   (EVDS or BDDK), weekly % and yearly % change, and a nominal/real switch. The real view shows
   TRY values in the prices of the latest CPI month.
@@ -99,6 +99,10 @@ has three tabs, each opening with KPI tiles (value, signed change and a one-year
 - **Cards:** card spending (credit + debit), online payments and foreign cards; BKM monthly
   card spending and card counts, with monthly % and yearly % change. The real view deflates
   the amounts only.
+- **Banking sector:** total deposits, the FX share of deposits, the NPL ratio and the
+  loan-to-deposit ratio; a table of 11 ratios (NPL by segment, bank-group shares of loans and
+  deposits) with weekly and yearly changes in pp, charts of the headline ratios, and BDDK's
+  deposit and NPL amounts. Bank-group amounts can be added from the sidebar.
 
 Layout:
 - The filters (source, nominal/real, series, date range) live in the sidebar and show only

@@ -93,6 +93,69 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "tab_credit": {"tr": "Krediler", "en": "Loans"},
     "tab_rates": {"tr": "Faizler", "en": "Interest rates"},
     "tab_cards": {"tr": "Kartlar", "en": "Cards"},
+    "tab_banking": {"tr": "Sektör", "en": "Banking sector"},
+    "banking_unavailable": {"tr": "Henüz sektör verisi yok.", "en": "No banking sector data yet."},
+    "ratios": {"tr": "Oranlar", "en": "Ratios"},
+    "amounts": {"tr": "Tutarlar", "en": "Amounts"},
+    "col_ratio": {"tr": "Oran", "en": "Ratio"},
+    "ratio_npl": {"tr": "Takipteki alacak oranı", "en": "Non-performing loan ratio"},
+    "ratio_npl_consumer": {
+        "tr": "Takipteki oranı: tüketici kredileri ve kartlar",
+        "en": "NPL ratio: consumer loans and cards",
+    },
+    "ratio_npl_commercial": {
+        "tr": "Takipteki oranı: ticari ve diğer krediler",
+        "en": "NPL ratio: commercial and other loans",
+    },
+    "ratio_fx_share": {"tr": "Mevduatta döviz payı", "en": "FX share of deposits"},
+    "ratio_loan_deposit": {"tr": "Kredi/mevduat oranı", "en": "Loan-to-deposit ratio"},
+    "ratio_loans_state_banks": {
+        "tr": "Kredilerdeki pay: kamu bankaları",
+        "en": "Share of loans: state banks",
+    },
+    "ratio_loans_private_banks": {
+        "tr": "Kredilerdeki pay: yerli özel bankalar",
+        "en": "Share of loans: domestic private banks",
+    },
+    "ratio_loans_foreign_banks": {
+        "tr": "Kredilerdeki pay: yabancı bankalar",
+        "en": "Share of loans: foreign banks",
+    },
+    "ratio_deposits_state_banks": {
+        "tr": "Mevduattaki pay: kamu bankaları",
+        "en": "Share of deposits: state banks",
+    },
+    "ratio_deposits_private_banks": {
+        "tr": "Mevduattaki pay: yerli özel bankalar",
+        "en": "Share of deposits: domestic private banks",
+    },
+    "ratio_deposits_foreign_banks": {
+        "tr": "Mevduattaki pay: yabancı bankalar",
+        "en": "Share of deposits: foreign banks",
+    },
+    "week_of": {"tr": "{week} haftası", "en": "week ending {week}"},
+    "banking_note": {
+        "tr": (
+            "Kaynak: BDDK haftalık bülteni, *Mevduat*, *Takipteki Alacaklar* ve *Krediler* "
+            "tabloları, haftalık cuma değerleri, TL + YP, 03.01.2014'ten itibaren. Mevduat "
+            "katılım fonlarını içerir; döviz mevduatı YP sütununun TL karşılığıdır. **Takipteki "
+            "alacak oranı = takipteki / (krediler + takipteki)**: BDDK'nın kredi tablosu yalnız "
+            "donmamış kredileri içerir. Kredi/mevduat oranı ve banka grubu payları BDDK sektör "
+            "toplamlarına göre hesaplanır; kamu + yerli özel + yabancı bankalar sektör toplamını "
+            "tam olarak verir (katılım ve kalkınma bankaları bu gruplara dağılmıştır). Oranların "
+            "değişimi yüzde puan (puan) cinsindendir."
+        ),
+        "en": (
+            "Source: BDDK weekly bulletin, tables *Mevduat* (deposits), *Takipteki Alacaklar* "
+            "(non-performing loans) and *Krediler* (loans), weekly Friday values, TRY + FX, from "
+            "2014-01-03. Deposits include participation funds; FX deposits are the FX column at "
+            "its TRY value. **NPL ratio = NPL / (loans + NPL)**: BDDK's loan table holds "
+            "performing loans only. The loan-to-deposit ratio and the bank-group shares use "
+            "BDDK's sector totals; state + domestic private + foreign banks add up to the sector "
+            "exactly (participation and development banks are spread over these groups). "
+            "Changes of ratios are in percentage points (pp)."
+        ),
+    },
     "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},
     "latest_month": {"tr": "Son veri: **{month}**", "en": "Latest data: **{month}**"},
     "col_mom": {"tr": "Aylık %", "en": "Monthly %"},

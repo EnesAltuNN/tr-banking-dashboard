@@ -8,7 +8,7 @@ and links here. Update the "verified" dates when you re-check a fact.
 | [TCMB EVDS3](#tcmb-evds3-verified-2026-09-24) | 6 weekly loan series | thousand TRY | 2024-06-28 | official API, free key |
 | [TCMB EVDS3, CPI](#consumer-price-index-verified-2026-09-27) | 1 monthly price index (deflator) | index, 2025=100 | 2005-01 | official API, free key |
 | [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, daily policy rate | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
-| [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series | million TRY | 2014-01-03 | public website, no API |
+| [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series; 13 deposit, NPL and bank-group series | million TRY | 2014-01-03 | public website, no API |
 | [BKM](#bkm-card-statistics-verified-2026-09-27) | 4 monthly card spending series, 2 card counts | million TRY, cards | 2017-01 | public website (HTML), no API |
 
 Series codes, names and units are configured in [`config/series.yaml`](../config/series.yaml).
@@ -220,6 +220,43 @@ sector. Values are weekly (Friday), in million TRY, TRY + FX, from 2014-01-03.
   - The home-page variant `tr/Home/KiyaslamaJsonGetir` caps results at 13 weeks; don't use it.
 - **An unknown row or bank group returns HTTP 200 with empty lists**, so the parser treats an
   empty series as an error.
+- **A week can be listed twice.** Row `2.0.9` returns 18.12.2020 and 5.02.2021 twice, with the
+  same value (seen 2026-09-29). The parser keeps one copy; two different values for one week
+  stay an error.
+
+### Deposits, non-performing loans and bank groups (verified 2026-09-29)
+
+Module `banking`, the dashboard's *Sektör* (*Banking sector*) tab. Same endpoint, code format
+and unit as the loans above; full history from 2014-01-03 (664 weeks on 2026-09-18).
+
+**Finding row ids.** The bulletin page switches tables through a form: `TabloDegistir('289')`
+posts `tabloId` (with the page's anti-forgery token) to `/BultenHaftalik/`. Table ids on the
+page are 289 *Krediler*, 290 *Takipteki Alacaklar*, 291 *Menkul Değerler*, 292 *Mevduat*,
+293-297 other balance sheet tables. Each value cell calls `ShowModalGraph('<row>', ...)`, which
+is where the row ids below come from. The row prefix follows the table: `1.` loans, `2.` NPL,
+`4.` deposits.
+
+| Code | Table / row | Series | 2026-09-18 |
+|---|---|---|---|
+| `4.0.1:10001:TRY:3` | Mevduat 1, total | Total deposits (incl. participation funds) | 32,553,270 |
+| `4.0.1:10001:TRY:2` | Mevduat 1, YP column | FX deposits, at their TRY value | 12,584,999 |
+| `4.0.2:10001:TRY:3` | Mevduat 2 | Deposits of individuals (Gerçek Kişiler) | 18,247,553 |
+| `4.0.5:10001:TRY:3` | Mevduat 5 | Deposits of companies (Ticari Kuruluşlar) | 11,649,094 |
+| `2.0.1:10001:TRY:3` | Takipteki 1 | Non-performing loans | 876,498 |
+| `2.0.9:10001:TRY:3` | Takipteki 2 | NPL: consumer loans and individual cards | 369,835 |
+| `2.0.5:10001:TRY:3` | Takipteki 8 | NPL: commercial and other loans | 506,664 |
+| `1.0.1:{10005,10007,10006}:TRY:3` | Krediler 1 | Total loans of state / domestic private / foreign banks | 13,209,240 / 8,030,389 / 6,998,060 |
+| `4.0.1:{10005,10007,10006}:TRY:3` | Mevduat 1 | Total deposits of the same groups | 15,275,970 / 9,033,830 / 8,243,471 |
+
+- **State + domestic private + foreign = sector, exactly**, for loans and deposits (checked on
+  2026-09-18). Participation and development banks belong to these ownership groups.
+- **Ratios are computed for display, never stored** (`app/metrics.py: ratio_pct`):
+  - NPL ratio = NPL / (loans + NPL): 3.01% on 2026-09-18. BDDK's loan table holds performing
+    loans only, so the denominator adds the NPL back, as BDDK's own reports do. Consumer and
+    commercial NPL ratios use the matching loan rows (`1.0.2`, `1.0.12`).
+  - FX share of deposits = `4.0.1` column 2 / column 3: 38.7%.
+  - Loan-to-deposit ratio = `1.0.1` / `4.0.1`: 86.7%.
+  - Bank-group shares of loans and deposits: group / sector total.
 - **TLS:** `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV
   SSL CA 2018" is missing.
   - Browsers download the missing intermediate themselves; Python on Linux does not.

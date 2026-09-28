@@ -153,6 +153,22 @@ def real_rates(rates: pd.DataFrame, inflation: pd.DataFrame) -> pd.DataFrame:
     return real[month_inflation.notna()].reset_index(drop=True)
 
 
+def ratio_pct(
+    numerator: pd.DataFrame, denominator: pd.DataFrame, of_total: bool = False
+) -> pd.DataFrame:
+    """date/value rows of numerator / denominator in %, on the dates both have.
+
+    `of_total` adds the numerator to the denominator. The NPL ratio needs it: BDDK's loan table
+    holds performing loans only, and the ratio is NPL / (loans + NPL), as in BDDK's reports.
+    """
+    merged = numerator[["date", "value"]].merge(
+        denominator[["date", "value"]], on="date", suffixes=("_part", "_base")
+    )
+    base = merged["value_base"] + (merged["value_part"] if of_total else 0)
+    ratio = pd.DataFrame({"date": merged["date"], "value": merged["value_part"] / base * 100})
+    return ratio.sort_values("date").reset_index(drop=True)
+
+
 def value_near(values: pd.Series, target: pd.Timestamp) -> float:
     """Latest value within LOOKBACK_TOLERANCE up to `target`, else NaN."""
     window = values[(values.index > target - LOOKBACK_TOLERANCE) & (values.index <= target)]

@@ -181,9 +181,11 @@ def parse_bddk_response(payload: Any, code: str) -> pd.DataFrame:
         )
     logger.debug("series %s (%s): %d values", code, payload.get("Baslik"), len(rows))
 
-    frame = pd.DataFrame(rows, columns=OBSERVATION_COLUMNS)
+    # Some rows list a week twice with the same value (e.g. 2.0.9 on 18.12.2020 and 5.02.2021,
+    # seen 2026-09-29): keep one copy. Two different values for one week stay an error.
+    frame = pd.DataFrame(rows, columns=OBSERVATION_COLUMNS).drop_duplicates()
     if frame["date"].duplicated().any():
-        raise BddkResponseError(f"series {code} has duplicate dates")
+        raise BddkResponseError(f"series {code} has conflicting values for the same date")
     return frame.sort_values("date", ignore_index=True)
 
 

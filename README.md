@@ -18,11 +18,11 @@ dashboard, in nominal and inflation-adjusted terms.
   - [TCMB EVDS3](https://evds3.tcmb.gov.tr/) (the central bank's data API): weekly loans, loan
     interest rates, the policy rate and CPI.
   - The [BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) (the banking
-    regulator): weekly loans back to **2014**. Where it covers the same item as EVDS, the two
-    agree within **about 0.3%**.
+    regulator): weekly loans, deposits, non-performing loans and bank groups back to **2014**.
+    Where it covers the same item as EVDS, the two agree within **about 0.3%**.
   - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
     counts back to **2017**.
-  - 25 series in total, all defined in one YAML file.
+  - 38 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -43,8 +43,10 @@ dashboard, in nominal and inflation-adjusted terms.
     schema.
   - Public workflow artifacts are scanned for secrets before upload.
 - **Bilingual dashboard:**
-  - Three tabs (loans, interest rates, cards), each opening with KPI tiles and sparklines;
-    filters live in the sidebar.
+  - Four tabs (loans, interest rates, cards, banking sector), each opening with KPI tiles and
+    sparklines; filters live in the sidebar.
+  - The banking-sector tab computes the NPL ratio, the FX share of deposits, the
+    loan-to-deposit ratio and bank-group shares on the fly from BDDK's tables.
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).
   - Light and dark themes with a color palette checked for color-vision deficiency; each
     category (housing, auto, personal, cards, commercial) keeps one color in every chart.
@@ -167,16 +169,17 @@ Done:
   inflation reference and MPC decision markers.
 - ✔ **Module 2, card spending:** BKM monthly statistics from 2017 (see
   [DATA_SOURCES.md](docs/DATA_SOURCES.md#bkm-card-statistics-verified-2026-09-27)).
+- ✔ **Banking sector:** BDDK deposits, non-performing loans and bank groups (state, domestic
+  private, foreign), with the ratios built from them.
 
 Planned, in order:
-1. **Module 3, bank rates and campaigns:** daily, from bank websites, starting with three
-   banks.
+1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
+   2026-09-29 found that most banks show personalised rates through JavaScript calculators,
+   not comparable rates in their HTML; it needs a decision on browser automation first.
 2. **Weekly AI summary:** changes computed in Python; a language model only writes the text.
 
 Other ideas:
 - the MPC meeting calendar, so decisions that kept the rate unchanged are marked too;
-- BDDK bank groups (state, domestic private, foreign);
-- deposits and non-performing loans;
 - alerts on unusual weekly changes.
 
 ## Documentation

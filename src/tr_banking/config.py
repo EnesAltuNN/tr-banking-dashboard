@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # only needs a code change, never a schema migration.
 Source = Literal["evds", "bddk", "bkm", "bank_site"]
 Frequency = Literal["daily", "weekly", "monthly"]
-Module = Literal["credit", "cards", "rates", "macro"]
+Module = Literal["credit", "cards", "rates", "banking", "macro"]
 # What a series measures, independent of its source. The dashboard gives each category one
 # color in every chart and uses it to pick the KPI tiles.
 Category = Literal[
@@ -25,6 +25,17 @@ Category = Literal[
     "policy",
     "online",
     "foreign",
+    # banking sector (deposits, non-performing loans, bank groups)
+    "deposits",
+    "fx_deposits",
+    "household_deposits",
+    "commercial_deposits",
+    "npl",
+    "npl_consumer",
+    "npl_commercial",
+    "state_banks",
+    "private_banks",
+    "foreign_banks",
 ]
 
 
