@@ -115,6 +115,8 @@ CROSSHAIR_COLOR = "#898781"
 INFLATION_COLORS = {"light": "#6f6d66", "dark": "#a3a19a"}
 RATE_DECIMALS = 2  # EVDS publishes rates with two decimals, e.g. 41.96
 DATE_FILTER_WIDTH = 290  # px: fits two dd.mm.yyyy dates, and a phone screen
+SERIES_FILTER_WIDTH = 340  # px: the series names fit, and so does the button's panel on a phone
+SOURCE_ICON, MODE_ICON, SERIES_ICON = ":material/database:", ":material/tune:", ":material/list:"
 # Up / down text colors, >= 4.5:1 on each theme's background. The sign (+/-) is always shown
 # too, so the direction never depends on color alone.
 DELTA_COLORS = {
@@ -335,14 +337,14 @@ def render_credit_view(
     lang: Lang,
     theme: str,
 ) -> None:
-    bar = filter_bar(lang)
-    source = render_source_picker(bar.modes, series, lang)
-    real = render_value_mode(bar.modes, lang) == "real"
+    bar = filter_bar()
+    source = render_source_picker(bar, series, lang)
+    real = render_value_mode(bar, lang) == "real"
     series = series[series["source"] == source]
     observations = observations[observations["series_id"].isin(series["id"])]
     render_kpis(credit_tiles(series, observations, price_index, lang), theme)
 
-    filters = render_filters(bar.picks, series, observations, lang, key=f"credit_{source}")
+    filters = render_filters(bar, series, observations, lang, key=f"credit_{source}")
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -385,10 +387,10 @@ def render_rates_view(
         st.info(text("rates_unavailable", lang))
         return
     inflation = annual_inflation(price_index) if not price_index.empty else price_index
-    bar = filter_bar(lang)
+    bar = filter_bar()
     render_kpis(rate_tiles(series, observations, inflation, policy_id, lang), theme)
 
-    filters = render_filters(bar.picks, series, observations, lang, key="rates")
+    filters = render_filters(bar, series, observations, lang, key="rates")
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -430,11 +432,11 @@ def render_cards_view(
     if observations.empty:
         st.info(text("cards_unavailable", lang))
         return
-    bar = filter_bar(lang)
-    real = render_value_mode(bar.modes, lang, key="cards_value_mode") == "real"
+    bar = filter_bar()
+    real = render_value_mode(bar, lang, key="cards_value_mode") == "real"
     render_kpis(card_tiles(series, observations, lang), theme)
 
-    filters = render_filters(bar.picks, series, observations, lang, key="cards")
+    filters = render_filters(bar, series, observations, lang, key="cards")
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -473,8 +475,8 @@ def render_banking_view(
     if observations_of_tab.empty:
         st.info(text("banking_unavailable", lang))
         return
-    bar = filter_bar(lang)
-    real = render_value_mode(bar.modes, lang, key="banking_value_mode") == "real"
+    bar = filter_bar()
+    real = render_value_mode(bar, lang, key="banking_value_mode") == "real"
     ratios = banking_ratios(series, observations)
     render_kpis(banking_tiles(banking, observations, ratios, lang), theme)
 
@@ -486,7 +488,7 @@ def render_banking_view(
     st.markdown(f"**{text('amounts', lang)}**")
     # Bank-group amounts are a click away in the filter bar; sector series show by default.
     sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(BANK_GROUPS), "id"]]
-    filters = render_filters(bar.picks, banking, observations_of_tab, lang, "banking", sector_ids)
+    filters = render_filters(bar, banking, observations_of_tab, lang, "banking", sector_ids)
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -787,28 +789,17 @@ def render_kpis(tiles: list[Tile], theme: str) -> None:
 # --- filters ---
 
 
-class FilterBar(NamedTuple):
-    """The two rows of the filter box: small choices on top, the wide pickers below."""
-
-    modes: DeltaGenerator
-    picks: DeltaGenerator
-
-
-def filter_bar(lang: Lang) -> FilterBar:
-    """One bordered box above the tab's content that holds every filter of that tab.
+def filter_bar() -> DeltaGenerator:
+    """One row of buttons above the tab's content, one button per filter.
 
     The pickers are called at different points of a view (the source picker before the KPI
-    tiles, the series picker after them), so they draw into this box instead of where they are
-    called. Both rows wrap to as many lines as the screen needs, which is what a phone gets
-    instead of a drawer. The series picker gets a row of its own: it is the widest filter and
-    was squeezed to a few characters when it shared one with the radios.
+    tiles, the series picker after them), so they draw into this container instead of where
+    they are called. Each button carries its own choice, so the row says what is on screen
+    without being opened, and it stays one short row on a phone instead of a wide box of
+    controls. What the button says comes from the widget's own state, which Streamlit has
+    already updated when the click reruns the script.
     """
-    box = st.container(border=True)
-    box.caption(text("filters", lang))
-    rows = [
-        box.container(horizontal=True, gap="medium", vertical_alignment="bottom") for _ in range(2)
-    ]
-    return FilterBar(*rows)
+    return st.container(horizontal=True, gap="small")
 
 
 def translated_start(name: str, lang: Lang, fallback: object) -> object:
@@ -833,17 +824,22 @@ def translated_radio(
     options: list[str],
     format_func: Callable[[str], str],
     lang: Lang,
+    icon: str,
+    button_func: Callable[[str], str] | None = None,
 ) -> str:
+    """A radio inside its own button. `button_func` shortens the choice for the button."""
     start = translated_start(name, lang, options[0])
-    value = bar.radio(
-        label,
-        options=options,
-        index=options.index(start) if start in options else 0,
-        format_func=format_func,
-        key=f"{name}_{lang}",
-        horizontal=True,
-        width="content",
-    )
+    shown = st.session_state.get(f"{name}_{lang}", start)
+    shown = shown if shown in options else options[0]
+    with bar.popover(f"{label}: {(button_func or format_func)(shown)}", icon=icon):
+        value = st.radio(
+            label,
+            options=options,
+            index=options.index(start) if start in options else 0,
+            format_func=format_func,
+            key=f"{name}_{lang}",
+            label_visibility="collapsed",
+        )
     st.session_state[f"{name}__value"] = value
     return value
 
@@ -852,13 +848,25 @@ def render_source_picker(bar: DeltaGenerator, series: pd.DataFrame, lang: Lang) 
     """One source at a time: each has its own history length, units and definitions."""
     available = [source for source in SOURCE_LABELS if source in set(series["source"])]
     format_source = lambda source: SOURCE_LABELS[source][lang]  # noqa: E731
-    return translated_radio(bar, "source", text("source", lang), available, format_source, lang)
+    return translated_radio(
+        bar, "source", text("source", lang), available, format_source, lang, SOURCE_ICON
+    )
 
 
 def render_value_mode(bar: DeltaGenerator, lang: Lang, key: str = "value_mode") -> str:
     format_mode = lambda mode: text(f"mode_{mode}", lang)  # noqa: E731
+    # "Real (inflation-adjusted)" explains itself in the list but is too long for the button.
+    short_mode = lambda mode: text(f"mode_{mode}_short", lang)  # noqa: E731
     modes = ["nominal", "real"]
-    return translated_radio(bar, key, text("value_mode", lang), modes, format_mode, lang)
+    return translated_radio(
+        bar, key, text("value_mode", lang), modes, format_mode, lang, MODE_ICON, short_mode
+    )
+
+
+def range_label(picked: object, lang: Lang) -> str:
+    """The date button: both dates, or only the first while the user is still choosing."""
+    days = picked if isinstance(picked, tuple) else (picked,)
+    return " – ".join(format_date(day, lang) for day in days)
 
 
 def render_filters(
@@ -876,29 +884,31 @@ def render_filters(
 
     name = f"{key}_series"
     start = translated_start(name, lang, list(labels) if default_ids is None else default_ids)
-    selected_ids = bar.multiselect(
-        text("series", lang),
-        options=list(labels),
-        default=[series_id for series_id in start if series_id in labels],
-        format_func=labels.__getitem__,
-        key=f"{name}_{lang}",
-        # The widest filter: it takes the rest of the row and shrinks with the screen.
-        width="stretch",
-        # In a horizontal row Streamlit would keep the chips on one scrolling line, which is
-        # the sideways scrolling a phone cannot do well: let them wrap instead.
-        wrap=True,
-    )
+    chosen = st.session_state.get(f"{name}_{lang}", start)
+    count = sum(1 for series_id in chosen if series_id in labels)
+    with bar.popover(text("series_count", lang).format(count=count), icon=SERIES_ICON):
+        selected_ids = st.multiselect(
+            text("series", lang),
+            options=list(labels),
+            default=[series_id for series_id in start if series_id in labels],
+            format_func=labels.__getitem__,
+            key=f"{name}_{lang}",
+            label_visibility="collapsed",
+            width=SERIES_FILTER_WIDTH,
+        )
     st.session_state[f"{name}__value"] = selected_ids
-    picked = bar.date_input(
-        text("date_range", lang),
-        value=(first, last),
-        min_value=first,
-        max_value=last,
-        format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
-        key=f"{key}_range",
-        # A date range needs both dates side by side; "content" is not a legal width here.
-        width=DATE_FILTER_WIDTH,
-    )
+    with bar.popover(range_label(st.session_state.get(f"{key}_range", (first, last)), lang)):
+        picked = st.date_input(
+            text("date_range", lang),
+            value=(first, last),
+            min_value=first,
+            max_value=last,
+            format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
+            key=f"{key}_range",
+            label_visibility="collapsed",
+            # A date range needs both dates side by side; "content" is not a legal width here.
+            width=DATE_FILTER_WIDTH,
+        )
 
     if not selected_ids:
         st.info(text("select_series", lang))

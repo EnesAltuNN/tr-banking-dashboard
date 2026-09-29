@@ -103,7 +103,7 @@ has four tabs, each opening with KPI tiles (value, signed change and a one-year 
 - **Banking sector:** total deposits, the FX share of deposits, the NPL ratio and the
   loan-to-deposit ratio; a table of 11 ratios (NPL by segment, bank-group shares of loans and
   deposits) with weekly and yearly changes in pp, charts of the headline ratios, and BDDK's
-  deposit and NPL amounts. Bank-group amounts can be added from the filter box.
+  deposit and NPL amounts. Bank-group amounts can be added from the series filter.
 
 Above the tabs, the newest weekly AI summary is shown (labelled as written by AI, with its
 model), when one exists. Below it, an alert box lists weekly series whose latest change is far
@@ -112,8 +112,8 @@ changes (in % for amounts, in points for rates). On the 2014-2026 history that f
 1.5% of weeks per series. When nothing is unusual, one grey line says so.
 
 Layout:
-- The filters (source, nominal/real, series, date range) sit in one box at the top of the
-  open tab and show only that tab's controls. Only the open tab runs.
+- The filters (source, nominal/real, series, date range) are a row of buttons at the top of
+  the open tab, each showing its choice and opening on a click; only that tab's filters. Only the open tab runs.
 - Charts sit in a two-column grid of cards (one column on phones). Each has a colored dot in
   its title and its source below it. Each category (housing, auto, personal, credit/debit
   card, commercial, policy) keeps one color everywhere.

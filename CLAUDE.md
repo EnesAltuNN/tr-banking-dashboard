@@ -59,9 +59,9 @@ https://tr-banking-dashboard.streamlit.app/.
 - **Local, 8 commits not pushed:** the Banking sector tab (13 BDDK series), the translated
   widget fix, `scripts/screenshots.py`, unusual-change alerts, the weekly AI summary
   (migration 0004), the MPC calendar, the slimmed CLAUDE.md and the pinned table column.
-- **Uncommitted:** the filters moved out of the sidebar into a bordered box at the top of the
-  open tab (`filter_bar`). pytest and ruff green, and the box was checked at 1440 px and
-  390 px in both themes. The README image still shows the old sidebar: retake it.
+- **Uncommitted:** the filters left the sidebar; `filter_bar` now draws one row of buttons
+  at the top of the open tab, each opening its picker in a popover. pytest and ruff green,
+  checked at 1440 px and 390 px. The README image still shows the old sidebar: retake it.
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
   2. `git push`.

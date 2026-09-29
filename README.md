@@ -10,7 +10,7 @@ dashboard, in nominal and inflation-adjusted terms.
 **Live dashboard: [tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)**
 (Turkish/English)
 
-[![Dashboard: a filter box, KPI tiles, a summary table and one chart per series](docs/images/dashboard.png)](https://tr-banking-dashboard.streamlit.app/)
+[![Dashboard: a filter row, KPI tiles, a summary table and one chart per series](docs/images/dashboard.png)](https://tr-banking-dashboard.streamlit.app/)
 
 ## Highlights
 
@@ -45,7 +45,7 @@ dashboard, in nominal and inflation-adjusted terms.
   - Public workflow artifacts are scanned for secrets before upload.
 - **Bilingual dashboard:**
   - Four tabs (loans, interest rates, cards, banking sector), each opening with KPI tiles and
-    sparklines; the filters sit in one box at the top of the tab.
+    sparklines; the filters are a row of buttons at the top of the tab.
   - The banking-sector tab computes the NPL ratio, the FX share of deposits, the
     loan-to-deposit ratio and bank-group shares on the fly from BDDK's tables.
   - Alerts flag a weekly change far outside the series' own past year (a robust score on

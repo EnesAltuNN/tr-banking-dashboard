@@ -197,11 +197,12 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     filters are drawn. The open tab is kept in `st.session_state["open_section"]`.
     The tabs' `default` is part of the widget identity, so it changes only when the language
     changes (changing it on every switch dropped every second click).
-  - There is no sidebar: `filter_bar` opens a bordered box at the top of the open tab and
-    every picker of that tab draws into it, wherever in the view it is called. The radios
-    share its first row, the series and date pickers its second (the series picker was
-    squeezed to a few characters when it shared a row). Both rows wrap on a phone, and the
-    series chips wrap with them (`wrap=True`), so nothing scrolls sideways.
+  - There is no sidebar: `filter_bar` opens one row of buttons at the top of the open tab
+    and every picker of that tab draws into it as an `st.popover`, wherever in the view it is
+    called. Each button carries its own choice ("Kaynak: TCMB EVDS", "6 seri", the date
+    range), read from the widget's own state, which Streamlit has updated by the time the
+    click reruns the script. The row wraps on a phone; an inline box of controls did not fit
+    there and left a wide empty strip on a desktop.
   - KPI tiles are `st.metric` with a sparkline. A change that rounds to zero gets
     `delta_color="off"` and no arrow (st.metric treats "0,0%" as a rise).
   - One color per `category`: `PALETTE`/`CATEGORY_HUES` in `dashboard.py`, the same steps as
