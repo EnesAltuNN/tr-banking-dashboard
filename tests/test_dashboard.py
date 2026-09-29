@@ -378,6 +378,7 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
         text = json.dumps(spec, ensure_ascii=False)
         assert "Yıllık enflasyon (TÜFE)" in text  # the reference line
         assert "PPK kararı" in text  # the 26 Dec 2024 cut is in the date range
+        assert '"title": "Karar"' in text  # the tooltip names hike, cut or hold
         assert '"resolve"' not in text  # no independent (dual) y-axis
     policy_marks = [
         layer["mark"] for layer in charts[-1]["layer"] if isinstance(layer["mark"], dict)

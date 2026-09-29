@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     db_path: Path = PROJECT_ROOT / "data" / "tr_banking.db"
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"
     series_config_path: Path = PROJECT_ROOT / "config" / "series.yaml"
+    mpc_calendar_path: Path = PROJECT_ROOT / "config" / "mpc_meetings.yaml"
     # Claude API key for the weekly summary (`tr-banking summarize`); nothing else needs it.
     anthropic_api_key: SecretStr | None = None
     summary_model: str = "claude-opus-5"

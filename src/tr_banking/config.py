@@ -1,5 +1,6 @@
 """Load and validate config/series.yaml into typed models."""
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -98,3 +99,24 @@ def load_series_config(path: Path) -> SeriesConfig:
     with path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return SeriesConfig.model_validate(data)
+
+
+class MpcCalendar(BaseModel):
+    """CBRT Monetary Policy Committee meeting dates (config/mpc_meetings.yaml)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    meetings: list[date] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_order(self) -> "MpcCalendar":
+        # Strictly increasing: catches a duplicate or a typo'd year when a line is added.
+        for earlier, later in zip(self.meetings, self.meetings[1:], strict=False):
+            if later <= earlier:
+                raise ValueError(f"meetings must be in increasing order: {earlier} then {later}")
+        return self
+
+
+def load_mpc_calendar(path: Path) -> MpcCalendar:
+    with path.open(encoding="utf-8") as f:
+        return MpcCalendar.model_validate(yaml.safe_load(f))

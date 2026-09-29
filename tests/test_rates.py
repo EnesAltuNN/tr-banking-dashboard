@@ -10,11 +10,14 @@ import pytest
 
 from tr_banking.app.metrics import (
     annual_inflation,
+    policy_decisions,
     rate_changes,
     ratio_pct,
     real_rates,
     summarize_rates,
 )
+from tr_banking.config import load_mpc_calendar
+from tr_banking.settings import PROJECT_ROOT
 from tr_banking.sources.evds import parse_evds_response
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -90,6 +93,56 @@ def test_no_changes_in_an_unchanged_or_empty_rate() -> None:
 
     assert rate_changes(flat).empty
     assert rate_changes(flat.iloc[0:0]).empty
+
+
+# --- policy_decisions ---
+
+
+def test_the_project_calendar_classifies_the_real_december_2024_cut() -> None:
+    policy = fixture_rows("evds_policy_rate_2024_2025.json", [POLICY])[["date", "value"]]
+    meetings = load_mpc_calendar(PROJECT_ROOT / "config" / "mpc_meetings.yaml").meetings
+
+    decisions = policy_decisions(policy, meetings)
+
+    # The fixture runs 2024-12-16 .. 2025-01-10: only the 26 December meeting is inside it.
+    assert decisions.to_dict("records") == [
+        {"date": pd.Timestamp("2024-12-26"), "previous": 50.0, "value": 47.5, "decision": "cut"}
+    ]
+
+
+def test_holds_are_marked_and_unlisted_changes_are_kept() -> None:
+    policy = rates(
+        1,
+        {
+            "2026-03-11": 38.0,
+            "2026-03-12": 37.0,  # meeting: cut
+            "2026-04-22": 37.0,  # meeting: hold
+            "2026-05-05": 40.0,  # no meeting listed: an unscheduled hike
+            "2026-06-11": 40.0,  # meeting: hold
+        },
+    )[["date", "value"]]
+    meetings = [
+        date(2026, 1, 22),  # before the data: left out
+        date(2026, 3, 12),
+        date(2026, 4, 22),
+        date(2026, 6, 11),
+        date(2026, 7, 23),  # still to come: left out
+    ]
+
+    decisions = policy_decisions(policy, meetings)
+
+    assert decisions[["date", "decision"]].to_dict("records") == [
+        {"date": pd.Timestamp("2026-03-12"), "decision": "cut"},
+        {"date": pd.Timestamp("2026-04-22"), "decision": "hold"},
+        {"date": pd.Timestamp("2026-05-05"), "decision": "hike"},
+        {"date": pd.Timestamp("2026-06-11"), "decision": "hold"},
+    ]
+
+
+def test_no_decisions_without_data() -> None:
+    empty = rates(1, {})[["date", "value"]]
+
+    assert policy_decisions(empty, [date(2026, 3, 12)]).empty
 
 
 # --- summarize_rates ---

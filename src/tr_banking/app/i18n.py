@@ -281,6 +281,10 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "policy_change": {"tr": "PPK kararı", "en": "MPC decision"},
     "tooltip_previous": {"tr": "Önceki (%)", "en": "Before (%)"},
     "tooltip_new": {"tr": "Yeni (%)", "en": "After (%)"},
+    "tooltip_decision": {"tr": "Karar", "en": "Decision"},
+    "decision_hike": {"tr": "Artırım", "en": "Hike"},
+    "decision_cut": {"tr": "İndirim", "en": "Cut"},
+    "decision_hold": {"tr": "Sabit", "en": "Hold"},
     "rates_unavailable": {"tr": "Henüz faiz verisi yok.", "en": "No interest rate data yet."},
     "rates_note": {
         "tr": (
@@ -289,8 +293,9 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "değerleri. İhtiyaç ve ticari kredi faizleri KMH ve kurumsal kredi kartlarını "
             "içermez. Politika faizi, TCMB'nin bir hafta vadeli repo faizidir (iş günü verisi); "
             "EVDS'deki serisi 14.09.2018'de başlar, daha önceki yıllarda karar işareti yoktur. "
-            "Dikey kesikli çizgiler politika faizini değiştiren PPK kararlarıdır; faizi sabit "
-            "tutan kararlar işaretlenmez. Gri kesikli çizgi TÜFE'den hesaplanan yıllık "
+            "Grafiklerin altındaki kısa çizgiler PPK toplantılarıdır: uzun ve koyu olanlar "
+            "politika faizini değiştiren, kısa ve soluk olanlar faizi sabit tutan kararlar "
+            "(toplantı takvimi TCMB duyurularından). Gri kesikli çizgi TÜFE'den hesaplanan yıllık "
             "enflasyondur. Değişimler yüzde puan (puan) cinsindendir: haftalık bir hafta, "
             "yıllık 52 hafta önceki değerle karşılaştırır. **Reel faiz ≈ faiz − yıllık "
             "enflasyon**: basit farktır, Fisher denklemi değildir; yalnız kredi faizleri için "
@@ -302,8 +307,9 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "Friday values. General purpose and commercial loan rates exclude overdrafts and "
             "corporate credit cards. The policy rate is the CBRT one-week repo rate (business "
             "days); its EVDS series starts on 2018-09-14, so earlier years have no decision "
-            "markers. Dashed vertical lines mark MPC decisions that changed the policy rate; "
-            "decisions that kept it unchanged are not marked. The dashed grey line is yearly "
+            "markers. Short ticks along the bottom are MPC meetings: long, dark ticks changed the "
+            "policy rate, short, faint ones kept it unchanged (meeting calendar from CBRT press "
+            "releases). The dashed grey line is yearly "
             "inflation computed from CPI. Changes are in percentage points (pp): weekly compares "
             "with a week earlier, yearly with 52 weeks earlier. **Real rate ≈ rate − yearly "
             "inflation**: a simple difference, not the Fisher equation; shown for loan rates "

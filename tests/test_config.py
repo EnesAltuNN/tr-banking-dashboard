@@ -1,9 +1,10 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from tr_banking.config import SeriesConfig, load_series_config
+from tr_banking.config import MpcCalendar, SeriesConfig, load_mpc_calendar, load_series_config
 from tr_banking.settings import PROJECT_ROOT
 from tr_banking.sources.bddk import parse_series_code
 from tr_banking.sources.bkm import parse_series_code as bkm_cells
@@ -65,6 +66,21 @@ def test_project_rates_are_percent_and_the_policy_rate_is_marked() -> None:
     policy = config.policy_rate
     assert policy is not None
     assert (policy.code, policy.frequency, policy.max_age_days) == ("TP.PY.P02.1H", "daily", 14)
+
+
+def test_project_mpc_calendar_is_ordered_and_starts_inside_the_policy_rate_series() -> None:
+    meetings = load_mpc_calendar(PROJECT_ROOT / "config" / "mpc_meetings.yaml").meetings
+
+    assert meetings[0] == date(2018, 10, 25)  # the EVDS series starts on 2018-09-14
+    assert {date(2024, 12, 26), date(2025, 3, 20), date(2026, 9, 10)} <= set(meetings)
+    assert len([day for day in meetings if day.year == 2024]) == 12
+
+
+def test_mpc_calendar_rejects_duplicates_and_disorder() -> None:
+    with pytest.raises(ValidationError, match="increasing order"):
+        MpcCalendar.model_validate({"meetings": ["2026-03-12", "2026-03-12"]})
+    with pytest.raises(ValidationError, match="increasing order"):
+        MpcCalendar.model_validate({"meetings": ["2026-04-22", "2026-03-12"]})
 
 
 def test_project_deflator_is_the_2025_based_cpi() -> None:

@@ -44,6 +44,7 @@ Check at the start of every session.
 | 2026-10-02 Fri 04:00 | Second scheduled fetch | If both runs are green, remind the user to remove the Windows task (Backlog 4). |
 | 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the first CI and fetch runs after it. |
 | 2026-11-15 | BDDK TLS certificate expires and gets renewed | Check the next BDDK fetch. On a certificate error, update the bundled intermediate (see [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)). |
+| 2026-12-18 | CBRT publishes "2027 Para Politikası" with the 2027 MPC calendar | Add the remaining 2027 meeting dates to `config/mpc_meetings.yaml` (Jan–Jun 2027 are already there). |
 
 ## Project status (updated 2026-09-28)
 
@@ -73,8 +74,9 @@ colors, light/dark theme, chart cards with sources, notes expander, footer).
 
 Built on 2026-09-29, to be pushed: the "Sektör" (banking sector) tab (module `banking`, 13
 BDDK series, ratios computed on the fly), translated-widget fix, `scripts/screenshots.py`,
-alerts on unusual weekly changes, and the weekly AI summary (migration `0004_summaries`,
-`tr-banking summarize`, workflow step, dashboard box).
+alerts on unusual weekly changes, the weekly AI summary (migration `0004_summaries`,
+`tr-banking summarize`, workflow step, dashboard box), and the MPC meeting calendar (holds
+marked on the rate charts).
 
 ## Next steps
 
@@ -98,8 +100,8 @@ alerts on unusual weekly changes, and the weekly AI summary (migration `0004_sum
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
 3. **Next roadmap item:** resuming module 3 (Backlog 7, see Open questions) needs a decision
-   first; otherwise the smaller Backlog items (14 MPC calendar, 18 policy rate before 2018,
-   19 seasonal card view, 23 phone tables). Show the plan first.
+   first; otherwise the smaller Backlog items (18 policy rate before 2018, 19 seasonal card
+   view, 23 phone tables). Show the plan first.
 
 ## Documentation map
 
@@ -210,8 +212,9 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 12. ~~Official weekly loan interest rates from EVDS~~ **done**: `TP.KTF10/11/12/18` and the
     policy rate `TP.PY.P02.1H` (module `rates`, "Interest rates" tab)
 13. ~~Policy-rate decision markers on the charts~~ **done** (from rate changes only)
-14. MPC (PPK) meeting calendar: put the CBRT's pre-announced meeting dates in a YAML file and
-    mark hold decisions too. Today's markers come from rate changes, so holds are invisible.
+14. ~~MPC (PPK) meeting calendar~~ **done** (2026-09-29): `config/mpc_meetings.yaml` (85 past
+    meetings from the CBRT press releases, plus the announced ones), `metrics.policy_decisions`
+    reads hike/cut/hold from the rate; holds are short, faint ticks
 15. ~~BDDK bank groups (state / domestic private / foreign)~~ **done** (2026-09-29): total
     loans and deposits per group, shares in the "Sektör" tab
 16. ~~BDDK deposits and non-performing loans~~ **done** (2026-09-29): tables 4 and 2, NPL and
@@ -323,6 +326,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   state_banks, private_banks, foreign_banks and others).
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
+- `config/mpc_meetings.yaml` (config only, like `series.yaml`): CBRT MPC meeting dates,
+  strictly increasing (`config.MpcCalendar`). Decisions are never typed in; they are read
+  from the policy rate on the meeting day. Unlisted rate changes are still marked.
 - `summaries(data_date PK, created_at, model, input, text_tr, text_en)` (migration 0004): one
   AI-written summary per data week, with the JSON facts it was written from.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an

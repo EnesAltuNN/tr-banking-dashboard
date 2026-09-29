@@ -95,7 +95,8 @@ has four tabs, each opening with KPI tiles (value, signed change and a one-year 
   TRY values in the prices of the latest CPI month.
 - **Interest rates:** the policy rate, the personal loan rate, yearly inflation and the real
   personal loan rate; loan rates and the policy rate in %, with changes in percentage points,
-  yearly inflation as a reference line and MPC decisions as ticks along the time axis.
+  yearly inflation as a reference line and MPC meetings as ticks along the time axis (long:
+  hike or cut, short: hold).
 - **Cards:** card spending (credit + debit), online payments and foreign cards; BKM monthly
   card spending and card counts, with monthly % and yearly % change. The real view deflates
   the amounts only.
@@ -368,9 +369,10 @@ uv run tr-banking summarize --force     # rewrite it
 
 ```
 config/series.yaml         series definitions
+config/mpc_meetings.yaml   CBRT MPC meeting dates (decision markers)
 src/tr_banking/
   settings.py              env/.env settings (pydantic-settings)
-  config.py                series.yaml loading and validation
+  config.py                series.yaml and mpc_meetings.yaml loading and validation
   sources/evds.py          EVDS3 client and response parser
   sources/bddk.py          BDDK weekly bulletin client and parser
   sources/bkm.py           BKM monthly card statistics client and label-based HTML parser

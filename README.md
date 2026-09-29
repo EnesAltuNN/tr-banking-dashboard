@@ -30,7 +30,8 @@ dashboard, in nominal and inflation-adjusted terms.
 - **Interest rates in percentage points:**
   - Loan rates and the policy rate are shown with yearly inflation as a reference line on the
     same axis.
-  - MPC rate decisions are marked on the charts.
+  - Every MPC meeting is marked on the charts, holds included: the meeting calendar comes
+    from the central bank's own press releases, and each decision is read from the rate.
   - The table shows an approximate real rate (rate minus inflation).
 - **Automatic, and loud when it breaks:**
   - GitHub Actions fetches every Tuesday and Friday.
@@ -174,7 +175,7 @@ Done:
   automatic fetch, live bilingual dashboard.
 - ✔ **Real values:** inflation-adjusted view with CPI from EVDS.
 - ✔ **Interest rates:** official weekly loan rates and the policy rate from EVDS, with
-  inflation reference and MPC decision markers.
+  inflation reference and MPC decision markers (hikes, cuts and holds).
 - ✔ **Module 2, card spending:** BKM monthly statistics from 2017 (see
   [DATA_SOURCES.md](docs/DATA_SOURCES.md#bkm-card-statistics-verified-2026-09-27)).
 - ✔ **Banking sector:** BDDK deposits, non-performing loans and bank groups (state, domestic
@@ -188,7 +189,6 @@ Planned, in order:
    not comparable rates in their HTML; it needs a decision on browser automation first.
 
 Other ideas:
-- the MPC meeting calendar, so decisions that kept the rate unchanged are marked too;
 - the policy rate before September 2018, where the EVDS series is empty;
 - a seasonally adjusted view of card spending.
 

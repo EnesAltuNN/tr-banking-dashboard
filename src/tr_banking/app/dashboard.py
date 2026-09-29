@@ -41,7 +41,7 @@ from tr_banking.app.metrics import (
     category_id,
     deflate,
     display_unit,
-    rate_changes,
+    policy_decisions,
     real_rates,
     spec_id,
     spec_observations,
@@ -51,7 +51,7 @@ from tr_banking.app.metrics import (
     value_near,
     with_categories,
 )
-from tr_banking.config import load_series_config
+from tr_banking.config import load_mpc_calendar, load_series_config
 from tr_banking.db import StorageError, Summary, open_repository
 from tr_banking.settings import Settings, get_settings
 
@@ -201,6 +201,7 @@ def main() -> None:
     render_weekly_summary(summary, lang)
 
     config = load_series_config(settings.series_config_path)
+    meetings = load_mpc_calendar(settings.mpc_calendar_path).meetings
     series = with_categories(series, config)
     render_alerts(series, observations, lang)
     price_index = spec_observations(series, observations, config.deflator)
@@ -213,7 +214,7 @@ def main() -> None:
         if section == "credit":
             render_credit_view(module, observations, price_index, lang, theme)
         elif section == "rates":
-            render_rates_view(module, observations, price_index, policy_id, lang, theme)
+            render_rates_view(module, observations, price_index, policy_id, meetings, lang, theme)
         elif section == "cards":
             render_cards_view(module, observations, price_index, lang, theme)
         else:
@@ -372,6 +373,7 @@ def render_rates_view(
     observations: pd.DataFrame,
     price_index: pd.DataFrame,
     policy_id: int | None,
+    meetings: list[date],
     lang: Lang,
     theme: str,
 ) -> None:
@@ -394,7 +396,7 @@ def render_rates_view(
     render_rates_table(summary, series, lang, theme)
 
     policy = observations[observations["series_id"] == policy_id]
-    changes = rate_changes(policy[["date", "value"]])
+    changes = policy_decisions(policy[["date", "value"]], meetings)
 
     def in_range(frame: pd.DataFrame) -> pd.DataFrame:
         return frame[frame["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
@@ -1079,7 +1081,7 @@ def rate_chart(
     color: str,
     step: bool = False,
 ) -> alt.LayerChart:
-    """A rate with yearly inflation as a reference line and policy-rate changes as rules.
+    """A rate with yearly inflation as a reference line and MPC decisions as ticks.
 
     Rate and inflation are both in %, so they share one y-axis (never a dual axis). The policy
     rate is drawn as steps: it holds its value until the next decision.
@@ -1126,22 +1128,29 @@ def rate_chart(
     ]
     if not changes.empty:
         # Short ticks along the bottom (a rug), not full-height lines: 2019-2025 had dozens of
-        # decisions close together. Last layer, so hovering a tick shows its own tooltip.
+        # decisions close together. Holds are shorter and fainter than hikes and cuts (size
+        # and opacity, not color alone). Last layers, so hovering a tick shows its tooltip.
         # y="height" is the plot's bottom edge whatever size Streamlit fits the chart to.
-        decisions = alt.Chart(changes).mark_tick(
-            color=CROSSHAIR_COLOR, thickness=2, size=14, opacity=0.9, yOffset=-7
+        labeled = changes.assign(
+            label=[text(f"decision_{decision}", lang) for decision in changes["decision"]]
         )
-        layers.append(
-            decisions.encode(
-                x=x,
-                y=alt.value("height"),
-                tooltip=[
-                    alt.Tooltip("date:T", title=text("policy_change", lang), format="%d %b %Y"),
-                    alt.Tooltip("previous:Q", title=text("tooltip_previous", lang), format=",.2f"),
-                    alt.Tooltip("value:Q", title=text("tooltip_new", lang), format=",.2f"),
-                ],
-            )
-        )
+        tooltip = [
+            alt.Tooltip("date:T", title=text("policy_change", lang), format="%d %b %Y"),
+            alt.Tooltip("label:N", title=text("tooltip_decision", lang)),
+            alt.Tooltip("previous:Q", title=text("tooltip_previous", lang), format=",.2f"),
+            alt.Tooltip("value:Q", title=text("tooltip_new", lang), format=",.2f"),
+        ]
+        for moved, size, opacity in ((False, 7, 0.45), (True, 14, 0.9)):
+            ticks = labeled[(labeled["decision"] != "hold") == moved]
+            if not ticks.empty:
+                mark = alt.Chart(ticks).mark_tick(
+                    color=CROSSHAIR_COLOR,
+                    thickness=2,
+                    size=size,
+                    opacity=opacity,
+                    yOffset=-size / 2,
+                )
+                layers.append(mark.encode(x=x, y=alt.value("height"), tooltip=tooltip))
     chart = alt.layer(*layers).properties(height=CHART_HEIGHT)
     return chart.configure(locale=VEGA_LOCALE_TR) if lang == "tr" else chart
 

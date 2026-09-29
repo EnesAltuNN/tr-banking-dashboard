@@ -113,6 +113,34 @@ def rate_changes(rates: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def policy_decisions(rates: pd.DataFrame, meetings: Iterable[date]) -> pd.DataFrame:
+    """MPC decisions read from the policy rate (date/value rows): "hike", "cut" or "hold".
+
+    A meeting compares the rate on its day (the CBRT applies a decision from the meeting day)
+    with the last rate before it; meetings outside the data (before it, or still to come) are
+    left out. A change on a day that is not a listed meeting is kept as well, so an unscheduled
+    meeting or a calendar not yet updated never hides a decision.
+    """
+    ordered = rates.sort_values("date")
+    rows = []
+    for meeting in pd.to_datetime(list(meetings)):
+        before = ordered.loc[ordered["date"] < meeting, "value"]
+        after = ordered.loc[ordered["date"] >= meeting, "value"]
+        if not before.empty and not after.empty:
+            rows.append((meeting, before.iloc[-1], after.iloc[0]))
+    listed = {row[0] for row in rows}
+    rows += [
+        (change.date, change.previous, change.value)
+        for change in rate_changes(ordered).itertuples()
+        if change.date not in listed
+    ]
+    frame = pd.DataFrame(rows, columns=["date", "previous", "value"])
+    frame["decision"] = "hold"
+    frame.loc[frame["value"] > frame["previous"], "decision"] = "hike"
+    frame.loc[frame["value"] < frame["previous"], "decision"] = "cut"
+    return frame.sort_values("date").reset_index(drop=True)
+
+
 def summarize_rates(
     observations: pd.DataFrame,
     inflation: pd.DataFrame,

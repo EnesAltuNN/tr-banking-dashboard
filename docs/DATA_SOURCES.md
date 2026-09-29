@@ -154,7 +154,7 @@ data.
 
 **Policy rate:** `TP.PY.P02.1H` in data group `bie_pyintbnk`, *(1H) TCMB Kotasyonları SATIŞ
 (%) (1 Haftalık İşlem)*: the CBRT one-week repo lending rate, on business days.
-- Its change dates match the MPC (PPK) decisions, e.g. 2023-06-22 → 15%, 2024-03-21 → 50%,
+- Its change dates are the MPC (PPK) meeting days, e.g. 2023-06-22 → 15%, 2024-03-21 → 50%,
   2024-12-26 → 47.5%, 2025-04-17 → 46%, 2026-01-22 → 37%.
 - The metadata says the series starts in 1996, but **the first value is 2018-09-14** (24%, the
   day after the 13 September 2018 decision). All earlier days since at least 2014 are null, so
@@ -170,10 +170,26 @@ data.
   one-week repo value exists, it does not show that period's actual funding cost. The
   series used here has no values before 2018-09-14 anyway.
 
-**Decision markers** are computed from the data (`app/metrics.py: rate_changes`): every day
-on which the policy rate differs from the previous business day. MPC decisions that kept the
-rate unchanged leave no trace in the data, so they are not marked (see the Backlog item on
-the MPC calendar).
+**MPC calendar and decision markers** (verified 2026-09-29):
+- The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from
+  the first meeting inside the series (2018-10-25). Past dates come from the CBRT's decision
+  press releases (tcmb.gov.tr > PPK > PPK Toplantı Kararları; each release's own page,
+  `.../duyurular/basin/<year>/duy<year>-<no>`, has the date and the decision). Announced
+  dates come from the calendar in "2026 Para Politikası" (Ek 2), which also lists the first
+  four meetings of 2027.
+- The decisions list page is incomplete: it misses the 26 December 2024 cut (release
+  2024-70) and the 10 September 2026 hold (2026-38); both were found on the press release
+  pages.
+- The EVDS series changes **on the meeting day itself**: all 40 changes from 2018-09-14 to
+  2026-09-25 fall exactly on a listed meeting. `app/metrics.py: policy_decisions` therefore
+  compares the rate on the meeting day with the last rate before it (hike, cut or hold).
+  Checked against the wording of every release: 85 meetings, 14 hikes, 26 cuts, 45 holds.
+- The 20 March 2025 interim meeting raised only the overnight lending rate; the policy rate
+  stayed at 42.5%, so it is a hold here.
+- A rate change on a day that is not listed (an unscheduled meeting, or a calendar not yet
+  updated) is still marked, so an out-of-date file only loses hold markers.
+- The CBRT publishes the next year's calendar in December ("2027 Para Politikası" on
+  2026-12-18); add it to the YAML then.
 
 **Yearly inflation and real rates:**
 - Yearly inflation is `CPI(month) / CPI(same month a year earlier) − 1`, from
