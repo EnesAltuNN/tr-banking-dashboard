@@ -47,6 +47,8 @@ dashboard, in nominal and inflation-adjusted terms.
     sparklines; filters live in the sidebar.
   - The banking-sector tab computes the NPL ratio, the FX share of deposits, the
     loan-to-deposit ratio and bank-group shares on the fly from BDDK's tables.
+  - Alerts flag a weekly change far outside the series' own past year (a robust score on
+    the median and MAD; the threshold was calibrated on 12 years of history).
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).
   - Light and dark themes with a color palette checked for color-vision deficiency; each
     category (housing, auto, personal, cards, commercial) keeps one color in every chart.
@@ -173,6 +175,7 @@ Done:
   [DATA_SOURCES.md](docs/DATA_SOURCES.md#bkm-card-statistics-verified-2026-09-27)).
 - ✔ **Banking sector:** BDDK deposits, non-performing loans and bank groups (state, domestic
   private, foreign), with the ratios built from them.
+- ✔ **Alerts:** unusual weekly changes flagged above the tabs.
 
 Planned, in order:
 1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
@@ -182,7 +185,8 @@ Planned, in order:
 
 Other ideas:
 - the MPC meeting calendar, so decisions that kept the rate unchanged are marked too;
-- alerts on unusual weekly changes.
+- the policy rate before September 2018, where the EVDS series is empty;
+- a seasonally adjusted view of card spending.
 
 ## Documentation
 

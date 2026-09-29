@@ -88,9 +88,9 @@ series (deposits, NPL, bank groups) and ratios computed on the fly.
      offer, do not do it unasked.
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
-3. **Next roadmap item:** decide with the user between the weekly AI summary (Backlog 8),
-   alerts on unusual weekly changes (Backlog 17) and resuming module 3 (Backlog 7, see Open
-   questions). Show the plan first.
+3. **Next roadmap item:** decide with the user between the weekly AI summary (Backlog 8; needs
+   a model choice and an API-key secret the user sets) and resuming module 3 (Backlog 7, see
+   Open questions). Show the plan first.
 
 ## Documentation map
 
@@ -204,8 +204,9 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
     loans and deposits per group, shares in the "Sektör" tab
 16. ~~BDDK deposits and non-performing loans~~ **done** (2026-09-29): tables 4 and 2, NPL and
     FX-share ratios computed on the fly
-17. Alerts on unusual weekly changes (e.g. a z-score on weekly %), shown on the dashboard and
-    later fed to the AI summary.
+17. ~~Alerts on unusual weekly changes~~ **done** (2026-09-29): `metrics.unusual_changes`, a
+    robust score (median and scaled MAD of the past 52 weekly changes, % or pp) >= 5, shown
+    above the tabs; ready to feed the AI summary
 18. Policy rate before 2018-09-14: `TP.PY.P02.1H` is empty then (see DATA_SOURCES). Options:
     the monthly BIS series `TP.BISPOLFAIZ.TUR`, or a hand-kept YAML of decisions. Decide first.
 19. Seasonal patterns in BKM card spending (December, summer tourism): a seasonally adjusted
@@ -423,6 +424,9 @@ a source client.
     AppTest cannot see this (it keeps the value); check it in a browser.
   - KPI tiles use short units (`SHORT_UNIT_LABELS`, "bn TRY") so values fit a quarter width.
   - Time axes use `DATE_AXIS` (labels keep the year).
+  - Alerts: `render_alerts` runs above the tabs on every weekly series except `macro`. The
+    threshold (`ALERT_THRESHOLD = 5`) was calibrated on the 2014-2026 history: about 1.5% of
+    weeks per series. Recalibrate with the history, not by guess, if series are added.
   - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
     is often empty as formatted text (e.g. the real-rate column).
   - Visual checks: run the app on a scratch SQLite (`DATABASE_URL = " "`, `DB_PATH`) and run

@@ -680,3 +680,49 @@ def test_series_selection_survives_a_language_switch(use_db: Callable, tmp_path:
 
     assert app.multiselect[0].value == picked
     assert app.dataframe[0].value["Series"].tolist() == [spec.name_en for spec in SPECS[:2]]
+
+
+# --- alerts on unusual weekly changes ---
+
+
+def spiked_db(path: Path) -> Path:
+    """Sixty weeks of steady ~1% growth for the EVDS loans, then a -6% week for housing."""
+    fridays = pd.date_range("2025-01-03", periods=60, freq="W-FRI")
+    rows = []
+    for index, spec in enumerate(SPECS):
+        value = 1_000_000.0 * (index + 1)
+        for step, friday in enumerate(fridays):
+            if step:
+                wobble = 0.002 * ((step * (index + 3)) % 5)  # deterministic small noise
+                last_week = step == len(fridays) - 1
+                growth = 0.94 if (last_week and spec.category == "housing") else 1.01 + wobble
+                value *= growth
+            rows.append((spec.code, friday.date(), value))
+    with SqliteRepository(path) as repo:
+        repo.init_schema()
+        for spec in SPECS:
+            repo.upsert_series(spec)
+        repo.upsert_observations("evds", pd.DataFrame(rows, columns=["code", "date", "value"]))
+    return path
+
+
+def test_no_alert_note_when_nothing_is_unusual(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    assert not app.warning
+    assert "Son haftada olağan dışı bir değişim yok" in page_text(app)
+
+
+def test_unusual_weekly_change_is_flagged_above_the_tabs(use_db: Callable, tmp_path: Path) -> None:
+    use_db(spiked_db(tmp_path / "spike.db"))
+
+    app = run_dashboard("rates")  # alerts show on every tab
+
+    assert not app.exception
+    [warning] = app.warning
+    assert "Son haftada olağan dışı değişim" in warning.value
+    assert "Konut kredileri (TCMB EVDS)" in warning.value
+    assert "**-6,0%**" in warning.value
+    assert "İhtiyaç kredileri" not in warning.value  # steady series stay quiet

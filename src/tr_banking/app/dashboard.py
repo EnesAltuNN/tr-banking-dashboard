@@ -42,6 +42,7 @@ from tr_banking.app.metrics import (
     real_rates,
     summarize,
     summarize_rates,
+    unusual_changes,
     value_near,
 )
 from tr_banking.config import SeriesConfig, SeriesSpec, load_series_config
@@ -188,6 +189,7 @@ def main() -> None:
 
     config = load_series_config(settings.series_config_path)
     series = with_categories(series, config)
+    render_alerts(series, observations, lang)
     price_index = spec_observations(series, observations, config.deflator)
     policy_id = spec_id(series, config.policy_rate)
 
@@ -229,6 +231,41 @@ def render_info_line(fetched_at: datetime | None, loaded_at: datetime, lang: Lan
         updated = f"{format_date(local, lang, long=True)} {local:%H:%M}"
     loaded = loaded_at.astimezone(DISPLAY_TZ).strftime("%H:%M")
     st.caption(text("info_line", lang).format(updated=updated, loaded=loaded))
+
+
+def render_alerts(series: pd.DataFrame, observations: pd.DataFrame, lang: Lang) -> None:
+    """Weekly series whose latest change is far outside their own past year (all tabs)."""
+    weekly = series[(series["frequency"] == "weekly") & (series["module"] != "macro")]
+    rows = observations[observations["series_id"].isin(weekly["id"])]
+    points = weekly.loc[weekly["unit"] == "%", "id"]
+    alerts = unusual_changes(rows, points_ids=points)
+    if alerts.empty:
+        st.caption(text("alerts_none", lang), help=text("alerts_method", lang))
+        return
+    meta = weekly.set_index("id")
+    lines = []
+    for alert in alerts.itertuples():
+        in_points = alert.series_id in set(points)
+
+        def shown(value: float, in_points: bool = in_points) -> str:
+            if in_points:
+                return f"{format_signed(value, lang, RATE_DECIMALS)} {text('pp', lang)}"
+            return format_pct(value, lang)
+
+        typical = f"{shown(alert.typical)} ± {shown(alert.spread).lstrip('+')}"
+        lines.append(
+            text("alerts_line", lang).format(
+                name=meta.loc[alert.series_id, f"name_{lang}"],
+                source=SOURCE_LABELS[meta.loc[alert.series_id, "source"]][lang],
+                week=format_date(alert.date, lang, long=True),
+                change=shown(alert.change),
+                typical=typical,
+            )
+        )
+    body = "\n".join(f"- {line}" for line in lines)
+    # A status color never carries meaning alone: the icon and the words say it too.
+    st.warning(f"{text('alerts_title', lang)}\n\n{body}", icon="⚠️")
+    st.caption(text("alerts_method", lang))
 
 
 def render_tabs(lang: Lang) -> tuple[str, DeltaGenerator]:

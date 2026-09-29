@@ -37,6 +37,35 @@ TEXTS: dict[str, dict[Lang, str]] = {
         ),
     },
     "filters": {"tr": "Filtreler", "en": "Filters"},
+    "alerts_title": {
+        "tr": "**Son haftada olağan dışı değişim**",
+        "en": "**Unusual change in the latest week**",
+    },
+    "alerts_line": {
+        "tr": "{name} ({source}), {week} haftası: **{change}**; son bir yılda tipik: {typical}",
+        "en": "{name} ({source}), week ending {week}: **{change}**; typical over the past "
+        "year: {typical}",
+    },
+    "alerts_none": {
+        "tr": (
+            "Son haftada olağan dışı bir değişim yok: her haftalık seri, son haftalık değişimi "
+            "kendi son bir yılıyla karşılaştırılarak izlenir."
+        ),
+        "en": (
+            "No unusual change in the latest week: every weekly series' latest change is "
+            "compared with its own past year."
+        ),
+    },
+    "alerts_method": {
+        "tr": (
+            "Değişim, serinin son 52 haftasının medyanından 5 ölçeklenmiş MAD'den fazla "
+            "sapıyorsa işaretlenir (2014-2026'da haftaların yaklaşık %1,5'i)."
+        ),
+        "en": (
+            "A change is flagged when it is more than 5 scaled MADs away from the median of the "
+            "series' last 52 weeks (about 1.5% of weeks in 2014-2026)."
+        ),
+    },
     "latest_week": {
         "tr": "Son veri: **{week}** haftası",
         "en": "Latest data: week ending **{week}**",

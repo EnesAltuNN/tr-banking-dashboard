@@ -169,6 +169,57 @@ def ratio_pct(
     return ratio.sort_values("date").reset_index(drop=True)
 
 
+# Alerts compare the latest weekly change with the series' own past year (median and MAD, which
+# ignore the odd extreme week). A robust score of 5 flagged about 1.5% of weeks per series on
+# the 2014-2026 history: rare enough to mean something, about one alert every two weeks over
+# all 30 weekly series.
+ALERT_THRESHOLD = 5.0
+ALERT_WINDOW_WEEKS = 52
+ALERT_MIN_HISTORY_WEEKS = 26
+ALERT_COLUMNS = ["series_id", "date", "change", "typical", "spread", "score"]
+
+
+def weekly_changes(values: pd.Series, in_points: bool) -> pd.Series:
+    """Changes between weeks exactly 7 days apart: in % or, for rates, in points."""
+    values = values.sort_index()
+    change = values.diff() if in_points else values.pct_change() * 100
+    consecutive = values.index.to_series().diff() == pd.Timedelta(days=7)
+    return change[consecutive].dropna()
+
+
+def unusual_changes(
+    observations: pd.DataFrame,
+    points_ids: Iterable[int] = (),
+    threshold: float = ALERT_THRESHOLD,
+) -> pd.DataFrame:
+    """Series whose latest weekly change is far outside their own past year.
+
+    score = (latest change - median) / (1.4826 * MAD) over the previous ALERT_WINDOW_WEEKS
+    changes (1.4826 * MAD matches the standard deviation for normal data). A series needs
+    ALERT_MIN_HISTORY_WEEKS of history, and a flat history (MAD 0) gives no score.
+    `points_ids` are rates and ratios, whose changes are measured in points, not %.
+    """
+    points = set(points_ids)
+    rows = []
+    for series_id, group in observations.groupby("series_id", sort=True):
+        values = group.set_index("date")["value"]
+        changes = weekly_changes(values, in_points=series_id in points)
+        if changes.empty or changes.index[-1] != values.index.max():
+            continue  # the latest week has no change (a gap before it)
+        history = changes.iloc[:-1].tail(ALERT_WINDOW_WEEKS)
+        if len(history) < ALERT_MIN_HISTORY_WEEKS:
+            continue
+        typical = history.median()
+        spread = 1.4826 * (history - typical).abs().median()
+        if spread == 0:
+            continue
+        latest = changes.iloc[-1]
+        score = (latest - typical) / spread
+        if abs(score) >= threshold:
+            rows.append((series_id, changes.index[-1], latest, typical, spread, score))
+    return pd.DataFrame(rows, columns=ALERT_COLUMNS)
+
+
 def value_near(values: pd.Series, target: pd.Timestamp) -> float:
     """Latest value within LOOKBACK_TOLERANCE up to `target`, else NaN."""
     window = values[(values.index > target - LOOKBACK_TOLERANCE) & (values.index <= target)]

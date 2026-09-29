@@ -104,6 +104,11 @@ has four tabs, each opening with KPI tiles (value, signed change and a one-year 
   deposits) with weekly and yearly changes in pp, charts of the headline ratios, and BDDK's
   deposit and NPL amounts. Bank-group amounts can be added from the sidebar.
 
+Above the tabs, an alert box lists weekly series whose latest change is far outside their own
+past year: more than 5 scaled MADs from the median of the last 52 weekly changes (in % for
+amounts, in points for rates). On the 2014-2026 history that flags about 1.5% of weeks per
+series. When nothing is unusual, one grey line says so.
+
 Layout:
 - The filters (source, nominal/real, series, date range) live in the sidebar and show only
   the open tab's controls. Only the open tab runs.
