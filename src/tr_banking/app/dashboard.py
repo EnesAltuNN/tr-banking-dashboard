@@ -611,7 +611,7 @@ def banking_tiles(
     deposits_id = category_id(banking, "deposits")
     if deposits_id is not None:
         rows = observations[observations["series_id"] == deposits_id]
-        factor, unit = shown_unit("million TRY", lang, None)
+        factor, unit = kpi_unit("million TRY", lang)
         last = summarize(rows).iloc[0]
         tiles.append(
             Tile(
@@ -665,7 +665,7 @@ def credit_tiles(
             continue
         rows = observations[observations["series_id"] == series_id]
         name = meta.loc[series_id, f"name_{lang}"]
-        factor, unit = shown_unit(meta.loc[series_id, "unit"], lang, None)
+        factor, unit = kpi_unit(meta.loc[series_id, "unit"], lang)
         last = summarize(rows).iloc[0]
         tiles.append(
             Tile(
@@ -767,7 +767,7 @@ def rate_tiles(
 def card_tiles(series: pd.DataFrame, observations: pd.DataFrame, lang: Lang) -> list[Tile]:
     """Last month's card spending (credit + debit), online payments and foreign cards."""
     meta = series.set_index("id")
-    factor, unit = shown_unit("million TRY", lang, None)
+    factor, unit = kpi_unit("million TRY", lang)
     candidates: list[tuple[str, list[int | None]]] = [
         (
             text("kpi_card_spending", lang),
@@ -835,24 +835,46 @@ def render_kpis(tiles: list[Tile], theme: str) -> None:
 # --- sidebar filters ---
 
 
+def translated_start(name: str, lang: Lang, fallback: object) -> object:
+    """Where a widget with translated option labels starts in this language.
+
+    Streamlit keeps a radio's or multiselect's choice as its label. After a language switch the
+    old label matches no option, and the browser shows nothing selected (or the old language's
+    chips). So each such widget gets one key per language (`<name>_<lang>`) and starts from the
+    value the other language's widget had. The start only changes with the language: like the
+    tabs' default, it is part of the widget's identity.
+    """
+    if st.session_state.get(f"{name}__lang") != lang:
+        st.session_state[f"{name}__lang"] = lang
+        st.session_state[f"{name}__start"] = st.session_state.get(f"{name}__value", fallback)
+    return st.session_state[f"{name}__start"]
+
+
+def translated_radio(
+    name: str, label: str, options: list[str], format_func: Callable[[str], str], lang: Lang
+) -> str:
+    start = translated_start(name, lang, options[0])
+    value = st.sidebar.radio(
+        label,
+        options=options,
+        index=options.index(start) if start in options else 0,
+        format_func=format_func,
+        key=f"{name}_{lang}",
+    )
+    st.session_state[f"{name}__value"] = value
+    return value
+
+
 def render_source_picker(series: pd.DataFrame, lang: Lang) -> str:
     """One source at a time: each has its own history length, units and definitions."""
     available = [source for source in SOURCE_LABELS if source in set(series["source"])]
-    return st.sidebar.radio(
-        text("source", lang),
-        options=available,
-        format_func=lambda source: SOURCE_LABELS[source][lang],
-        key="source",
-    )
+    format_source = lambda source: SOURCE_LABELS[source][lang]  # noqa: E731
+    return translated_radio("source", text("source", lang), available, format_source, lang)
 
 
 def render_value_mode(lang: Lang, key: str = "value_mode") -> str:
-    return st.sidebar.radio(
-        text("value_mode", lang),
-        options=["nominal", "real"],
-        format_func=lambda mode: text(f"mode_{mode}", lang),
-        key=key,
-    )
+    format_mode = lambda mode: text(f"mode_{mode}", lang)  # noqa: E731
+    return translated_radio(key, text("value_mode", lang), ["nominal", "real"], format_mode, lang)
 
 
 def render_filters(
@@ -867,13 +889,16 @@ def render_filters(
     labels = {int(row.id): getattr(row, f"name_{lang}") for row in series.itertuples()}
     first, last = observations["date"].min().date(), observations["date"].max().date()
 
+    name = f"{key}_series"
+    start = translated_start(name, lang, list(labels) if default_ids is None else default_ids)
     selected_ids = st.sidebar.multiselect(
         text("series", lang),
         options=list(labels),
-        default=list(labels) if default_ids is None else default_ids,
+        default=[series_id for series_id in start if series_id in labels],
         format_func=labels.__getitem__,
-        key=f"{key}_series",
+        key=f"{name}_{lang}",
     )
+    st.session_state[f"{name}__value"] = selected_ids
     picked = st.sidebar.date_input(
         text("date_range", lang),
         value=(first, last),
@@ -913,6 +938,12 @@ def deflate_money(
             return rows, format_month(reference, lang)
     st.info(text("real_unavailable", lang))
     return observations, None
+
+
+def kpi_unit(stored_unit: str, lang: Lang) -> tuple[float, str]:
+    """Display multiplier and the short unit label used in KPI tiles."""
+    factor, unit = display_unit(stored_unit)
+    return factor, unit_label(unit, lang, short=True)
 
 
 def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, str]:

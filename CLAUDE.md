@@ -82,8 +82,10 @@ series (deposits, NPL, bank groups) and ratios computed on the fly.
    loads only the last 8 weeks of the new series. After the push, reboot the app on
    share.streamlit.io if the page shows an ImportError (seen on 2026-09-28).
 2. **User: add the dashboard screenshot** of the new design and check the README on GitHub.
-   - The screenshot goes to `docs/images/dashboard.png` (the README already links it): about
-     1600×1000 px, English view, light theme, PNG under ~500 KB.
+   - One command writes it to `docs/images/dashboard.png` (the README already links it):
+     `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`
+     (EN, light theme, 1600×1000, warns above 500 KB). The user wanted to take it themselves;
+     offer, do not do it unasked.
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
 3. **Next roadmap item:** decide with the user between the weekly AI summary (Backlog 8),
@@ -212,9 +214,9 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
     **done** (2026-09-28)
 21. ~~Dashboard redesign: KPI tiles, sidebar filters, category colors, theme, footer~~ **done**
     (2026-09-28)
-22. Keep an automated screenshot check in the repo (the Playwright + Edge script used on
-    2026-09-28 lives only in a scratchpad), e.g. `scripts/screenshots.py`, so the README image
-    and visual regressions are one command away.
+22. ~~Screenshot script in the repo~~ **done** (2026-09-29): `scripts/screenshots.py` writes
+    `docs/images/dashboard.png` (EN, light, 1600×1000, checks the 500 KB limit) and, with
+    `--all`, every tab in both themes; works locally and against the live URL.
 23. Wide tables scroll sideways on phones; consider fewer columns in a narrow layout.
 
 ## Open questions
@@ -414,13 +416,19 @@ a source client.
     `chartCategoricalColors` in `.streamlit/config.toml`. The palette passed the dataviz
     validator (CVD and contrast) in both modes; three light steps are below 3:1, so every
     chart names its series in the title and every tab has a table.
+  - Streamlit keeps a radio's or multiselect's choice as its **label**. Widgets with translated
+    option labels (source, nominal/real, series) therefore get one key per language
+    (`source_tr`, `source_en`) and start from the other language's value
+    (`translated_start`); otherwise a language switch leaves nothing selected in the browser.
+    AppTest cannot see this (it keeps the value); check it in a browser.
+  - KPI tiles use short units (`SHORT_UNIT_LABELS`, "bn TRY") so values fit a quarter width.
   - Time axes use `DATE_AXIS` (labels keep the year).
   - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
     is often empty as formatted text (e.g. the real-rate column).
-  - Visual checks: run the app on a scratch SQLite (`DATABASE_URL = " "`, `DB_PATH`) and take
-    screenshots with Playwright and the installed Edge (`uv run --no-project --with
-    playwright`, `chromium.launch(channel="msedge")`); AppTest does not see layout or
-    widget-identity bugs.
+  - Visual checks: run the app on a scratch SQLite (`DATABASE_URL = " "`, `DB_PATH`) and run
+    `scripts/screenshots.py` (Playwright with the installed Edge, via `uv run --with
+    playwright`; not a project dependency). It writes the README image and, with `--all`,
+    every tab in light and dark. AppTest does not see layout or widget-identity bugs.
 - The dashboard is public:
   - `load_data` is an `st.cache_data` with a 1 h TTL, shared by all visitors. It opens one
     short connection per cache miss, never one per rerun.
@@ -449,6 +457,7 @@ uv run tr-banking check-freshness                     # exit 1 if data is stale
 uv run tr-banking scan-raw                            # exit 1 if a raw file holds a secret
 uv run tr-banking clean-raw [--days 30]               # delete old raw response files
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
+uv run --with playwright python scripts/screenshots.py [--url URL] [--all FOLDER]  # README image
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
 ```
 

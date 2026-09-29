@@ -335,6 +335,10 @@ UNIT_LABELS: dict[str, dict[Lang, str]] = {
     "billion TRY": {"tr": "milyar TL", "en": "billion TRY"},
     "million cards": {"tr": "milyon adet", "en": "million cards"},
 }
+# Shorter labels for the KPI tiles, where "18,445.2 billion TRY" does not fit a quarter width.
+SHORT_UNIT_LABELS: dict[str, dict[Lang, str]] = {
+    "billion TRY": {"tr": "milyar TL", "en": "bn TRY"},
+}
 
 MONTHS: dict[Lang, list[str]] = {
     "tr": [
@@ -389,8 +393,9 @@ def text(key: str, lang: Lang) -> str:
     return TEXTS[key][lang]
 
 
-def unit_label(unit: str, lang: Lang) -> str:
-    return UNIT_LABELS.get(unit, {}).get(lang, unit)
+def unit_label(unit: str, lang: Lang, short: bool = False) -> str:
+    labels = SHORT_UNIT_LABELS if short and unit in SHORT_UNIT_LABELS else UNIT_LABELS
+    return labels.get(unit, {}).get(lang, unit)
 
 
 def format_number(value: float, lang: Lang, decimals: int = 1) -> str:

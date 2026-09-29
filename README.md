@@ -150,7 +150,9 @@ Supabase, the scheduled fetch and hosting are described in [docs/SETUP.md](docs/
   arguments. The tabs' `default` followed the open tab, so after one switch the widget was
   rebuilt and the next click went to a widget that no longer existed. The default now changes
   only with the language. The unit tests could not see it (they set state by key), so the fix
-  was verified by clicking through the tabs in a real browser.
+  was verified by clicking through the tabs in a real browser. The same browser check found a
+  sibling: radios and multiselects keep their choice as a label, so switching to English left
+  nothing selected. Translated widgets now get one key per language.
 - **A public page needs a cache.** Streamlit reruns the script on every click. A one-hour
   cache shared by all visitors turns that into at most one short database read per hour. The
   page shows both the last data fetch and the time it read the database, so the cache never

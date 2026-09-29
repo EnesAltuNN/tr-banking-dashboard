@@ -154,7 +154,7 @@ def test_source_picker_switches_to_bddk(use_db: Callable, tmp_path: Path) -> Non
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
 
-    app.radio(key="source").set_value("bddk").run()
+    app.radio(key="source_tr").set_value("bddk").run()
 
     assert not app.exception
     table = app.dataframe[0].value
@@ -186,11 +186,11 @@ def test_english_switch_translates_table(use_db: Callable, tmp_path: Path) -> No
 def test_language_switch_keeps_selected_source(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
-    app.radio(key="source").set_value("bddk").run()
+    app.radio(key="source_tr").set_value("bddk").run()
 
     app.radio(key="lang").set_value("en").run()
 
-    assert app.radio(key="source").value == "bddk"
+    assert app.radio(key="source_en").value == "bddk"
     assert app.dataframe[0].value["Series"].tolist() == [spec.name_en for spec in BDDK_SPECS]
 
 
@@ -280,7 +280,7 @@ def test_real_view_uses_prices_of_the_latest_cpi_month(use_db: Callable, tmp_pat
     app = run_dashboard()
     nominal = app.dataframe[0].value["Son değer (milyar TL)"].iloc[0]
 
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_tr").set_value("real").run()
 
     assert not app.exception
     table = app.dataframe[0].value
@@ -300,7 +300,7 @@ def test_real_view_ends_at_the_last_week_with_cpi(use_db: Callable, tmp_path: Pa
     use_db(populated_db(tmp_path / "test.db", cpi_until="2024-06-30"))
     app = run_dashboard()
 
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_tr").set_value("real").run()
 
     table = app.dataframe[0].value
     assert set(table["Tarih"]) == {date(2024, 6, 28)}  # July weeks have no CPI yet
@@ -312,7 +312,7 @@ def test_real_view_without_cpi_falls_back_to_nominal(use_db: Callable, tmp_path:
     use_db(populated_db(tmp_path / "test.db", cpi_until="2023-12-31"))
     app = run_dashboard()
 
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_tr").set_value("real").run()
 
     assert not app.exception
     assert "TÜFE verisi henüz yok" in app.info[0].value
@@ -324,7 +324,7 @@ def test_english_real_view(use_db: Callable, tmp_path: Path) -> None:
     app = run_dashboard()
 
     app.radio(key="lang").set_value("en").run()
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_en").set_value("real").run()
 
     columns = list(app.dataframe[0].value.columns)
     assert columns == ["Series", "Date", "Last value (billion TRY, Dec 2024 prices)", "Yearly %"]
@@ -447,7 +447,7 @@ def test_cards_real_view_deflates_amounts_but_not_card_counts(
     app = run_dashboard("cards")
     nominal = app.dataframe[0].value.set_index("Seri")
 
-    app.radio(key="cards_value_mode").set_value("real").run()
+    app.radio(key="cards_value_mode_tr").set_value("real").run()
 
     assert not app.exception
     real = app.dataframe[0].value.set_index("Seri")
@@ -540,10 +540,10 @@ def test_filters_live_in_the_sidebar_and_follow_the_open_tab(
 
     credit, rates = run_dashboard(), run_dashboard("rates")
 
-    assert [widget.key for widget in credit.sidebar.radio] == ["source", "value_mode"]
+    assert [widget.key for widget in credit.sidebar.radio] == ["source_tr", "value_mode_tr"]
     assert len(credit.sidebar.multiselect) == 1
     assert [widget.key for widget in rates.sidebar.radio] == []
-    assert [widget.key for widget in rates.sidebar.multiselect] == ["rates_series"]
+    assert [widget.key for widget in rates.sidebar.multiselect] == ["rates_series_tr"]
 
 
 def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: Path) -> None:
@@ -650,6 +650,33 @@ def test_banking_series_stay_out_of_the_loans_tab(use_db: Callable, tmp_path: Pa
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
 
-    app.radio(key="source").set_value("bddk").run()
+    app.radio(key="source_tr").set_value("bddk").run()
 
     assert "Toplam mevduat" not in app.dataframe[0].value["Seri"].tolist()
+
+
+# --- translated widgets keep their choice across a language switch ---
+
+
+def test_real_view_survives_a_language_switch(use_db: Callable, tmp_path: Path) -> None:
+    # Streamlit stores a radio's choice as its label; "Reel (...)" is not an English label.
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+    app.radio(key="value_mode_tr").set_value("real").run()
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert app.radio(key="value_mode_en").value == "real"
+    assert "Dec 2024 prices" in list(app.dataframe[0].value.columns)[2]
+
+
+def test_series_selection_survives_a_language_switch(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+    picked = app.multiselect[0].value[:2]
+    app.multiselect[0].set_value(picked).run()
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert app.multiselect[0].value == picked
+    assert app.dataframe[0].value["Series"].tolist() == [spec.name_en for spec in SPECS[:2]]

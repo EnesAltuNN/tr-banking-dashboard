@@ -117,6 +117,21 @@ Layout:
   colors, the Inter font and the chart palette. The page follows the visitor's light/dark
   setting.
 
+### Screenshots
+
+[`scripts/screenshots.py`](../scripts/screenshots.py) shoots the running dashboard with
+Playwright and the installed Edge browser (Playwright is not a project dependency):
+
+```powershell
+uv run streamlit run src/tr_banking/app/dashboard.py            # in another terminal
+uv run --with playwright python scripts/screenshots.py          # docs/images/dashboard.png
+uv run --with playwright python scripts/screenshots.py --all data/screenshots  # every tab
+uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/
+```
+
+The README image is the English view in the light theme, 1600×1000; the script warns if the
+PNG is over 500 KB.
+
 ## Configuration
 
 - **Series** live in [`config/series.yaml`](../config/series.yaml): code, Turkish/English
