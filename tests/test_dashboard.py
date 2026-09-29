@@ -473,7 +473,7 @@ def test_cards_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     assert "million cards" in table["Unit"].tolist()
 
 
-# --- layout: KPI tiles, sidebar filters, one color per category, chart sources ---
+# --- layout: KPI tiles, filter bar, one color per category, chart sources ---
 
 
 def metric_values(app: AppTest) -> dict[str, tuple[str, str]]:
@@ -534,17 +534,19 @@ def test_card_kpis(use_db: Callable, tmp_path: Path) -> None:
     )
 
 
-def test_filters_live_in_the_sidebar_and_follow_the_open_tab(
+def test_filters_sit_above_the_tab_and_follow_the_open_tab(
     use_db: Callable, tmp_path: Path
 ) -> None:
     use_db(populated_db(tmp_path / "test.db"))
 
     credit, rates = run_dashboard(), run_dashboard("rates")
 
-    assert [widget.key for widget in credit.sidebar.radio] == ["source_tr", "value_mode_tr"]
-    assert len(credit.sidebar.multiselect) == 1
-    assert [widget.key for widget in rates.sidebar.radio] == []
-    assert [widget.key for widget in rates.sidebar.multiselect] == ["rates_series_tr"]
+    # No sidebar at all: every filter is drawn in the open tab, "lang" is the header switch.
+    assert not credit.sidebar.radio and not credit.sidebar.multiselect
+    assert [widget.key for widget in credit.radio] == ["lang", "source_tr", "value_mode_tr"]
+    assert len(credit.multiselect) == 1
+    assert [widget.key for widget in rates.radio] == ["lang"]
+    assert [widget.key for widget in rates.multiselect] == ["rates_series_tr"]
 
 
 def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: Path) -> None:

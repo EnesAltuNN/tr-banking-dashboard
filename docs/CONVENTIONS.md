@@ -194,9 +194,14 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   changes in pp; card counts stay counts.
 - Dashboard layout (`app/dashboard.py`):
   - Tabs are stateful and lazy (`on_change="rerun"`): only the open tab runs and only its
-    filters appear in the sidebar. The open tab is kept in `st.session_state["open_section"]`.
+    filters are drawn. The open tab is kept in `st.session_state["open_section"]`.
     The tabs' `default` is part of the widget identity, so it changes only when the language
     changes (changing it on every switch dropped every second click).
+  - There is no sidebar: `filter_bar` opens a bordered box at the top of the open tab and
+    every picker of that tab draws into it, wherever in the view it is called. The radios
+    share its first row, the series and date pickers its second (the series picker was
+    squeezed to a few characters when it shared a row). Both rows wrap on a phone, and the
+    series chips wrap with them (`wrap=True`), so nothing scrolls sideways.
   - KPI tiles are `st.metric` with a sparkline. A change that rounds to zero gets
     `delta_color="off"` and no arrow (st.metric treats "0,0%" as a rise).
   - One color per `category`: `PALETTE`/`CATEGORY_HUES` in `dashboard.py`, the same steps as
