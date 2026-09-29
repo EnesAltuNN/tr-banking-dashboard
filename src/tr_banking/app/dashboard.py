@@ -32,23 +32,28 @@ from tr_banking.app.i18n import (
     unit_label,
 )
 from tr_banking.app.metrics import (
+    BANK_GROUPS,
     MONETARY_UNITS,
     YEAR,
+    Ratio,
     annual_inflation,
+    banking_ratios,
+    category_id,
     deflate,
     display_unit,
     rate_changes,
-    ratio_pct,
     real_rates,
+    spec_id,
+    spec_observations,
     summarize,
     summarize_rates,
     unusual_changes,
     value_near,
+    with_categories,
 )
-from tr_banking.config import SeriesConfig, SeriesSpec, load_series_config
-from tr_banking.db import StorageError, open_repository
+from tr_banking.config import load_series_config
+from tr_banking.db import StorageError, Summary, open_repository
 from tr_banking.settings import Settings, get_settings
-from tr_banking.sources.bddk import parse_series_code as bddk_key
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +63,6 @@ DISPLAY_TZ = ZoneInfo("Europe/Istanbul")
 # visitor or click.
 CACHE_TTL = timedelta(hours=1)
 SECTIONS = ("credit", "rates", "cards", "banking")
-BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
 
 # Categorical palette validated for color-vision deficiency and contrast in each mode (the
 # same steps as chartCategoricalColors in .streamlit/config.toml). Each category keeps one hue
@@ -150,8 +154,8 @@ class Tile(NamedTuple):
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_data(
     storage_key: str, _settings: Settings
-) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None, datetime]:
-    """Series, observations, last fetch time and when this snapshot was read.
+) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None, datetime, Summary | None]:
+    """Series, observations, last fetch time, when this snapshot was read, latest summary.
 
     The connection is opened only on a cache miss and closed right after reading. A pooled
     connection kept open across the app's sleep would go stale, while one short read per hour
@@ -160,9 +164,15 @@ def load_data(
     """
     loaded_at = datetime.now(UTC)
     if _settings.database_url is None and not Path(_settings.db_path).exists():
-        return pd.DataFrame(), pd.DataFrame(), None, loaded_at
+        return pd.DataFrame(), pd.DataFrame(), None, loaded_at, None
     with open_repository(_settings) as repo:
-        return repo.list_series(), repo.get_observations(), repo.last_fetched_at(), loaded_at
+        return (
+            repo.list_series(),
+            repo.get_observations(),
+            repo.last_fetched_at(),
+            loaded_at,
+            repo.latest_summary(),
+        )
 
 
 def storage_key(settings: Settings) -> str:
@@ -176,7 +186,9 @@ def main() -> None:
 
     settings = get_settings()
     try:
-        series, observations, fetched_at, loaded_at = load_data(storage_key(settings), settings)
+        series, observations, fetched_at, loaded_at, summary = load_data(
+            storage_key(settings), settings
+        )
     except (StorageError, psycopg.Error):
         # Details (host, role) go to the server log only; visitors see a plain message.
         logger.exception("dashboard could not read the database")
@@ -186,6 +198,7 @@ def main() -> None:
         st.info(text("no_data", lang))
         st.stop()
     render_info_line(fetched_at, loaded_at, lang)
+    render_weekly_summary(summary, lang)
 
     config = load_series_config(settings.series_config_path)
     series = with_categories(series, config)
@@ -221,6 +234,17 @@ def render_header() -> Lang:
     title_column.title(text("title", lang))
     title_column.markdown(text("tagline", lang))
     return lang
+
+
+def render_weekly_summary(summary: Summary | None, lang: Lang) -> None:
+    """The weekly AI-written text, clearly labelled as such, above everything else."""
+    if summary is None:
+        return
+    week = format_date(summary.data_date, lang, long=True)
+    with st.container(border=True):
+        st.markdown(f"**{text('summary_title', lang)}**")
+        st.markdown(summary.text_tr if lang == "tr" else summary.text_en)
+        st.caption(text("summary_caption", lang).format(week=week, model=summary.model))
 
 
 def render_info_line(fetched_at: datetime | None, loaded_at: datetime, lang: Lang) -> None:
@@ -293,38 +317,6 @@ def render_footer(lang: Lang) -> None:
     st.divider()
     st.caption(text("footer_sources", lang))
     st.caption(text("footer_values", lang))
-
-
-def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
-    """Adds each series' config-only `category` (not stored in the database)."""
-    categories = {(spec.source, spec.code): spec.category for spec in config.series}
-    return series.assign(
-        category=[categories.get((row.source, row.code)) for row in series.itertuples()]
-    )
-
-
-def spec_id(series: pd.DataFrame, spec: SeriesSpec | None) -> int | None:
-    """Database id of a configured series, or None if it is not configured or not loaded."""
-    if spec is None:
-        return None
-    ids = series.loc[(series["source"] == spec.source) & (series["code"] == spec.code), "id"]
-    return int(ids.iloc[0]) if not ids.empty else None
-
-
-def spec_observations(
-    series: pd.DataFrame, observations: pd.DataFrame, spec: SeriesSpec | None
-) -> pd.DataFrame:
-    """date/value rows of a configured series such as the deflator (may be empty)."""
-    rows = observations[observations["series_id"] == spec_id(series, spec)]
-    return rows[["date", "value"]].reset_index(drop=True)
-
-
-def category_id(series: pd.DataFrame, category: str, monetary: bool | None = None) -> int | None:
-    """The first series of a category, optionally only TRY amounts (or only non-amounts)."""
-    rows = series[series["category"] == category]
-    if monetary is not None:
-        rows = rows[rows["unit"].isin(MONETARY_UNITS) == monetary]
-    return int(rows["id"].iloc[0]) if not rows.empty else None
 
 
 def series_color(category: str | None, theme: str) -> str:
@@ -459,14 +451,6 @@ def render_cards_view(
         st.caption(text("cards_note", lang))
 
 
-class Ratio(NamedTuple):
-    """A ratio of two stored series, computed for display only (never stored)."""
-
-    key: str  # i18n text key, e.g. "ratio_npl"
-    category: str | None  # color of its chart
-    values: pd.DataFrame  # date/value in %
-
-
 def render_banking_view(
     series: pd.DataFrame,
     observations: pd.DataFrame,
@@ -515,82 +499,6 @@ def render_banking_view(
 
 
 HEADLINE_RATIOS = ("ratio_npl", "ratio_fx_share", "ratio_loan_deposit", "ratio_loans_state_banks")
-
-
-def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Ratio]:
-    """NPL ratios, FX share of deposits, loan-to-deposit ratio and bank-group shares.
-
-    Loan totals come from BDDK's loan table (module "credit"), so every ratio compares BDDK
-    with BDDK. A ratio whose inputs are not loaded is left out.
-    """
-    bddk_loans = series[(series["source"] == "bddk") & (series["module"] == "credit")]
-    banking = series[series["module"] == "banking"]
-
-    def rows(series_id: int | None) -> pd.DataFrame | None:
-        if series_id is None:
-            return None
-        found = observations[observations["series_id"] == series_id]
-        return found if not found.empty else None
-
-    def group(category: str, row: str) -> int | None:
-        matches = banking[
-            (banking["category"] == category)
-            & (banking["code"].map(lambda code: bddk_key(code).row) == row)
-        ]
-        return int(matches["id"].iloc[0]) if not matches.empty else None
-
-    loans = rows(category_id(bddk_loans, "total"))
-    deposits = rows(category_id(banking, "deposits"))
-    definitions: list[tuple[str, str | None, pd.DataFrame | None, pd.DataFrame | None, bool]] = [
-        ("ratio_npl", "npl", rows(category_id(banking, "npl")), loans, True),
-        (
-            "ratio_npl_consumer",
-            "npl_consumer",
-            rows(category_id(banking, "npl_consumer")),
-            rows(category_id(bddk_loans, "consumer")),
-            True,
-        ),
-        (
-            "ratio_npl_commercial",
-            "npl_commercial",
-            rows(category_id(banking, "npl_commercial")),
-            rows(category_id(bddk_loans, "commercial")),
-            True,
-        ),
-        (
-            "ratio_fx_share",
-            "fx_deposits",
-            rows(category_id(banking, "fx_deposits")),
-            deposits,
-            False,
-        ),
-        ("ratio_loan_deposit", None, loans, deposits, False),
-    ]
-    for bank_group in BANK_GROUPS:
-        definitions.append(
-            (
-                f"ratio_loans_{bank_group}",
-                bank_group,
-                rows(group(bank_group, "1.0.1")),
-                loans,
-                False,
-            )
-        )
-    for bank_group in BANK_GROUPS:
-        definitions.append(
-            (
-                f"ratio_deposits_{bank_group}",
-                bank_group,
-                rows(group(bank_group, "4.0.1")),
-                deposits,
-                False,
-            )
-        )
-    return [
-        Ratio(key, category, ratio_pct(part, base, of_total))
-        for key, category, part, base, of_total in definitions
-        if part is not None and base is not None
-    ]
 
 
 def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:

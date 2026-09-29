@@ -71,16 +71,25 @@ Live since 2026-09-28: robustness (per-source monthly lookback, BKM stored every
 `clean-raw`) and the dashboard redesign (KPI tiles, sidebar filters, lazy tabs, category
 colors, light/dark theme, chart cards with sources, notes expander, footer).
 
-Built on 2026-09-29, to be pushed: the "Sektör" (banking sector) tab, module `banking`, 13 BDDK
-series (deposits, NPL, bank groups) and ratios computed on the fly.
+Built on 2026-09-29, to be pushed: the "Sektör" (banking sector) tab (module `banking`, 13
+BDDK series, ratios computed on the fly), translated-widget fix, `scripts/screenshots.py`,
+alerts on unusual weekly changes, and the weekly AI summary (migration `0004_summaries`,
+`tr-banking summarize`, workflow step, dashboard box).
 
 ## Next steps
 
-1. **User: push the 2026-09-29 commit, then load the new BDDK history once** with the local
-   `.env` (`fetch_writer`): `uv run tr-banking backfill --start 2014-01-03 --source bddk`
-   (about 30 s; 20 series, 1 s apart). No migration is needed. Until then the scheduled fetch
-   loads only the last 8 weeks of the new series. After the push, reboot the app on
-   share.streamlit.io if the page shows an ImportError (seen on 2026-09-28).
+1. **User, in this order (the 2026-09-29 commits need migration 0004):**
+   1. Apply the migration as the owner **before pushing**, or the scheduled run fails at its
+      schema check: `$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL`
+   2. `git push`.
+   3. Load the new BDDK history once with `.env` (`fetch_writer`):
+      `uv run tr-banking backfill --start 2014-01-03 --source bddk` (about 30 s).
+   4. For the AI summary, add the GitHub secret `ANTHROPIC_API_KEY` by name
+      (`gh secret set ANTHROPIC_API_KEY --repo EnesAltuNN/tr-banking-dashboard`, which prompts
+      for the value). Without it the step is skipped. A first manual run needs the user's
+      go-ahead (it costs money): `summarize --dry-run` first, then `summarize` with the key
+      in `.env`, or trigger the workflow.
+   5. Reboot the app on share.streamlit.io if the page shows an ImportError (seen 2026-09-28).
 2. **User: add the dashboard screenshot** of the new design and check the README on GitHub.
    - One command writes it to `docs/images/dashboard.png` (the README already links it):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`
@@ -88,9 +97,9 @@ series (deposits, NPL, bank groups) and ratios computed on the fly.
      offer, do not do it unasked.
    - Remind the user to check on github.com that the README's Mermaid architecture diagram
      renders correctly.
-3. **Next roadmap item:** decide with the user between the weekly AI summary (Backlog 8; needs
-   a model choice and an API-key secret the user sets) and resuming module 3 (Backlog 7, see
-   Open questions). Show the plan first.
+3. **Next roadmap item:** resuming module 3 (Backlog 7, see Open questions) needs a decision
+   first; otherwise the smaller Backlog items (14 MPC calendar, 18 policy rate before 2018,
+   19 seasonal card view, 23 phone tables). Show the plan first.
 
 ## Documentation map
 
@@ -119,6 +128,7 @@ series (deposits, NPL, bank groups) and ratios computed on the fly.
   - `DATABASE_URL`, the **`fetch_writer`** session pooler string
     (`postgresql://fetch_writer.<ref>:<pw>@<pooler-host>:5432/postgres`). It never holds the
     owner string.
+  - `ANTHROPIC_API_KEY` (optional): the Claude API key for the weekly summary step.
 - **GitHub CLI:**
   - Installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as EnesAltuNN. It is not
     on the PATH of old terminals, so call it by full path.
@@ -188,7 +198,9 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
 6. ~~Module 2: BKM~~ **done**: 6 monthly series from 2017-01, "Kartlar" tab
 7. Module 3: bank rates/campaigns scraping, **postponed on 2026-09-29** (see Open questions
    for the research findings)
-8. Weekly AI summary: compute changes in Python, LLM only writes text (see Open questions)
+8. ~~Weekly AI summary~~ **done** (2026-09-29): `summary.py` builds the facts (pure), Claude
+   (`claude-opus-5`, `fallbacks: "default"`, JSON output) writes TR/EN text, stored in
+   `summaries` with its input; once per data week; dashboard box above the tabs
 9. ~~`.devcontainer/devcontainer.json` from Streamlit's deploy flow~~ **closed**: deleted (it used
    Python 3.11 + pip and could not install this uv project)
 10. ~~Real, inflation-adjusted values~~ **done**: CPI `TP.TUKFIY2025.GENEL`, prices of the
@@ -239,12 +251,10 @@ If the Supabase data is lost or the project is recreated, run the owner steps on
   latest week most of the month (CPI comes about 3 days after the month ends). The user asked
   for empty cells; an alternative is to show the last week that has CPI, as the loans tab's
   real view does. Ask before changing.
-- **AI summary:**
-  - Which model?
-  - Where does it run? Likely a GitHub Actions step after the fetch, with its own API-key
-    secret.
-  - Which table stores the generated summaries, with inputs and date, so the dashboard can
-    show them?
+- **AI summary (decided 2026-09-29):** `claude-opus-5` (the skill's default; the user can set
+  `SUMMARY_MODEL`), a GitHub Actions step after the fetch with its own `ANTHROPIC_API_KEY`
+  secret, table `summaries` (migration 0004) with the facts as `input`. Open: effort tuning
+  and a small eval of the texts once a few weeks exist.
 
 ## Architecture
 
@@ -282,6 +292,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     secret. The secrets checked are the EVDS key, the full `DATABASE_URL` and its password.
   - `tr-banking clean-raw [--days 30]`: delete raw files older than N days (by modification
     time), for local housekeeping.
+  - `tr-banking summarize [--dry-run] [--force]`: facts of the newest data week from
+    `summary.build_brief`, text from Claude via `summary.write_summary`, stored once per data
+    week in `summaries`. Needs `ANTHROPIC_API_KEY` (not for `--dry-run`).
 - `pipeline.run_update` runs each source independently. A failing source is logged and the
   others still load; the CLI then exits 1.
 - Fetch windows: weekly/daily requests start at `--weeks` back; monthly requests reach back
@@ -310,6 +323,8 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   state_banks, private_banks, foreign_banks and others).
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
+- `summaries(data_date PK, created_at, model, input, text_tr, text_en)` (migration 0004): one
+  AI-written summary per data week, with the JSON facts it was written from.
 - Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
   addition, not a rewrite.
 - Postgres uses native types: `DATE`, `DOUBLE PRECISION`, `TIMESTAMPTZ`, identity ids.
@@ -460,6 +475,7 @@ uv run tr-banking db check                            # connection, migrations, 
 uv run tr-banking check-freshness                     # exit 1 if data is stale
 uv run tr-banking scan-raw                            # exit 1 if a raw file holds a secret
 uv run tr-banking clean-raw [--days 30]               # delete old raw response files
+uv run tr-banking summarize [--dry-run] [--force]     # weekly AI summary (Claude API)
 uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
 uv run --with playwright python scripts/screenshots.py [--url URL] [--all FOLDER]  # README image
 powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task

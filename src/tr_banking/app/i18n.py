@@ -37,6 +37,17 @@ TEXTS: dict[str, dict[Lang, str]] = {
         ),
     },
     "filters": {"tr": "Filtreler", "en": "Filters"},
+    "summary_title": {"tr": "Haftanın özeti", "en": "This week in brief"},
+    "summary_caption": {
+        "tr": (
+            "{week} haftası verileri · Metni yapay zekâ ({model}) yazdı; rakamlar resmî "
+            "verilerden Python ile hesaplandı ve metinle birlikte saklanır."
+        ),
+        "en": (
+            "Data for the week ending {week} · Written by AI ({model}); the numbers were "
+            "computed in Python from official data and are stored with the text."
+        ),
+    },
     "alerts_title": {
         "tr": "**Son haftada olağan dışı değişim**",
         "en": "**Unusual change in the latest week**",

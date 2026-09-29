@@ -22,3 +22,13 @@ CREATE TABLE IF NOT EXISTS observations (
     -- Composite primary key = UNIQUE (series_id, date) + an index for per-series queries.
     PRIMARY KEY (series_id, date)
 );
+
+-- Weekly AI-written summaries (db/migrations/0004_summaries.sql on Postgres).
+CREATE TABLE IF NOT EXISTS summaries (
+    data_date  TEXT PRIMARY KEY,  -- ISO 8601 YYYY-MM-DD, newest weekly data covered
+    created_at TEXT NOT NULL,     -- ISO 8601 UTC timestamp
+    model      TEXT NOT NULL,
+    input      TEXT NOT NULL,     -- JSON facts computed in Python
+    text_tr    TEXT NOT NULL,
+    text_en    TEXT NOT NULL
+);

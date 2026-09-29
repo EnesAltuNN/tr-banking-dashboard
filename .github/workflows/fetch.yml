@@ -77,6 +77,22 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run tr-banking check-freshness
 
+      # Weekly AI summary: Python computes the facts, Claude only writes the text. It runs
+      # once per data week (the Friday run after new data; a Tuesday run finds it done) and is
+      # skipped until the ANTHROPIC_API_KEY secret exists. The data is stored before this step,
+      # so a failure here cannot lose any of it.
+      - name: Weekly AI summary
+        if: ${{ !cancelled() && steps.schema.outcome == 'success' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::notice::ANTHROPIC_API_KEY is not set: skipping the weekly summary"
+            exit 0
+          fi
+          uv run tr-banking summarize
+
       # Artifacts of a public repository are public: upload only after proving no secret is
       # inside (the files hold response bodies only, and the key is masked when saving).
       - name: Scan raw responses for secrets
@@ -84,6 +100,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           EVDS_API_KEY: ${{ secrets.EVDS_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run tr-banking scan-raw
 

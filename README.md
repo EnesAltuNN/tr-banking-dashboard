@@ -49,14 +49,17 @@ dashboard, in nominal and inflation-adjusted terms.
     loan-to-deposit ratio and bank-group shares on the fly from BDDK's tables.
   - Alerts flag a weekly change far outside the series' own past year (a robust score on
     the median and MAD; the threshold was calibrated on 12 years of history).
+- **A weekly summary written by Claude, with the numbers kept honest:** Python computes the
+  facts, the model only writes a short TR/EN text about them, and the facts are stored next
+  to the text so every sentence can be checked.
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).
   - Light and dark themes with a color palette checked for color-vision deficiency; each
     category (housing, auto, personal, cards, commercial) keeps one color in every chart.
   - A one-hour shared cache keeps the public page light on the database, and only the open
     tab runs.
-- **Tested:** 340+ tests, most of them on real recorded API responses. CI runs them against a
-  real Postgres 17 container, including tests that prove what each database role can and
-  cannot do.
+- **Tested:** 380+ tests, most of them on real recorded API responses; the Claude API call is
+  tested against a mocked HTTP transport. CI runs them against a real Postgres 17 container,
+  including tests that prove what each database role can and cannot do.
 
 ## Architecture
 
@@ -66,6 +69,7 @@ flowchart LR
     BDDK["BDDK weekly bulletin"] --> GHA
     BKM["BKM monthly card statistics"] --> GHA
     GHA["GitHub Actions<br/>Tue + Fri 04:00 UTC<br/>role: fetch_writer"] -->|"upsert"| DB[("Supabase Postgres<br/>RLS on every table")]
+    GHA <-->|"facts in, text out"| CLAUDE["Claude API<br/>weekly summary"]
     DB -->|"SELECT, cached 1 h"| APP["Streamlit Community Cloud<br/>role: dashboard_reader"]
     APP --> USERS(("Visitors"))
 ```
@@ -176,12 +180,12 @@ Done:
 - ✔ **Banking sector:** BDDK deposits, non-performing loans and bank groups (state, domestic
   private, foreign), with the ratios built from them.
 - ✔ **Alerts:** unusual weekly changes flagged above the tabs.
+- ✔ **Weekly AI summary:** facts from Python, text from Claude, shown above the tabs.
 
 Planned, in order:
 1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
    2026-09-29 found that most banks show personalised rates through JavaScript calculators,
    not comparable rates in their HTML; it needs a decision on browser automation first.
-2. **Weekly AI summary:** changes computed in Python; a language model only writes the text.
 
 Other ideas:
 - the MPC meeting calendar, so decisions that kept the rate unchanged are marked too;

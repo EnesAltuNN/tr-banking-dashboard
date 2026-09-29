@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 from tr_banking import db as db_module
 from tr_banking import settings as settings_module
 from tr_banking.config import load_series_config
-from tr_banking.db import Repository, SqliteRepository
+from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import parse_bddk_response
 from tr_banking.sources.bkm import parse_bkm_page, parse_series_code, sum_cells
@@ -726,3 +726,39 @@ def test_unusual_weekly_change_is_flagged_above_the_tabs(use_db: Callable, tmp_p
     assert "Konut kredileri (TCMB EVDS)" in warning.value
     assert "**-6,0%**" in warning.value
     assert "İhtiyaç kredileri" not in warning.value  # steady series stay quiet
+
+
+# --- weekly AI summary ---
+
+
+def test_weekly_summary_is_shown_and_labelled(use_db: Callable, tmp_path: Path) -> None:
+    db_path = populated_db(tmp_path / "test.db")
+    with SqliteRepository(db_path) as repo:
+        repo.upsert_summary(
+            Summary(
+                date(2024, 7, 12),
+                datetime(2024, 7, 19, 5, 0, tzinfo=UTC),
+                "claude-opus-5",
+                "{}",
+                "Tüketici kredileri yıllık %37,7 arttı.",
+                "Consumer loans rose 37.7%.",
+            )
+        )
+    use_db(db_path)
+    app = run_dashboard()
+
+    text = page_text(app)
+    assert "Haftanın özeti" in text
+    assert "Tüketici kredileri yıllık %37,7 arttı." in text
+    assert "Metni yapay zekâ (claude-opus-5) yazdı" in text
+
+    app.radio(key="lang").set_value("en").run()
+    assert "Consumer loans rose 37.7%." in page_text(app)
+
+
+def test_no_summary_box_without_a_summary(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    assert "Haftanın özeti" not in page_text(app)

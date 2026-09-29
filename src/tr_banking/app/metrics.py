@@ -2,8 +2,12 @@
 
 from collections.abc import Iterable
 from datetime import date, timedelta
+from typing import NamedTuple
 
 import pandas as pd
+
+from tr_banking.config import SeriesConfig, SeriesSpec
+from tr_banking.sources.bddk import parse_series_code as bddk_key
 
 WEEK = timedelta(weeks=1)
 # 52 weeks (not 365 days) lands on the same weekday, so a weekly series has a value there.
@@ -268,3 +272,127 @@ def _summarize_series(series_id: int, group: pd.DataFrame, frequency: str) -> tu
         pct_change(last_value, previous),
         pct_change(last_value, year_ago),
     )
+
+
+# --- selecting series by config (category, deflator, policy rate) ---
+
+BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
+
+
+def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
+    """Adds each series' config-only `category` (not stored in the database)."""
+    categories = {(spec.source, spec.code): spec.category for spec in config.series}
+    return series.assign(
+        category=[categories.get((row.source, row.code)) for row in series.itertuples()]
+    )
+
+
+def spec_id(series: pd.DataFrame, spec: SeriesSpec | None) -> int | None:
+    """Database id of a configured series, or None if it is not configured or not loaded."""
+    if spec is None:
+        return None
+    ids = series.loc[(series["source"] == spec.source) & (series["code"] == spec.code), "id"]
+    return int(ids.iloc[0]) if not ids.empty else None
+
+
+def spec_observations(
+    series: pd.DataFrame, observations: pd.DataFrame, spec: SeriesSpec | None
+) -> pd.DataFrame:
+    """date/value rows of a configured series such as the deflator (may be empty)."""
+    rows = observations[observations["series_id"] == spec_id(series, spec)]
+    return rows[["date", "value"]].reset_index(drop=True)
+
+
+def category_id(series: pd.DataFrame, category: str, monetary: bool | None = None) -> int | None:
+    """The first series of a category, optionally only TRY amounts (or only non-amounts)."""
+    rows = series[series["category"] == category]
+    if monetary is not None:
+        rows = rows[rows["unit"].isin(MONETARY_UNITS) == monetary]
+    return int(rows["id"].iloc[0]) if not rows.empty else None
+
+
+# --- banking sector ratios ---
+
+
+class Ratio(NamedTuple):
+    """A ratio of two stored series, computed for display only (never stored)."""
+
+    key: str  # i18n text key, e.g. "ratio_npl"
+    category: str | None  # color of its chart
+    values: pd.DataFrame  # date/value in %
+
+
+def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Ratio]:
+    """NPL ratios, FX share of deposits, loan-to-deposit ratio and bank-group shares.
+
+    Loan totals come from BDDK's loan table (module "credit"), so every ratio compares BDDK
+    with BDDK. A ratio whose inputs are not loaded is left out.
+    """
+    bddk_loans = series[(series["source"] == "bddk") & (series["module"] == "credit")]
+    banking = series[series["module"] == "banking"]
+
+    def rows(series_id: int | None) -> pd.DataFrame | None:
+        if series_id is None:
+            return None
+        found = observations[observations["series_id"] == series_id]
+        return found if not found.empty else None
+
+    def group(category: str, row: str) -> int | None:
+        matches = banking[
+            (banking["category"] == category)
+            & (banking["code"].map(lambda code: bddk_key(code).row) == row)
+        ]
+        return int(matches["id"].iloc[0]) if not matches.empty else None
+
+    loans = rows(category_id(bddk_loans, "total"))
+    deposits = rows(category_id(banking, "deposits"))
+    definitions: list[tuple[str, str | None, pd.DataFrame | None, pd.DataFrame | None, bool]] = [
+        ("ratio_npl", "npl", rows(category_id(banking, "npl")), loans, True),
+        (
+            "ratio_npl_consumer",
+            "npl_consumer",
+            rows(category_id(banking, "npl_consumer")),
+            rows(category_id(bddk_loans, "consumer")),
+            True,
+        ),
+        (
+            "ratio_npl_commercial",
+            "npl_commercial",
+            rows(category_id(banking, "npl_commercial")),
+            rows(category_id(bddk_loans, "commercial")),
+            True,
+        ),
+        (
+            "ratio_fx_share",
+            "fx_deposits",
+            rows(category_id(banking, "fx_deposits")),
+            deposits,
+            False,
+        ),
+        ("ratio_loan_deposit", None, loans, deposits, False),
+    ]
+    for bank_group in BANK_GROUPS:
+        definitions.append(
+            (
+                f"ratio_loans_{bank_group}",
+                bank_group,
+                rows(group(bank_group, "1.0.1")),
+                loans,
+                False,
+            )
+        )
+    for bank_group in BANK_GROUPS:
+        definitions.append(
+            (
+                f"ratio_deposits_{bank_group}",
+                bank_group,
+                rows(group(bank_group, "4.0.1")),
+                deposits,
+                False,
+            )
+        )
+    return [
+        Ratio(key, category, ratio_pct(part, base, of_total))
+        for key, category, part, base, of_total in definitions
+        if part is not None and base is not None
+    ]

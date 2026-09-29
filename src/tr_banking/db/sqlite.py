@@ -38,6 +38,11 @@ class SqliteRepository(Repository):
     def _fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]:
         return self._conn.execute(sql, params).fetchall()
 
+    def _has_table(self, name: str) -> bool:
+        return bool(
+            self._fetch_all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [name])
+        )
+
     def _write_one(self, sql: str, params: Sequence[Any]) -> list[tuple[Any, ...]]:
         # `with conn` wraps the statement in a transaction: commit on success, rollback on error.
         with self._conn:

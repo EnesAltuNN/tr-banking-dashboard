@@ -178,7 +178,7 @@ class PostgresRepository(Repository):
             self._fetch_all(
                 "SELECT relname, relrowsecurity FROM pg_class "
                 "WHERE relnamespace = current_schema()::regnamespace "
-                "AND relname IN ('series', 'observations', 'schema_migrations')"
+                "AND relname IN ('series', 'observations', 'schema_migrations', 'summaries')"
             )
         )
         return {"server_version": version, "role": role, "migrations": migrations, "rls": rls}
@@ -187,6 +187,10 @@ class PostgresRepository(Repository):
         with self._conn.cursor() as cursor:
             cursor.execute(sql, params)
             return cursor.fetchall()
+
+    def _has_table(self, name: str) -> bool:
+        [(exists,)] = self._fetch_all("SELECT to_regclass(%s) IS NOT NULL", [name])
+        return bool(exists)
 
     def _write_one(self, sql: str, params: Sequence[Any]) -> list[tuple[Any, ...]]:
         with self._conn.transaction(), self._conn.cursor() as cursor:

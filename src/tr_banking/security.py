@@ -12,10 +12,12 @@ MIN_SECRET_LENGTH = 6
 
 
 def secret_values(settings: Settings) -> list[str]:
-    """Every configured secret: the EVDS key, the full DATABASE_URL and its password alone."""
+    """Every configured secret: the EVDS and Claude API keys, the full DATABASE_URL and its
+    password alone."""
     values: list[str] = []
-    if settings.evds_api_key is not None:
-        values.append(settings.evds_api_key.get_secret_value())
+    for key in (settings.evds_api_key, settings.anthropic_api_key):
+        if key is not None:
+            values.append(key.get_secret_value())
     if settings.database_url is not None:
         url = settings.database_url.get_secret_value()
         values.append(url)

@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -6,7 +7,7 @@ import pandas as pd
 import pytest
 
 from tr_banking.config import SeriesSpec
-from tr_banking.db import PostgresRepository, Repository, SqliteRepository
+from tr_banking.db import PostgresRepository, Repository, SqliteRepository, Summary
 
 HOUSING = SeriesSpec(
     source="evds",
@@ -198,3 +199,39 @@ def test_latest_dates(repo: Repository) -> None:
     assert latest["frequency"].tolist() == ["weekly", "weekly"]
     assert latest["latest_date"].iloc[0] == pd.Timestamp("2026-09-11")
     assert pd.isna(latest["latest_date"].iloc[1])  # no data yet
+
+
+# --- weekly summaries ---
+
+
+def summary(day: date, text: str = "Özet", model: str = "claude-opus-5") -> Summary:
+    facts = json.dumps({"data_week": day.isoformat()})
+    return Summary(day, SECOND_FETCH, model, facts, text, f"{text} (en)")
+
+
+def test_summaries_are_upserted_per_data_week(repo: Repository) -> None:
+    assert repo.latest_summary() is None
+    repo.upsert_summary(summary(date(2026, 9, 11), "Eski"))
+    repo.upsert_summary(summary(date(2026, 9, 18), "İlk"))
+
+    repo.upsert_summary(summary(date(2026, 9, 18), "Yeni", model="claude-opus-4-8"))
+
+    latest = repo.latest_summary()
+    assert latest is not None
+    assert (latest.data_date, latest.text_tr, latest.model) == (
+        date(2026, 9, 18),
+        "Yeni",
+        "claude-opus-4-8",
+    )
+    assert latest.created_at == SECOND_FETCH
+    assert repo.has_summary(date(2026, 9, 11))
+    assert not repo.has_summary(date(2026, 9, 4))
+
+
+def test_latest_summary_without_the_table_is_none(tmp_path: Path) -> None:
+    # A database one migration behind the code: the dashboard must still load.
+    with SqliteRepository(tmp_path / "old.db") as repository:
+        repository.init_schema()
+        repository._conn.execute("DROP TABLE summaries")
+
+        assert repository.latest_summary() is None

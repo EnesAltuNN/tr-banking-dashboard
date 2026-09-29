@@ -28,8 +28,11 @@ class Settings(BaseSettings):
     db_path: Path = PROJECT_ROOT / "data" / "tr_banking.db"
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"
     series_config_path: Path = PROJECT_ROOT / "config" / "series.yaml"
+    # Claude API key for the weekly summary (`tr-banking summarize`); nothing else needs it.
+    anthropic_api_key: SecretStr | None = None
+    summary_model: str = "claude-opus-5"
 
-    @field_validator("evds_api_key", "database_url", mode="before")
+    @field_validator("evds_api_key", "database_url", "anthropic_api_key", mode="before")
     @classmethod
     def _blank_means_unset(cls, value: object) -> object:
         # `DATABASE_URL=` left empty in .env (or an empty CI secret) means "not configured".

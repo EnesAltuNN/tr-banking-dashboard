@@ -104,10 +104,11 @@ has four tabs, each opening with KPI tiles (value, signed change and a one-year 
   deposits) with weekly and yearly changes in pp, charts of the headline ratios, and BDDK's
   deposit and NPL amounts. Bank-group amounts can be added from the sidebar.
 
-Above the tabs, an alert box lists weekly series whose latest change is far outside their own
-past year: more than 5 scaled MADs from the median of the last 52 weekly changes (in % for
-amounts, in points for rates). On the 2014-2026 history that flags about 1.5% of weeks per
-series. When nothing is unusual, one grey line says so.
+Above the tabs, the newest weekly AI summary is shown (labelled as written by AI, with its
+model), when one exists. Below it, an alert box lists weekly series whose latest change is far
+outside their own past year: more than 5 scaled MADs from the median of the last 52 weekly
+changes (in % for amounts, in points for rates). On the 2014-2026 history that flags about
+1.5% of weeks per series. When nothing is unusual, one grey line says so.
 
 Layout:
 - The filters (source, nominal/real, series, date range) live in the sidebar and show only
@@ -217,8 +218,9 @@ Checks along the way:
 ## Automatic fetch (GitHub Actions)
 
 [`.github/workflows/fetch.yml`](../.github/workflows/fetch.yml) runs `db check`,
-`db migrate --check`, `fetch`, `check-freshness` and `scan-raw` against Supabase, as the
-least-privilege `fetch_writer` role.
+`db migrate --check`, `fetch`, `check-freshness`, `summarize` (only with the
+`ANTHROPIC_API_KEY` secret) and `scan-raw` against Supabase, as the least-privilege
+`fetch_writer` role.
 
 - **When:** every **Tuesday and Friday at 04:00 UTC**, which is 07:00 in Istanbul (Türkiye is
   UTC+3 all year).
@@ -241,6 +243,7 @@ Actions*, or with `gh secret set NAME`, which prompts for the value. Do not use
 |---|---|
 | `EVDS_API_KEY` | your EVDS API key (same as in `.env`) |
 | `DATABASE_URL` | the Session pooler string of the least-privilege **`fetch_writer`** role: `postgresql://fetch_writer.<project-ref>:<its password>@<pooler-host>:5432/postgres`. **Not** the owner (`postgres`) string, and not `dashboard_reader`. |
+| `ANTHROPIC_API_KEY` | optional: a Claude API key for the weekly AI summary. Without it the summary step is skipped. |
 
 > **Scheduled runs stop after 60 days without repository activity** in public repositories.
 > GitHub then disables the workflow; re-enable it under **Actions → Weekly fetch → Enable
@@ -339,6 +342,28 @@ If the Supabase data is lost or the project is recreated:
 2. Re-enable both roles (step 4).
 3. Update `.env` and the GitHub and Streamlit secrets if the project ref or passwords changed.
 
+## Weekly AI summary
+
+Python computes the facts of the newest data week (loans, rates, inflation, banking ratios,
+cards, unusual changes); a Claude model (`claude-opus-5` by default, `SUMMARY_MODEL` to change)
+writes a short Turkish and English text about exactly those numbers. The text, the model and
+the facts are stored in the `summaries` table (migration `0004`); the dashboard shows the
+newest one above the tabs.
+
+```powershell
+uv run tr-banking summarize --dry-run   # print the facts; nothing is sent or stored
+uv run tr-banking summarize             # write the summary of the newest data week (once)
+uv run tr-banking summarize --force     # rewrite it
+```
+
+- **Once per data week:** a week that already has a summary is skipped, so the scheduled job
+  (Friday run after new data) makes about one API call a week, a few cents.
+- **Refusals** are handled: the request asks for a server-side fallback
+  (`fallbacks: "default"`); if the whole chain declines, the command fails loudly and stores
+  nothing.
+- **Key:** GitHub secret `ANTHROPIC_API_KEY` for the scheduled job; for a manual run put
+  `ANTHROPIC_API_KEY=...` in `.env`.
+
 ## Project layout
 
 ```
@@ -355,15 +380,16 @@ src/tr_banking/
   db/sqlite.py, schema.sql local SQLite backend
   db/postgres.py           Postgres/Supabase backend, migration runner
   db/migrations/           numbered Postgres migrations (tables, RLS, limited roles)
-  pipeline.py, cli.py      fetch/backfill, db and health-check commands
+  pipeline.py, cli.py      fetch/backfill, summarize, db and health-check commands
+  summary.py               weekly AI summary: facts (pure) and the Claude API call
   freshness.py             stale-series detection (pure)
   security.py              secret scan for files that get published
   app/dashboard.py         Streamlit dashboard
-  app/metrics.py           last value, weekly/yearly % (pure functions)
+  app/metrics.py           changes, real values, ratios, alerts, series selection (pure)
   app/i18n.py              TR/EN texts and number/date formatting (pure functions)
 .github/workflows/         ci.yml (lint + tests on every push), fetch.yml (Tue/Fri fetch)
 docs/                      setup, data sources, security, images
-scripts/                   Windows Task Scheduler scripts for the optional local fetch
+scripts/                   screenshots.py; Windows Task Scheduler scripts (optional local fetch)
 sql/                       one-off SQL to run by hand in Supabase (enable the limited roles)
 .streamlit/config.toml     Streamlit settings (no email prompt, no telemetry, safe errors)
 tests/                     pytest suite with real EVDS and BDDK response fixtures
