@@ -13,6 +13,7 @@ import altair as alt
 import pandas as pd
 import psycopg
 import streamlit as st
+from pandas.io.formats.style import Styler
 from streamlit.delta_generator import DeltaGenerator
 
 from tr_banking.app.i18n import (
@@ -32,19 +33,27 @@ from tr_banking.app.i18n import (
     unit_label,
 )
 from tr_banking.app.metrics import (
+    BANK_GROUPS,
     MONETARY_UNITS,
     YEAR,
+    Ratio,
     annual_inflation,
+    banking_ratios,
+    category_id,
     deflate,
     display_unit,
-    rate_changes,
+    policy_decisions,
     real_rates,
+    spec_id,
+    spec_observations,
     summarize,
     summarize_rates,
+    unusual_changes,
     value_near,
+    with_categories,
 )
-from tr_banking.config import SeriesConfig, SeriesSpec, load_series_config
-from tr_banking.db import StorageError, open_repository
+from tr_banking.config import load_mpc_calendar, load_series_config
+from tr_banking.db import StorageError, Summary, open_repository
 from tr_banking.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -54,7 +63,7 @@ DISPLAY_TZ = ZoneInfo("Europe/Istanbul")
 # every visitor, so a public page costs Supabase at most one connection per hour, not one per
 # visitor or click.
 CACHE_TTL = timedelta(hours=1)
-SECTIONS = ("credit", "rates", "cards")
+SECTIONS = ("credit", "rates", "cards", "banking")
 
 # Categorical palette validated for color-vision deficiency and contrast in each mode (the
 # same steps as chartCategoricalColors in .streamlit/config.toml). Each category keeps one hue
@@ -91,11 +100,23 @@ CATEGORY_HUES = {
     "commercial": "green",
     "personal": "violet",
     "policy": "red",
+    # banking sector tab
+    "fx_deposits": "yellow",
+    "household_deposits": "magenta",
+    "commercial_deposits": "green",
+    "npl": "red",
+    "npl_commercial": "green",
+    "state_banks": "orange",
+    "private_banks": "violet",
+    "foreign_banks": "aqua",
 }
 CROSSHAIR_COLOR = "#898781"
 # Yearly inflation is a reference, not a series of its own: a muted grey, dashed line.
 INFLATION_COLORS = {"light": "#6f6d66", "dark": "#a3a19a"}
 RATE_DECIMALS = 2  # EVDS publishes rates with two decimals, e.g. 41.96
+DATE_FILTER_WIDTH = 290  # px: fits two dd.mm.yyyy dates, and a phone screen
+SERIES_FILTER_WIDTH = 340  # px: the series names fit, and so does the button's panel on a phone
+SOURCE_ICON, MODE_ICON, SERIES_ICON = ":material/database:", ":material/tune:", ":material/list:"
 # Up / down text colors, >= 4.5:1 on each theme's background. The sign (+/-) is always shown
 # too, so the direction never depends on color alone.
 DELTA_COLORS = {
@@ -137,8 +158,8 @@ class Tile(NamedTuple):
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_data(
     storage_key: str, _settings: Settings
-) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None, datetime]:
-    """Series, observations, last fetch time and when this snapshot was read.
+) -> tuple[pd.DataFrame, pd.DataFrame, datetime | None, datetime, Summary | None]:
+    """Series, observations, last fetch time, when this snapshot was read, latest summary.
 
     The connection is opened only on a cache miss and closed right after reading. A pooled
     connection kept open across the app's sleep would go stale, while one short read per hour
@@ -147,9 +168,15 @@ def load_data(
     """
     loaded_at = datetime.now(UTC)
     if _settings.database_url is None and not Path(_settings.db_path).exists():
-        return pd.DataFrame(), pd.DataFrame(), None, loaded_at
+        return pd.DataFrame(), pd.DataFrame(), None, loaded_at, None
     with open_repository(_settings) as repo:
-        return repo.list_series(), repo.get_observations(), repo.last_fetched_at(), loaded_at
+        return (
+            repo.list_series(),
+            repo.get_observations(),
+            repo.last_fetched_at(),
+            loaded_at,
+            repo.latest_summary(),
+        )
 
 
 def storage_key(settings: Settings) -> str:
@@ -163,7 +190,9 @@ def main() -> None:
 
     settings = get_settings()
     try:
-        series, observations, fetched_at, loaded_at = load_data(storage_key(settings), settings)
+        series, observations, fetched_at, loaded_at, summary = load_data(
+            storage_key(settings), settings
+        )
     except (StorageError, psycopg.Error):
         # Details (host, role) go to the server log only; visitors see a plain message.
         logger.exception("dashboard could not read the database")
@@ -173,22 +202,26 @@ def main() -> None:
         st.info(text("no_data", lang))
         st.stop()
     render_info_line(fetched_at, loaded_at, lang)
+    render_weekly_summary(summary, lang)
 
     config = load_series_config(settings.series_config_path)
+    meetings = load_mpc_calendar(settings.mpc_calendar_path).meetings
     series = with_categories(series, config)
+    render_alerts(series, observations, lang)
     price_index = spec_observations(series, observations, config.deflator)
     policy_id = spec_id(series, config.policy_rate)
 
-    st.sidebar.header(text("filters", lang))
     section, tab = render_tabs(lang)
     with tab:
         module = series[series["module"] == section]
         if section == "credit":
             render_credit_view(module, observations, price_index, lang, theme)
         elif section == "rates":
-            render_rates_view(module, observations, price_index, policy_id, lang, theme)
-        else:
+            render_rates_view(module, observations, price_index, policy_id, meetings, lang, theme)
+        elif section == "cards":
             render_cards_view(module, observations, price_index, lang, theme)
+        else:
+            render_banking_view(series, observations, price_index, lang, theme)
     render_footer(lang)
 
 
@@ -207,6 +240,17 @@ def render_header() -> Lang:
     return lang
 
 
+def render_weekly_summary(summary: Summary | None, lang: Lang) -> None:
+    """The weekly AI-written text, clearly labelled as such, above everything else."""
+    if summary is None:
+        return
+    week = format_date(summary.data_date, lang, long=True)
+    with st.container(border=True):
+        st.markdown(f"**{text('summary_title', lang)}**")
+        st.markdown(summary.text_tr if lang == "tr" else summary.text_en)
+        st.caption(text("summary_caption", lang).format(week=week, model=summary.model))
+
+
 def render_info_line(fetched_at: datetime | None, loaded_at: datetime, lang: Lang) -> None:
     """When the fetch job last wrote data, and when this (cached) page read it."""
     updated = "-"
@@ -217,9 +261,44 @@ def render_info_line(fetched_at: datetime | None, loaded_at: datetime, lang: Lan
     st.caption(text("info_line", lang).format(updated=updated, loaded=loaded))
 
 
+def render_alerts(series: pd.DataFrame, observations: pd.DataFrame, lang: Lang) -> None:
+    """Weekly series whose latest change is far outside their own past year (all tabs)."""
+    weekly = series[(series["frequency"] == "weekly") & (series["module"] != "macro")]
+    rows = observations[observations["series_id"].isin(weekly["id"])]
+    points = weekly.loc[weekly["unit"] == "%", "id"]
+    alerts = unusual_changes(rows, points_ids=points)
+    if alerts.empty:
+        st.caption(text("alerts_none", lang), help=text("alerts_method", lang))
+        return
+    meta = weekly.set_index("id")
+    lines = []
+    for alert in alerts.itertuples():
+        in_points = alert.series_id in set(points)
+
+        def shown(value: float, in_points: bool = in_points) -> str:
+            if in_points:
+                return f"{format_signed(value, lang, RATE_DECIMALS)} {text('pp', lang)}"
+            return format_pct(value, lang)
+
+        typical = f"{shown(alert.typical)} ± {shown(alert.spread).lstrip('+')}"
+        lines.append(
+            text("alerts_line", lang).format(
+                name=meta.loc[alert.series_id, f"name_{lang}"],
+                source=SOURCE_LABELS[meta.loc[alert.series_id, "source"]][lang],
+                week=format_date(alert.date, lang, long=True),
+                change=shown(alert.change),
+                typical=typical,
+            )
+        )
+    body = "\n".join(f"- {line}" for line in lines)
+    # A status color never carries meaning alone: the icon and the words say it too.
+    st.warning(f"{text('alerts_title', lang)}\n\n{body}", icon="⚠️")
+    st.caption(text("alerts_method", lang))
+
+
 def render_tabs(lang: Lang) -> tuple[str, DeltaGenerator]:
-    """The open section and its tab. Only that tab's code runs, and only its filters appear in
-    the sidebar. The open section is remembered by key rather than label, so switching the
+    """The open section and its tab. Only that tab's code runs, and only its own filters are
+    drawn. The open section is remembered by key rather than label, so switching the
     language keeps it open (the labels, and with them the widget, change)."""
     st.markdown(TAB_STYLE, unsafe_allow_html=True)
     # `default` is part of the widget's identity: change it only when the language changes.
@@ -244,38 +323,6 @@ def render_footer(lang: Lang) -> None:
     st.caption(text("footer_values", lang))
 
 
-def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
-    """Adds each series' config-only `category` (not stored in the database)."""
-    categories = {(spec.source, spec.code): spec.category for spec in config.series}
-    return series.assign(
-        category=[categories.get((row.source, row.code)) for row in series.itertuples()]
-    )
-
-
-def spec_id(series: pd.DataFrame, spec: SeriesSpec | None) -> int | None:
-    """Database id of a configured series, or None if it is not configured or not loaded."""
-    if spec is None:
-        return None
-    ids = series.loc[(series["source"] == spec.source) & (series["code"] == spec.code), "id"]
-    return int(ids.iloc[0]) if not ids.empty else None
-
-
-def spec_observations(
-    series: pd.DataFrame, observations: pd.DataFrame, spec: SeriesSpec | None
-) -> pd.DataFrame:
-    """date/value rows of a configured series such as the deflator (may be empty)."""
-    rows = observations[observations["series_id"] == spec_id(series, spec)]
-    return rows[["date", "value"]].reset_index(drop=True)
-
-
-def category_id(series: pd.DataFrame, category: str, monetary: bool | None = None) -> int | None:
-    """The first series of a category, optionally only TRY amounts (or only non-amounts)."""
-    rows = series[series["category"] == category]
-    if monetary is not None:
-        rows = rows[rows["unit"].isin(MONETARY_UNITS) == monetary]
-    return int(rows["id"].iloc[0]) if not rows.empty else None
-
-
 def series_color(category: str | None, theme: str) -> str:
     return PALETTE.get(theme, PALETTE["light"])[CATEGORY_HUES.get(category or "", "blue")]
 
@@ -290,13 +337,14 @@ def render_credit_view(
     lang: Lang,
     theme: str,
 ) -> None:
-    source = render_source_picker(series, lang)
-    real = render_value_mode(lang) == "real"
+    bar = filter_bar()
+    source = render_source_picker(bar, series, lang)
+    real = render_value_mode(bar, lang) == "real"
     series = series[series["source"] == source]
     observations = observations[observations["series_id"].isin(series["id"])]
     render_kpis(credit_tiles(series, observations, price_index, lang), theme)
 
-    filters = render_filters(series, observations, lang, key=f"credit_{source}")
+    filters = render_filters(bar, series, observations, lang, key=f"credit_{source}")
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -329,6 +377,7 @@ def render_rates_view(
     observations: pd.DataFrame,
     price_index: pd.DataFrame,
     policy_id: int | None,
+    meetings: list[date],
     lang: Lang,
     theme: str,
 ) -> None:
@@ -338,9 +387,10 @@ def render_rates_view(
         st.info(text("rates_unavailable", lang))
         return
     inflation = annual_inflation(price_index) if not price_index.empty else price_index
+    bar = filter_bar()
     render_kpis(rate_tiles(series, observations, inflation, policy_id, lang), theme)
 
-    filters = render_filters(series, observations, lang, key="rates")
+    filters = render_filters(bar, series, observations, lang, key="rates")
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -351,7 +401,7 @@ def render_rates_view(
     render_rates_table(summary, series, lang, theme)
 
     policy = observations[observations["series_id"] == policy_id]
-    changes = rate_changes(policy[["date", "value"]])
+    changes = policy_decisions(policy[["date", "value"]], meetings)
 
     def in_range(frame: pd.DataFrame) -> pd.DataFrame:
         return frame[frame["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
@@ -382,10 +432,11 @@ def render_cards_view(
     if observations.empty:
         st.info(text("cards_unavailable", lang))
         return
-    real = render_value_mode(lang, key="cards_value_mode") == "real"
+    bar = filter_bar()
+    real = render_value_mode(bar, lang, key="cards_value_mode") == "real"
     render_kpis(card_tiles(series, observations, lang), theme)
 
-    filters = render_filters(series, observations, lang, key="cards")
+    filters = render_filters(bar, series, observations, lang, key="cards")
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -408,7 +459,152 @@ def render_cards_view(
         st.caption(text("cards_note", lang))
 
 
+def render_banking_view(
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    price_index: pd.DataFrame,
+    lang: Lang,
+    theme: str,
+) -> None:
+    """Deposits, non-performing loans and bank groups (BDDK), with ratios computed on the fly.
+
+    Gets every series, not only module "banking": the ratios need BDDK's loan totals too.
+    """
+    banking = series[series["module"] == "banking"]
+    observations_of_tab = observations[observations["series_id"].isin(banking["id"])]
+    if observations_of_tab.empty:
+        st.info(text("banking_unavailable", lang))
+        return
+    bar = filter_bar()
+    real = render_value_mode(bar, lang, key="banking_value_mode") == "real"
+    ratios = banking_ratios(series, observations)
+    render_kpis(banking_tiles(banking, observations, ratios, lang), theme)
+
+    st.markdown(f"**{text('ratios', lang)}**")
+    render_ratio_table(ratios, lang, theme)
+    headline = [ratio for ratio in ratios if ratio.key in HEADLINE_RATIOS]
+    render_ratio_charts(headline, lang, theme)
+
+    st.markdown(f"**{text('amounts', lang)}**")
+    # Bank-group amounts are a click away in the filter bar; sector series show by default.
+    sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(BANK_GROUPS), "id"]]
+    filters = render_filters(bar, banking, observations_of_tab, lang, "banking", sector_ids)
+    if filters is None:
+        return
+    selected_ids, start, end = filters
+    selected = observations_of_tab[observations_of_tab["series_id"].isin(selected_ids)]
+    week = format_date(selected["date"].max(), lang, long=True)
+    st.caption(text("latest_week", lang).format(week=week))
+
+    month = None
+    if real:
+        selected, month = deflate_money(selected, banking, price_index, lang)
+    summary = summarize(selected, as_of=end)
+    render_summary_table(summary, banking, lang, theme, month, show_prev=month is None)
+    in_range = selected[selected["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
+    render_charts(in_range, banking.set_index("id"), selected_ids, lang, theme, month)
+    with st.expander(text("notes", lang)):
+        st.caption(text("banking_note", lang))
+
+
+HEADLINE_RATIOS = ("ratio_npl", "ratio_fx_share", "ratio_loan_deposit", "ratio_loans_state_banks")
+
+
+def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
+    if not ratios:
+        return
+    frames = [ratio.values.assign(series_id=index) for index, ratio in enumerate(ratios)]
+    summary = summarize_rates(pd.concat(frames, ignore_index=True), pd.DataFrame())
+    ratio_col, date_col = text("col_ratio", lang), text("col_date", lang)
+    last_col = f"{text('col_last', lang)} (%)"
+    wow_col, yoy_col = text("col_wow_pp", lang), text("col_yoy_pp", lang)
+    frame = pd.DataFrame(
+        {
+            ratio_col: [text(ratios[i].key, lang) for i in summary["series_id"]],
+            date_col: summary["last_date"].dt.date,
+            last_col: summary["last_value"],
+            wow_col: summary["wow_pp"],
+            yoy_col: summary["yoy_pp"],
+        }
+    )
+    styled = (
+        frame.style.format(
+            lambda value: format_number(value, lang, RATE_DECIMALS), subset=[last_col]
+        )
+        .format(
+            lambda value: format_signed(value, lang, RATE_DECIMALS),
+            subset=[wow_col, yoy_col],
+            na_rep=MISSING,
+        )
+        .format(lambda day: format_date(day, lang), subset=[date_col])
+        .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
+    )
+    show_table(styled, ratio_col)
+
+
+def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk"][lang])
+    for row_start in range(0, len(ratios), CHARTS_PER_ROW):
+        row = ratios[row_start : row_start + CHARTS_PER_ROW]
+        for column, ratio in zip(st.columns(CHARTS_PER_ROW), row, strict=False):
+            color = series_color(ratio.category, theme)
+            with column.container(border=True):
+                chart_title(text(ratio.key, lang), color)
+                st.altair_chart(line_chart(ratio.values, "%", color, lang, axis_format=",.1f"))
+                st.caption(source)
+
+
 # --- KPI tiles ---
+
+
+def banking_tiles(
+    banking: pd.DataFrame, observations: pd.DataFrame, ratios: list[Ratio], lang: Lang
+) -> list[Tile]:
+    """Total deposits (level, yearly %), FX share, NPL ratio and loan-to-deposit ratio."""
+    tiles = []
+    deposits_id = category_id(banking, "deposits")
+    if deposits_id is not None:
+        rows = observations[observations["series_id"] == deposits_id]
+        factor, unit = kpi_unit("million TRY", lang)
+        last = summarize(rows).iloc[0]
+        tiles.append(
+            Tile(
+                label=banking.set_index("id").loc[deposits_id, f"name_{lang}"],
+                value=f"{format_number(last.last_value * factor, lang)} {unit}",
+                change=last.yoy_pct,
+                change_text=format_pct(last.yoy_pct, lang),
+                description=text("desc_yearly", lang),
+                details=text("week_of", lang).format(
+                    week=format_date(last.last_date, lang, long=True)
+                ),
+                sparkline=sparkline(rows, "weekly", factor),
+            )
+        )
+    by_key = {ratio.key: ratio for ratio in ratios}
+    pp = text("pp", lang)
+    for key in ("ratio_fx_share", "ratio_npl", "ratio_loan_deposit"):
+        if key not in by_key:
+            continue
+        values = by_key[key].values
+        last = summarize_rates(values.assign(series_id=0), pd.DataFrame()).iloc[0]
+        tiles.append(
+            Tile(
+                label=text(key, lang),
+                value=f"{format_number(last.last_value, lang, RATE_DECIMALS)}%",
+                change=last.yoy_pp,
+                change_text=f"{format_signed(last.yoy_pp, lang, RATE_DECIMALS)} {pp}",
+                description=text("desc_yearly", lang),
+                details=text("week_of", lang).format(
+                    week=format_date(last.last_date, lang, long=True)
+                ),
+                sparkline=sparkline(values, "weekly"),
+                decimals=RATE_DECIMALS,
+            )
+        )
+    return tiles
+
+
+# --- KPI tiles (other sections) ---
 
 
 def credit_tiles(
@@ -423,7 +619,7 @@ def credit_tiles(
             continue
         rows = observations[observations["series_id"] == series_id]
         name = meta.loc[series_id, f"name_{lang}"]
-        factor, unit = shown_unit(meta.loc[series_id, "unit"], lang, None)
+        factor, unit = kpi_unit(meta.loc[series_id, "unit"], lang)
         last = summarize(rows).iloc[0]
         tiles.append(
             Tile(
@@ -525,7 +721,7 @@ def rate_tiles(
 def card_tiles(series: pd.DataFrame, observations: pd.DataFrame, lang: Lang) -> list[Tile]:
     """Last month's card spending (credit + debit), online payments and foreign cards."""
     meta = series.set_index("id")
-    factor, unit = shown_unit("million TRY", lang, None)
+    factor, unit = kpi_unit("million TRY", lang)
     candidates: list[tuple[str, list[int | None]]] = [
         (
             text("kpi_card_spending", lang),
@@ -590,52 +786,129 @@ def render_kpis(tiles: list[Tile], theme: str) -> None:
         )
 
 
-# --- sidebar filters ---
+# --- filters ---
 
 
-def render_source_picker(series: pd.DataFrame, lang: Lang) -> str:
+def filter_bar() -> DeltaGenerator:
+    """One row of buttons above the tab's content, one button per filter.
+
+    The pickers are called at different points of a view (the source picker before the KPI
+    tiles, the series picker after them), so they draw into this container instead of where
+    they are called. Each button carries its own choice, so the row says what is on screen
+    without being opened, and it stays one short row on a phone instead of a wide box of
+    controls. What the button says comes from the widget's own state, which Streamlit has
+    already updated when the click reruns the script.
+    """
+    return st.container(horizontal=True, gap="small")
+
+
+def translated_start(name: str, lang: Lang, fallback: object) -> object:
+    """Where a widget with translated option labels starts in this language.
+
+    Streamlit keeps a radio's or multiselect's choice as its label. After a language switch the
+    old label matches no option, and the browser shows nothing selected (or the old language's
+    chips). So each such widget gets one key per language (`<name>_<lang>`) and starts from the
+    value the other language's widget had. The start only changes with the language: like the
+    tabs' default, it is part of the widget's identity.
+    """
+    if st.session_state.get(f"{name}__lang") != lang:
+        st.session_state[f"{name}__lang"] = lang
+        st.session_state[f"{name}__start"] = st.session_state.get(f"{name}__value", fallback)
+    return st.session_state[f"{name}__start"]
+
+
+def translated_radio(
+    bar: DeltaGenerator,
+    name: str,
+    label: str,
+    options: list[str],
+    format_func: Callable[[str], str],
+    lang: Lang,
+    icon: str,
+    button_func: Callable[[str], str] | None = None,
+) -> str:
+    """A radio inside its own button. `button_func` shortens the choice for the button."""
+    start = translated_start(name, lang, options[0])
+    shown = st.session_state.get(f"{name}_{lang}", start)
+    shown = shown if shown in options else options[0]
+    with bar.popover(f"{label}: {(button_func or format_func)(shown)}", icon=icon):
+        value = st.radio(
+            label,
+            options=options,
+            index=options.index(start) if start in options else 0,
+            format_func=format_func,
+            key=f"{name}_{lang}",
+            label_visibility="collapsed",
+        )
+    st.session_state[f"{name}__value"] = value
+    return value
+
+
+def render_source_picker(bar: DeltaGenerator, series: pd.DataFrame, lang: Lang) -> str:
     """One source at a time: each has its own history length, units and definitions."""
     available = [source for source in SOURCE_LABELS if source in set(series["source"])]
-    return st.sidebar.radio(
-        text("source", lang),
-        options=available,
-        format_func=lambda source: SOURCE_LABELS[source][lang],
-        key="source",
+    format_source = lambda source: SOURCE_LABELS[source][lang]  # noqa: E731
+    return translated_radio(
+        bar, "source", text("source", lang), available, format_source, lang, SOURCE_ICON
     )
 
 
-def render_value_mode(lang: Lang, key: str = "value_mode") -> str:
-    return st.sidebar.radio(
-        text("value_mode", lang),
-        options=["nominal", "real"],
-        format_func=lambda mode: text(f"mode_{mode}", lang),
-        key=key,
+def render_value_mode(bar: DeltaGenerator, lang: Lang, key: str = "value_mode") -> str:
+    format_mode = lambda mode: text(f"mode_{mode}", lang)  # noqa: E731
+    # "Real (inflation-adjusted)" explains itself in the list but is too long for the button.
+    short_mode = lambda mode: text(f"mode_{mode}_short", lang)  # noqa: E731
+    modes = ["nominal", "real"]
+    return translated_radio(
+        bar, key, text("value_mode", lang), modes, format_mode, lang, MODE_ICON, short_mode
     )
+
+
+def range_label(picked: object, lang: Lang) -> str:
+    """The date button: both dates, or only the first while the user is still choosing."""
+    days = picked if isinstance(picked, tuple) else (picked,)
+    return " – ".join(format_date(day, lang) for day in days)
 
 
 def render_filters(
-    series: pd.DataFrame, observations: pd.DataFrame, lang: Lang, key: str
+    bar: DeltaGenerator,
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    lang: Lang,
+    key: str,
+    default_ids: list[int] | None = None,
 ) -> tuple[list[int], date, date] | None:
-    """Series and date range pickers in the sidebar; None (after a hint) while the choice is
-    incomplete."""
+    """Series and date range pickers in the filter bar; None (after a hint) while the choice
+    is incomplete. All series are selected by default unless `default_ids` says otherwise."""
     labels = {int(row.id): getattr(row, f"name_{lang}") for row in series.itertuples()}
     first, last = observations["date"].min().date(), observations["date"].max().date()
 
-    selected_ids = st.sidebar.multiselect(
-        text("series", lang),
-        options=list(labels),
-        default=list(labels),
-        format_func=labels.__getitem__,
-        key=f"{key}_series",
-    )
-    picked = st.sidebar.date_input(
-        text("date_range", lang),
-        value=(first, last),
-        min_value=first,
-        max_value=last,
-        format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
-        key=f"{key}_range",
-    )
+    name = f"{key}_series"
+    start = translated_start(name, lang, list(labels) if default_ids is None else default_ids)
+    chosen = st.session_state.get(f"{name}_{lang}", start)
+    count = sum(1 for series_id in chosen if series_id in labels)
+    with bar.popover(text("series_count", lang).format(count=count), icon=SERIES_ICON):
+        selected_ids = st.multiselect(
+            text("series", lang),
+            options=list(labels),
+            default=[series_id for series_id in start if series_id in labels],
+            format_func=labels.__getitem__,
+            key=f"{name}_{lang}",
+            label_visibility="collapsed",
+            width=SERIES_FILTER_WIDTH,
+        )
+    st.session_state[f"{name}__value"] = selected_ids
+    with bar.popover(range_label(st.session_state.get(f"{key}_range", (first, last)), lang)):
+        picked = st.date_input(
+            text("date_range", lang),
+            value=(first, last),
+            min_value=first,
+            max_value=last,
+            format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
+            key=f"{key}_range",
+            label_visibility="collapsed",
+            # A date range needs both dates side by side; "content" is not a legal width here.
+            width=DATE_FILTER_WIDTH,
+        )
 
     if not selected_ids:
         st.info(text("select_series", lang))
@@ -669,6 +942,12 @@ def deflate_money(
     return observations, None
 
 
+def kpi_unit(stored_unit: str, lang: Lang) -> tuple[float, str]:
+    """Display multiplier and the short unit label used in KPI tiles."""
+    factor, unit = display_unit(stored_unit)
+    return factor, unit_label(unit, lang, short=True)
+
+
 def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, str]:
     """Display multiplier and label; real TRY values get "..., Aug 2026 prices"."""
     factor, unit = display_unit(stored_unit)
@@ -679,6 +958,17 @@ def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, 
 
 
 # --- tables ---
+
+
+def show_table(styled: Styler, first_col: str) -> None:
+    """Every table looks the same: no inner scroll (they are short) and a pinned first
+    column, so the name stays in view when a wide table scrolls sideways on a phone."""
+    st.dataframe(
+        styled,
+        hide_index=True,
+        height="content",
+        column_config={first_col: st.column_config.Column(pinned=True)},
+    )
 
 
 def render_summary_table(
@@ -731,7 +1021,7 @@ def render_summary_table(
         .format(lambda day: format_period(day, lang), subset=[date_col])
         .map(delta_style(theme), subset=pct_cols)
     )
-    st.dataframe(styled, hide_index=True)
+    show_table(styled, series_col)
 
 
 def delta_style(theme: str, decimals: int = 1) -> Callable[[float], str]:
@@ -776,17 +1066,20 @@ def render_rates_table(summary: pd.DataFrame, series: pd.DataFrame, lang: Lang, 
         # A real rate is a level, not a change: it keeps its sign but gets no up/down color.
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    st.dataframe(styled, hide_index=True)
+    show_table(styled, series_col)
 
 
 # --- charts ---
 
 
 def chart_card(meta: pd.Series, lang: Lang, color: str) -> None:
+    chart_title(str(meta[f"name_{lang}"]), color)
+
+
+def chart_title(name: str, color: str) -> None:
     """Title with the series' color dot (identity is never color alone: the name is there)."""
-    name = html.escape(str(meta[f"name_{lang}"]))
     st.markdown(
-        f'<span style="color:{color}" aria-hidden="true">●</span> **{name}**',
+        f'<span style="color:{color}" aria-hidden="true">●</span> **{html.escape(name)}**',
         unsafe_allow_html=True,
     )
 
@@ -854,7 +1147,7 @@ def rate_chart(
     color: str,
     step: bool = False,
 ) -> alt.LayerChart:
-    """A rate with yearly inflation as a reference line and policy-rate changes as rules.
+    """A rate with yearly inflation as a reference line and MPC decisions as ticks.
 
     Rate and inflation are both in %, so they share one y-axis (never a dual axis). The policy
     rate is drawn as steps: it holds its value until the next decision.
@@ -901,35 +1194,47 @@ def rate_chart(
     ]
     if not changes.empty:
         # Short ticks along the bottom (a rug), not full-height lines: 2019-2025 had dozens of
-        # decisions close together. Last layer, so hovering a tick shows its own tooltip.
+        # decisions close together. Holds are shorter and fainter than hikes and cuts (size
+        # and opacity, not color alone). Last layers, so hovering a tick shows its tooltip.
         # y="height" is the plot's bottom edge whatever size Streamlit fits the chart to.
-        decisions = alt.Chart(changes).mark_tick(
-            color=CROSSHAIR_COLOR, thickness=2, size=14, opacity=0.9, yOffset=-7
+        labeled = changes.assign(
+            label=[text(f"decision_{decision}", lang) for decision in changes["decision"]]
         )
-        layers.append(
-            decisions.encode(
-                x=x,
-                y=alt.value("height"),
-                tooltip=[
-                    alt.Tooltip("date:T", title=text("policy_change", lang), format="%d %b %Y"),
-                    alt.Tooltip("previous:Q", title=text("tooltip_previous", lang), format=",.2f"),
-                    alt.Tooltip("value:Q", title=text("tooltip_new", lang), format=",.2f"),
-                ],
-            )
-        )
+        tooltip = [
+            alt.Tooltip("date:T", title=text("policy_change", lang), format="%d %b %Y"),
+            alt.Tooltip("label:N", title=text("tooltip_decision", lang)),
+            alt.Tooltip("previous:Q", title=text("tooltip_previous", lang), format=",.2f"),
+            alt.Tooltip("value:Q", title=text("tooltip_new", lang), format=",.2f"),
+        ]
+        for moved, size, opacity in ((False, 7, 0.45), (True, 14, 0.9)):
+            ticks = labeled[(labeled["decision"] != "hold") == moved]
+            if not ticks.empty:
+                mark = alt.Chart(ticks).mark_tick(
+                    color=CROSSHAIR_COLOR,
+                    thickness=2,
+                    size=size,
+                    opacity=opacity,
+                    yOffset=-size / 2,
+                )
+                layers.append(mark.encode(x=x, y=alt.value("height"), tooltip=tooltip))
     chart = alt.layer(*layers).properties(height=CHART_HEIGHT)
     return chart.configure(locale=VEGA_LOCALE_TR) if lang == "tr" else chart
 
 
 def line_chart(
-    data: pd.DataFrame, unit: str, color: str, lang: Lang, monthly: bool = False
+    data: pd.DataFrame,
+    unit: str,
+    color: str,
+    lang: Lang,
+    monthly: bool = False,
+    axis_format: str = ",.0f",
 ) -> alt.LayerChart:
     """2px line with a snapping crosshair; each series gets its own y-scale."""
     hover = alt.selection_point(
         fields=["date"], nearest=True, on="pointerover", clear="pointerout", empty=False
     )
     base = alt.Chart(data).encode(x=alt.X("date:T", title=None, axis=DATE_AXIS))
-    y = alt.Y("value:Q", title=unit, scale=alt.Scale(zero=False), axis=alt.Axis(format=",.0f"))
+    y = alt.Y("value:Q", title=unit, scale=alt.Scale(zero=False), axis=alt.Axis(format=axis_format))
 
     line = base.mark_line(color=color, strokeWidth=2, strokeCap="round", strokeJoin="round")
     # Invisible full-height rules make the whole column the hover target, not the thin line.

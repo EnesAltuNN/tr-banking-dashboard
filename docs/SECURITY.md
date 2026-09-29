@@ -9,8 +9,8 @@ do what, and the safeguards that keep secrets out of public places.
 |---|---|---|
 | You, one-off (owner string from your password manager) | `postgres` (table owner) | everything: applying migrations (DDL), disaster recovery |
 | You, daily (`.env`) | `fetch_writer` | same as the scheduled fetch |
-| Scheduled fetch (GitHub Actions) | `fetch_writer` | `SELECT`/`INSERT`/`UPDATE` on `series` and `observations`, `SELECT` on `schema_migrations`; no delete, no schema changes |
-| Dashboard (Streamlit Cloud) | `dashboard_reader` | `SELECT` on `series` and `observations` only; sessions are read-only |
+| Scheduled fetch (GitHub Actions) | `fetch_writer` | `SELECT`/`INSERT`/`UPDATE` on `series`, `observations` and `summaries`, `SELECT` on `schema_migrations`; no delete, no schema changes |
+| Dashboard (Streamlit Cloud) | `dashboard_reader` | `SELECT` on `series`, `observations` and `summaries` only; sessions are read-only |
 | Supabase REST API (`anon`, `authenticated`) | - | nothing |
 
 - **The owner string is stored in no file at all,** only in a password manager. It is typed in
@@ -44,7 +44,7 @@ Actions would put full control of the database one leaked secret away. Instead:
 Supabase serves the `public` schema over its REST API (PostgREST) as the `anon` and
 `authenticated` roles. How it is locked out:
 - Row Level Security is enabled on every table (`series`, `observations`,
-  `schema_migrations`).
+  `schema_migrations`, `summaries`).
 - There is no policy for `anon`/`authenticated`, and their table privileges are revoked, so
   REST requests get `permission denied`.
 - Policies exist only for `dashboard_reader` (SELECT) and `fetch_writer` (one per allowed
@@ -68,6 +68,7 @@ curl -s "https://<project-ref>.supabase.co/rest/v1/series?select=*" -H "apikey: 
 | Secret | Where | Never in |
 |---|---|---|
 | EVDS API key | `.env`, GitHub secret `EVDS_API_KEY` | the repo, logs, URLs |
+| Claude API key (weekly summary) | GitHub secret `ANTHROPIC_API_KEY`; optionally `.env` for manual runs | the repo, logs, Streamlit (the dashboard only reads the stored text) |
 | `fetch_writer` connection string | `.env`, GitHub secret `DATABASE_URL` | the repo, Streamlit |
 | `dashboard_reader` connection string | Streamlit secret `DATABASE_URL` | the repo, GitHub |
 | Owner (`postgres`) connection string | password manager only | any file, GitHub, Streamlit |
@@ -92,6 +93,16 @@ debugging. Artifacts of a public repository are public, so:
 - **`tr-banking scan-raw` checks every file** (name and content) against the real secret
   values: the EVDS key, the full `DATABASE_URL` and its password. The upload step runs only if
   that scan passes.
+
+## The AI-written summary
+
+- **The model sees only facts computed in Python** from the database (no secrets, no raw
+  responses), and those facts are stored next to its text (`summaries.input`), so every
+  sentence can be checked against its numbers.
+- **The key is used by one workflow step only** (`Weekly AI summary`), not by the dashboard.
+  `scan-raw` checks the raw files for it as well.
+- **The dashboard labels the text** as written by AI and names the model that wrote it; a
+  server-side fallback model is named too.
 
 ## Public dashboard
 

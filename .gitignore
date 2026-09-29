@@ -16,7 +16,9 @@ __pycache__/
 # Raw data and logs
 data/raw/
 data/logs/
+data/screenshots/
 
 # OS files
 .DS_Store
 Thumbs.db
+graphify-out/

@@ -2,8 +2,12 @@
 
 from collections.abc import Iterable
 from datetime import date, timedelta
+from typing import NamedTuple
 
 import pandas as pd
+
+from tr_banking.config import SeriesConfig, SeriesSpec
+from tr_banking.sources.bddk import parse_series_code as bddk_key
 
 WEEK = timedelta(weeks=1)
 # 52 weeks (not 365 days) lands on the same weekday, so a weekly series has a value there.
@@ -109,6 +113,34 @@ def rate_changes(rates: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def policy_decisions(rates: pd.DataFrame, meetings: Iterable[date]) -> pd.DataFrame:
+    """MPC decisions read from the policy rate (date/value rows): "hike", "cut" or "hold".
+
+    A meeting compares the rate on its day (the CBRT applies a decision from the meeting day)
+    with the last rate before it; meetings outside the data (before it, or still to come) are
+    left out. A change on a day that is not a listed meeting is kept as well, so an unscheduled
+    meeting or a calendar not yet updated never hides a decision.
+    """
+    ordered = rates.sort_values("date")
+    rows = []
+    for meeting in pd.to_datetime(list(meetings)):
+        before = ordered.loc[ordered["date"] < meeting, "value"]
+        after = ordered.loc[ordered["date"] >= meeting, "value"]
+        if not before.empty and not after.empty:
+            rows.append((meeting, before.iloc[-1], after.iloc[0]))
+    listed = {row[0] for row in rows}
+    rows += [
+        (change.date, change.previous, change.value)
+        for change in rate_changes(ordered).itertuples()
+        if change.date not in listed
+    ]
+    frame = pd.DataFrame(rows, columns=["date", "previous", "value"])
+    frame["decision"] = "hold"
+    frame.loc[frame["value"] > frame["previous"], "decision"] = "hike"
+    frame.loc[frame["value"] < frame["previous"], "decision"] = "cut"
+    return frame.sort_values("date").reset_index(drop=True)
+
+
 def summarize_rates(
     observations: pd.DataFrame,
     inflation: pd.DataFrame,
@@ -151,6 +183,73 @@ def real_rates(rates: pd.DataFrame, inflation: pd.DataFrame) -> pd.DataFrame:
     month_inflation = rates["date"].dt.to_period("M").map(by_month(inflation))
     real = rates.assign(value=rates["value"] - month_inflation)[["date", "value"]]
     return real[month_inflation.notna()].reset_index(drop=True)
+
+
+def ratio_pct(
+    numerator: pd.DataFrame, denominator: pd.DataFrame, of_total: bool = False
+) -> pd.DataFrame:
+    """date/value rows of numerator / denominator in %, on the dates both have.
+
+    `of_total` adds the numerator to the denominator. The NPL ratio needs it: BDDK's loan table
+    holds performing loans only, and the ratio is NPL / (loans + NPL), as in BDDK's reports.
+    """
+    merged = numerator[["date", "value"]].merge(
+        denominator[["date", "value"]], on="date", suffixes=("_part", "_base")
+    )
+    base = merged["value_base"] + (merged["value_part"] if of_total else 0)
+    ratio = pd.DataFrame({"date": merged["date"], "value": merged["value_part"] / base * 100})
+    return ratio.sort_values("date").reset_index(drop=True)
+
+
+# Alerts compare the latest weekly change with the series' own past year (median and MAD, which
+# ignore the odd extreme week). A robust score of 5 flagged about 1.5% of weeks per series on
+# the 2014-2026 history: rare enough to mean something, about one alert every two weeks over
+# all 30 weekly series.
+ALERT_THRESHOLD = 5.0
+ALERT_WINDOW_WEEKS = 52
+ALERT_MIN_HISTORY_WEEKS = 26
+ALERT_COLUMNS = ["series_id", "date", "change", "typical", "spread", "score"]
+
+
+def weekly_changes(values: pd.Series, in_points: bool) -> pd.Series:
+    """Changes between weeks exactly 7 days apart: in % or, for rates, in points."""
+    values = values.sort_index()
+    change = values.diff() if in_points else values.pct_change() * 100
+    consecutive = values.index.to_series().diff() == pd.Timedelta(days=7)
+    return change[consecutive].dropna()
+
+
+def unusual_changes(
+    observations: pd.DataFrame,
+    points_ids: Iterable[int] = (),
+    threshold: float = ALERT_THRESHOLD,
+) -> pd.DataFrame:
+    """Series whose latest weekly change is far outside their own past year.
+
+    score = (latest change - median) / (1.4826 * MAD) over the previous ALERT_WINDOW_WEEKS
+    changes (1.4826 * MAD matches the standard deviation for normal data). A series needs
+    ALERT_MIN_HISTORY_WEEKS of history, and a flat history (MAD 0) gives no score.
+    `points_ids` are rates and ratios, whose changes are measured in points, not %.
+    """
+    points = set(points_ids)
+    rows = []
+    for series_id, group in observations.groupby("series_id", sort=True):
+        values = group.set_index("date")["value"]
+        changes = weekly_changes(values, in_points=series_id in points)
+        if changes.empty or changes.index[-1] != values.index.max():
+            continue  # the latest week has no change (a gap before it)
+        history = changes.iloc[:-1].tail(ALERT_WINDOW_WEEKS)
+        if len(history) < ALERT_MIN_HISTORY_WEEKS:
+            continue
+        typical = history.median()
+        spread = 1.4826 * (history - typical).abs().median()
+        if spread == 0:
+            continue
+        latest = changes.iloc[-1]
+        score = (latest - typical) / spread
+        if abs(score) >= threshold:
+            rows.append((series_id, changes.index[-1], latest, typical, spread, score))
+    return pd.DataFrame(rows, columns=ALERT_COLUMNS)
 
 
 def value_near(values: pd.Series, target: pd.Timestamp) -> float:
@@ -201,3 +300,127 @@ def _summarize_series(series_id: int, group: pd.DataFrame, frequency: str) -> tu
         pct_change(last_value, previous),
         pct_change(last_value, year_ago),
     )
+
+
+# --- selecting series by config (category, deflator, policy rate) ---
+
+BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
+
+
+def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
+    """Adds each series' config-only `category` (not stored in the database)."""
+    categories = {(spec.source, spec.code): spec.category for spec in config.series}
+    return series.assign(
+        category=[categories.get((row.source, row.code)) for row in series.itertuples()]
+    )
+
+
+def spec_id(series: pd.DataFrame, spec: SeriesSpec | None) -> int | None:
+    """Database id of a configured series, or None if it is not configured or not loaded."""
+    if spec is None:
+        return None
+    ids = series.loc[(series["source"] == spec.source) & (series["code"] == spec.code), "id"]
+    return int(ids.iloc[0]) if not ids.empty else None
+
+
+def spec_observations(
+    series: pd.DataFrame, observations: pd.DataFrame, spec: SeriesSpec | None
+) -> pd.DataFrame:
+    """date/value rows of a configured series such as the deflator (may be empty)."""
+    rows = observations[observations["series_id"] == spec_id(series, spec)]
+    return rows[["date", "value"]].reset_index(drop=True)
+
+
+def category_id(series: pd.DataFrame, category: str, monetary: bool | None = None) -> int | None:
+    """The first series of a category, optionally only TRY amounts (or only non-amounts)."""
+    rows = series[series["category"] == category]
+    if monetary is not None:
+        rows = rows[rows["unit"].isin(MONETARY_UNITS) == monetary]
+    return int(rows["id"].iloc[0]) if not rows.empty else None
+
+
+# --- banking sector ratios ---
+
+
+class Ratio(NamedTuple):
+    """A ratio of two stored series, computed for display only (never stored)."""
+
+    key: str  # i18n text key, e.g. "ratio_npl"
+    category: str | None  # color of its chart
+    values: pd.DataFrame  # date/value in %
+
+
+def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Ratio]:
+    """NPL ratios, FX share of deposits, loan-to-deposit ratio and bank-group shares.
+
+    Loan totals come from BDDK's loan table (module "credit"), so every ratio compares BDDK
+    with BDDK. A ratio whose inputs are not loaded is left out.
+    """
+    bddk_loans = series[(series["source"] == "bddk") & (series["module"] == "credit")]
+    banking = series[series["module"] == "banking"]
+
+    def rows(series_id: int | None) -> pd.DataFrame | None:
+        if series_id is None:
+            return None
+        found = observations[observations["series_id"] == series_id]
+        return found if not found.empty else None
+
+    def group(category: str, row: str) -> int | None:
+        matches = banking[
+            (banking["category"] == category)
+            & (banking["code"].map(lambda code: bddk_key(code).row) == row)
+        ]
+        return int(matches["id"].iloc[0]) if not matches.empty else None
+
+    loans = rows(category_id(bddk_loans, "total"))
+    deposits = rows(category_id(banking, "deposits"))
+    definitions: list[tuple[str, str | None, pd.DataFrame | None, pd.DataFrame | None, bool]] = [
+        ("ratio_npl", "npl", rows(category_id(banking, "npl")), loans, True),
+        (
+            "ratio_npl_consumer",
+            "npl_consumer",
+            rows(category_id(banking, "npl_consumer")),
+            rows(category_id(bddk_loans, "consumer")),
+            True,
+        ),
+        (
+            "ratio_npl_commercial",
+            "npl_commercial",
+            rows(category_id(banking, "npl_commercial")),
+            rows(category_id(bddk_loans, "commercial")),
+            True,
+        ),
+        (
+            "ratio_fx_share",
+            "fx_deposits",
+            rows(category_id(banking, "fx_deposits")),
+            deposits,
+            False,
+        ),
+        ("ratio_loan_deposit", None, loans, deposits, False),
+    ]
+    for bank_group in BANK_GROUPS:
+        definitions.append(
+            (
+                f"ratio_loans_{bank_group}",
+                bank_group,
+                rows(group(bank_group, "1.0.1")),
+                loans,
+                False,
+            )
+        )
+    for bank_group in BANK_GROUPS:
+        definitions.append(
+            (
+                f"ratio_deposits_{bank_group}",
+                bank_group,
+                rows(group(bank_group, "4.0.1")),
+                deposits,
+                False,
+            )
+        )
+    return [
+        Ratio(key, category, ratio_pct(part, base, of_total))
+        for key, category, part, base, of_total in definitions
+        if part is not None and base is not None
+    ]

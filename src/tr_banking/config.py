@@ -1,5 +1,6 @@
 """Load and validate config/series.yaml into typed models."""
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # only needs a code change, never a schema migration.
 Source = Literal["evds", "bddk", "bkm", "bank_site"]
 Frequency = Literal["daily", "weekly", "monthly"]
-Module = Literal["credit", "cards", "rates", "macro"]
+Module = Literal["credit", "cards", "rates", "banking", "macro"]
 # What a series measures, independent of its source. The dashboard gives each category one
 # color in every chart and uses it to pick the KPI tiles.
 Category = Literal[
@@ -25,6 +26,17 @@ Category = Literal[
     "policy",
     "online",
     "foreign",
+    # banking sector (deposits, non-performing loans, bank groups)
+    "deposits",
+    "fx_deposits",
+    "household_deposits",
+    "commercial_deposits",
+    "npl",
+    "npl_consumer",
+    "npl_commercial",
+    "state_banks",
+    "private_banks",
+    "foreign_banks",
 ]
 
 
@@ -87,3 +99,24 @@ def load_series_config(path: Path) -> SeriesConfig:
     with path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return SeriesConfig.model_validate(data)
+
+
+class MpcCalendar(BaseModel):
+    """CBRT Monetary Policy Committee meeting dates (config/mpc_meetings.yaml)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    meetings: list[date] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_order(self) -> "MpcCalendar":
+        # Strictly increasing: catches a duplicate or a typo'd year when a line is added.
+        for earlier, later in zip(self.meetings, self.meetings[1:], strict=False):
+            if later <= earlier:
+                raise ValueError(f"meetings must be in increasing order: {earlier} then {later}")
+        return self
+
+
+def load_mpc_calendar(path: Path) -> MpcCalendar:
+    with path.open(encoding="utf-8") as f:
+        return MpcCalendar.model_validate(yaml.safe_load(f))

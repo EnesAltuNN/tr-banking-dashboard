@@ -1,22 +1,26 @@
 """Command line entry point for fetching, database setup and CI health checks."""
 
 import argparse
+import json
 import logging
 import sqlite3
+import sys
 from collections.abc import Sequence
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
+import anthropic
 import pandas as pd
 import psycopg
 
 from tr_banking.config import load_series_config
-from tr_banking.db import PostgresRepository, Repository, StorageError, open_repository
+from tr_banking.db import PostgresRepository, Repository, StorageError, Summary, open_repository
 from tr_banking.db.postgres import describe_connection
 from tr_banking.freshness import find_stale
 from tr_banking.pipeline import IMPLEMENTED_SOURCES, UpdateError, run_update
 from tr_banking.security import files_containing_secrets, mask, secret_values
 from tr_banking.settings import get_settings
 from tr_banking.sources.common import SourceApiError, remove_old_files
+from tr_banking.summary import SummaryError, build_brief, write_summary
 
 logger = logging.getLogger("tr_banking.cli")
 
@@ -42,6 +46,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return check_freshness(args.source)
         elif args.command == "scan-raw":
             return scan_raw()
+        elif args.command == "summarize":
+            return summarize(args.dry_run, args.force)
         elif args.command == "clean-raw":
             return clean_raw(args.days)
         else:
@@ -51,7 +57,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 start, end = args.start, args.end or today
             sources = (args.source,) if args.source else IMPLEMENTED_SOURCES
             run_update(get_settings(), start, end, sources)
-    except (UpdateError, SourceApiError, StorageError, ValueError, psycopg.Error) as exc:
+    except (
+        UpdateError,
+        SourceApiError,
+        StorageError,
+        SummaryError,
+        anthropic.APIError,
+        ValueError,
+        psycopg.Error,
+    ) as exc:
         # Expected failures: one clear line (full traceback with -v), non-zero exit code.
         logger.error("%s failed: %s", args.command, exc, exc_info=args.verbose)
         return 1
@@ -130,6 +144,33 @@ def scan_raw() -> int:
     if leaks:
         return 1
     logger.info("scanned %d raw files: no secrets found", len(files))
+    return 0
+
+
+def summarize(dry_run: bool, force: bool) -> int:
+    """Write the weekly summary of the newest data week, once per week.
+
+    The facts come from the database; the model only writes the text. With --dry-run the
+    facts are printed and nothing is sent or stored.
+    """
+    settings = get_settings()
+    config = load_series_config(settings.series_config_path)
+    with open_repository(settings) as repo:
+        repo.ensure_ready()
+        brief = build_brief(repo.list_series(), repo.get_observations(), config)
+        facts = json.dumps(brief, ensure_ascii=False, indent=1)
+        if dry_run:
+            sys.stdout.write(facts + "\n")
+            return 0
+        data_date = date.fromisoformat(brief["data_week"])
+        if repo.has_summary(data_date) and not force:
+            logger.info("the week ending %s is already summarized; nothing to do", data_date)
+            return 0
+        if settings.anthropic_api_key is None:
+            raise ValueError("ANTHROPIC_API_KEY is not set (add it to .env or the environment)")
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+        model, text_tr, text_en = write_summary(client, brief, settings.summary_model)
+        repo.upsert_summary(Summary(data_date, datetime.now(UTC), model, facts, text_tr, text_en))
     return 0
 
 
@@ -226,6 +267,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 if any series is older than its publishing rhythm allows",
     )
     commands.add_parser("scan-raw", help="exit 1 if a raw response file contains a secret")
+    summary = commands.add_parser(
+        "summarize", help="write the weekly AI summary of the newest data week (Claude API)"
+    )
+    summary.add_argument(
+        "--dry-run", action="store_true", help="print the facts; send and store nothing"
+    )
+    summary.add_argument(
+        "--force", action="store_true", help="rewrite the summary even if the week has one"
+    )
     clean = commands.add_parser("clean-raw", help="delete old raw response files")
     clean.add_argument(
         "--days",

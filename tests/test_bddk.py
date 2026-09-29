@@ -100,7 +100,7 @@ def test_null_values_are_dropped() -> None:
         ({"XEkseni": ["2024-07-05"], "YEkseni": [1.0]}, "unexpected date"),
         ({"XEkseni": ["5.07.2024"], "YEkseni": ["1.0"]}, "non-numeric"),
         ({"XEkseni": ["5.07.2024"], "YEkseni": [True]}, "non-numeric"),
-        ({"XEkseni": ["5.07.2024", "5.07.2024"], "YEkseni": [1.0, 2.0]}, "duplicate dates"),
+        ({"XEkseni": ["5.07.2024", "5.07.2024"], "YEkseni": [1.0, 2.0]}, "conflicting values"),
     ],
 )
 def test_malformed_responses_fail(payload: Any, message: str) -> None:
@@ -205,3 +205,15 @@ def test_ssl_context_trusts_the_intermediate_bddk_does_not_send() -> None:
     assert "GlobalSign RSA OV SSL CA 2018" in names
     assert context.verify_mode == ssl.CERT_REQUIRED
     assert context.check_hostname
+
+
+def test_a_week_listed_twice_with_the_same_value_is_kept_once() -> None:
+    # Real case: row 2.0.9 lists 18.12.2020 twice, both 18472.011.
+    payload = {
+        "XEkseni": ["11.12.2020", "18.12.2020", "18.12.2020", "25.12.2020"],
+        "YEkseni": [18000.0, 18472.011, 18472.011, 18500.0],
+    }
+
+    rows = parse_bddk_response(payload, "2.0.9:10001:TRY:3")
+
+    assert rows["date"].tolist() == [date(2020, 12, 11), date(2020, 12, 18), date(2020, 12, 25)]

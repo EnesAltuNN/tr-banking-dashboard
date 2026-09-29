@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 from tr_banking import db as db_module
 from tr_banking import settings as settings_module
 from tr_banking.config import load_series_config
-from tr_banking.db import Repository, SqliteRepository
+from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import parse_bddk_response
 from tr_banking.sources.bkm import parse_bkm_page, parse_series_code, sum_cells
@@ -25,7 +25,10 @@ CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
 SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
 CPI_SPEC = CONFIG.deflator
 RATE_SPECS = [spec for spec in CONFIG.series if spec.module == "rates"]
-BDDK_SPECS = CONFIG.for_source("bddk")
+ALL_BDDK_SPECS = CONFIG.for_source("bddk")
+BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
+BANKING_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "banking"]
+BANK_GROUPS = {"state_banks", "private_banks", "foreign_banks"}
 BKM_SPECS = CONFIG.for_source("bkm")
 # The real July 2026 BKM page, stored for three months at these fractions of its values.
 BKM_MONTHS = {"2023-07-31": 0.5, "2024-06-30": 0.9, "2024-07-31": 1.0}
@@ -95,7 +98,7 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
     loan_codes = [spec.code for spec in RATE_SPECS if not spec.policy_rate]
     with SqliteRepository(path) as repo:
         repo.init_schema()
-        for spec in [*SPECS, CPI_SPEC, *RATE_SPECS, *BDDK_SPECS, *BKM_SPECS]:
+        for spec in [*SPECS, CPI_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
             repo.upsert_series(spec)
         repo.upsert_observations("bkm", bkm_rows())
         evds = fixture("evds_hpbitablo6_2024.json")
@@ -109,7 +112,7 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         policy = fixture("evds_policy_rate_2024_2025.json")
         repo.upsert_observations("evds", parse_evds_response(policy, [CONFIG.policy_rate.code]))
         bddk = fixture("bddk_konut_2024.json")
-        for spec in BDDK_SPECS:  # the housing fixture stands in for every BDDK series
+        for spec in ALL_BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
     return path
 
@@ -151,7 +154,7 @@ def test_source_picker_switches_to_bddk(use_db: Callable, tmp_path: Path) -> Non
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
 
-    app.radio(key="source").set_value("bddk").run()
+    app.radio(key="source_tr").set_value("bddk").run()
 
     assert not app.exception
     table = app.dataframe[0].value
@@ -183,11 +186,11 @@ def test_english_switch_translates_table(use_db: Callable, tmp_path: Path) -> No
 def test_language_switch_keeps_selected_source(use_db: Callable, tmp_path: Path) -> None:
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard()
-    app.radio(key="source").set_value("bddk").run()
+    app.radio(key="source_tr").set_value("bddk").run()
 
     app.radio(key="lang").set_value("en").run()
 
-    assert app.radio(key="source").value == "bddk"
+    assert app.radio(key="source_en").value == "bddk"
     assert app.dataframe[0].value["Series"].tolist() == [spec.name_en for spec in BDDK_SPECS]
 
 
@@ -277,7 +280,7 @@ def test_real_view_uses_prices_of_the_latest_cpi_month(use_db: Callable, tmp_pat
     app = run_dashboard()
     nominal = app.dataframe[0].value["Son değer (milyar TL)"].iloc[0]
 
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_tr").set_value("real").run()
 
     assert not app.exception
     table = app.dataframe[0].value
@@ -297,7 +300,7 @@ def test_real_view_ends_at_the_last_week_with_cpi(use_db: Callable, tmp_path: Pa
     use_db(populated_db(tmp_path / "test.db", cpi_until="2024-06-30"))
     app = run_dashboard()
 
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_tr").set_value("real").run()
 
     table = app.dataframe[0].value
     assert set(table["Tarih"]) == {date(2024, 6, 28)}  # July weeks have no CPI yet
@@ -309,7 +312,7 @@ def test_real_view_without_cpi_falls_back_to_nominal(use_db: Callable, tmp_path:
     use_db(populated_db(tmp_path / "test.db", cpi_until="2023-12-31"))
     app = run_dashboard()
 
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_tr").set_value("real").run()
 
     assert not app.exception
     assert "TÜFE verisi henüz yok" in app.info[0].value
@@ -321,7 +324,7 @@ def test_english_real_view(use_db: Callable, tmp_path: Path) -> None:
     app = run_dashboard()
 
     app.radio(key="lang").set_value("en").run()
-    app.radio(key="value_mode").set_value("real").run()
+    app.radio(key="value_mode_en").set_value("real").run()
 
     columns = list(app.dataframe[0].value.columns)
     assert columns == ["Series", "Date", "Last value (billion TRY, Dec 2024 prices)", "Yearly %"]
@@ -336,7 +339,7 @@ def test_rates_tab_shows_levels_pp_changes_and_real_rates(use_db: Callable, tmp_
     app = run_dashboard("rates")
 
     assert not app.exception
-    assert [tab.label for tab in app.tabs] == ["Krediler", "Faizler", "Kartlar"]
+    assert [tab.label for tab in app.tabs] == ["Krediler", "Faizler", "Kartlar", "Sektör"]
     table = app.dataframe[0].value
     assert list(table.columns) == TR_RATE_COLUMNS
     assert table["Seri"].tolist() == [spec.name_tr for spec in RATE_SPECS]
@@ -375,6 +378,7 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
         text = json.dumps(spec, ensure_ascii=False)
         assert "Yıllık enflasyon (TÜFE)" in text  # the reference line
         assert "PPK kararı" in text  # the 26 Dec 2024 cut is in the date range
+        assert '"title": "Karar"' in text  # the tooltip names hike, cut or hold
         assert '"resolve"' not in text  # no independent (dual) y-axis
     policy_marks = [
         layer["mark"] for layer in charts[-1]["layer"] if isinstance(layer["mark"], dict)
@@ -388,7 +392,7 @@ def test_rates_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
 
     app.radio(key="lang").set_value("en").run()
 
-    assert [tab.label for tab in app.tabs] == ["Loans", "Interest rates", "Cards"]
+    assert [tab.label for tab in app.tabs] == ["Loans", "Interest rates", "Cards", "Banking sector"]
     # The open tab survives the language switch (its label, and widget, changed).
     assert list(app.dataframe[0].value.columns) == [
         "Series",
@@ -444,7 +448,7 @@ def test_cards_real_view_deflates_amounts_but_not_card_counts(
     app = run_dashboard("cards")
     nominal = app.dataframe[0].value.set_index("Seri")
 
-    app.radio(key="cards_value_mode").set_value("real").run()
+    app.radio(key="cards_value_mode_tr").set_value("real").run()
 
     assert not app.exception
     real = app.dataframe[0].value.set_index("Seri")
@@ -469,7 +473,7 @@ def test_cards_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     assert "million cards" in table["Unit"].tolist()
 
 
-# --- layout: KPI tiles, sidebar filters, one color per category, chart sources ---
+# --- layout: KPI tiles, filter bar, one color per category, chart sources ---
 
 
 def metric_values(app: AppTest) -> dict[str, tuple[str, str]]:
@@ -530,17 +534,19 @@ def test_card_kpis(use_db: Callable, tmp_path: Path) -> None:
     )
 
 
-def test_filters_live_in_the_sidebar_and_follow_the_open_tab(
+def test_filters_sit_above_the_tab_and_follow_the_open_tab(
     use_db: Callable, tmp_path: Path
 ) -> None:
     use_db(populated_db(tmp_path / "test.db"))
 
     credit, rates = run_dashboard(), run_dashboard("rates")
 
-    assert [widget.key for widget in credit.sidebar.radio] == ["source", "value_mode"]
-    assert len(credit.sidebar.multiselect) == 1
-    assert [widget.key for widget in rates.sidebar.radio] == []
-    assert [widget.key for widget in rates.sidebar.multiselect] == ["rates_series"]
+    # No sidebar at all: every filter is drawn in the open tab, "lang" is the header switch.
+    assert not credit.sidebar.radio and not credit.sidebar.multiselect
+    assert [widget.key for widget in credit.radio] == ["lang", "source_tr", "value_mode_tr"]
+    assert len(credit.multiselect) == 1
+    assert [widget.key for widget in rates.radio] == ["lang"]
+    assert [widget.key for widget in rates.multiselect] == ["rates_series_tr"]
 
 
 def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: Path) -> None:
@@ -594,3 +600,168 @@ def test_time_axis_labels_keep_the_year(use_db: Callable, tmp_path: Path) -> Non
     spec = json.loads(app.get("vega_lite_chart")[0].proto.spec)
     label_expr = spec["layer"][0]["encoding"]["x"]["axis"]["labelExpr"]
     assert "'%b %Y'" in label_expr and "'%Y'" in label_expr
+
+
+# --- banking sector tab (BDDK deposits, non-performing loans, bank groups) ---
+
+
+def test_banking_tab_shows_kpis_ratios_and_sector_series(use_db: Callable, tmp_path: Path) -> None:
+    # Every BDDK series holds the same housing fixture, so the ratios are easy to predict:
+    # NPL / (loans + NPL) = 50%, every other ratio = 100%.
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard("banking")
+
+    assert not app.exception
+    kpis = metric_values(app)
+    assert list(kpis) == [
+        "Toplam mevduat",
+        "Mevduatta döviz payı",
+        "Takipteki alacak oranı",
+        "Kredi/mevduat oranı",
+    ]
+    assert kpis["Takipteki alacak oranı"][0] == "50,00%"
+    ratios = app.dataframe[0].value.set_index("Oran")["Son değer (%)"]
+    assert len(ratios) == 11
+    assert ratios["Takipteki alacak oranı"] == pytest.approx(50.0)
+    assert ratios["Kredilerdeki pay: kamu bankaları"] == pytest.approx(100.0)
+    # Sector series are shown by default; bank-group amounts are one click away.
+    amounts = app.dataframe[1].value
+    sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in BANK_GROUPS]
+    assert amounts["Seri"].tolist() == sector
+    assert len(app.get("vega_lite_chart")) == 4 + len(sector)
+    assert "takipteki / (krediler + takipteki)" in page_text(app)
+
+
+def test_banking_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard("banking")
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert list(app.dataframe[0].value.columns) == [
+        "Ratio",
+        "Date",
+        "Last value (%)",
+        "Weekly change (pp)",
+        "Yearly change (pp)",
+    ]
+    assert "Non-performing loan ratio" in [metric.label for metric in app.metric]
+
+
+def test_banking_series_stay_out_of_the_loans_tab(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+
+    app.radio(key="source_tr").set_value("bddk").run()
+
+    assert "Toplam mevduat" not in app.dataframe[0].value["Seri"].tolist()
+
+
+# --- translated widgets keep their choice across a language switch ---
+
+
+def test_real_view_survives_a_language_switch(use_db: Callable, tmp_path: Path) -> None:
+    # Streamlit stores a radio's choice as its label; "Reel (...)" is not an English label.
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+    app.radio(key="value_mode_tr").set_value("real").run()
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert app.radio(key="value_mode_en").value == "real"
+    assert "Dec 2024 prices" in list(app.dataframe[0].value.columns)[2]
+
+
+def test_series_selection_survives_a_language_switch(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard()
+    picked = app.multiselect[0].value[:2]
+    app.multiselect[0].set_value(picked).run()
+
+    app.radio(key="lang").set_value("en").run()
+
+    assert app.multiselect[0].value == picked
+    assert app.dataframe[0].value["Series"].tolist() == [spec.name_en for spec in SPECS[:2]]
+
+
+# --- alerts on unusual weekly changes ---
+
+
+def spiked_db(path: Path) -> Path:
+    """Sixty weeks of steady ~1% growth for the EVDS loans, then a -6% week for housing."""
+    fridays = pd.date_range("2025-01-03", periods=60, freq="W-FRI")
+    rows = []
+    for index, spec in enumerate(SPECS):
+        value = 1_000_000.0 * (index + 1)
+        for step, friday in enumerate(fridays):
+            if step:
+                wobble = 0.002 * ((step * (index + 3)) % 5)  # deterministic small noise
+                last_week = step == len(fridays) - 1
+                growth = 0.94 if (last_week and spec.category == "housing") else 1.01 + wobble
+                value *= growth
+            rows.append((spec.code, friday.date(), value))
+    with SqliteRepository(path) as repo:
+        repo.init_schema()
+        for spec in SPECS:
+            repo.upsert_series(spec)
+        repo.upsert_observations("evds", pd.DataFrame(rows, columns=["code", "date", "value"]))
+    return path
+
+
+def test_no_alert_note_when_nothing_is_unusual(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    assert not app.warning
+    assert "Son haftada olağan dışı bir değişim yok" in page_text(app)
+
+
+def test_unusual_weekly_change_is_flagged_above_the_tabs(use_db: Callable, tmp_path: Path) -> None:
+    use_db(spiked_db(tmp_path / "spike.db"))
+
+    app = run_dashboard("rates")  # alerts show on every tab
+
+    assert not app.exception
+    [warning] = app.warning
+    assert "Son haftada olağan dışı değişim" in warning.value
+    assert "Konut kredileri (TCMB EVDS)" in warning.value
+    assert "**-6,0%**" in warning.value
+    assert "İhtiyaç kredileri" not in warning.value  # steady series stay quiet
+
+
+# --- weekly AI summary ---
+
+
+def test_weekly_summary_is_shown_and_labelled(use_db: Callable, tmp_path: Path) -> None:
+    db_path = populated_db(tmp_path / "test.db")
+    with SqliteRepository(db_path) as repo:
+        repo.upsert_summary(
+            Summary(
+                date(2024, 7, 12),
+                datetime(2024, 7, 19, 5, 0, tzinfo=UTC),
+                "claude-opus-5",
+                "{}",
+                "Tüketici kredileri yıllık %37,7 arttı.",
+                "Consumer loans rose 37.7%.",
+            )
+        )
+    use_db(db_path)
+    app = run_dashboard()
+
+    text = page_text(app)
+    assert "Haftanın özeti" in text
+    assert "Tüketici kredileri yıllık %37,7 arttı." in text
+    assert "Metni yapay zekâ (claude-opus-5) yazdı" in text
+
+    app.radio(key="lang").set_value("en").run()
+    assert "Consumer loans rose 37.7%." in page_text(app)
+
+
+def test_no_summary_box_without_a_summary(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard()
+
+    assert "Haftanın özeti" not in page_text(app)

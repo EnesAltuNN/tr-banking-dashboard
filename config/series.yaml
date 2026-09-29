@@ -4,9 +4,11 @@
 # Allowed values (validated in src/tr_banking/config.py):
 #   source:    evds | bddk | bkm | bank_site
 #   frequency: daily | weekly | monthly
-#   module:    credit | cards | rates | macro (inputs such as CPI, not shown as a module)
+#   module:    credit | cards | rates | banking | macro (inputs such as CPI, no tab of its own)
 #   category:  optional; total | consumer | housing | auto | personal | credit_card |
-#              debit_card | commercial | policy | online | foreign (one color per category
+#              debit_card | commercial | policy | online | foreign | deposits | fx_deposits |
+#              household_deposits | commercial_deposits | npl | npl_consumer |
+#              npl_commercial | state_banks | private_banks | foreign_banks (one color per category
 #              in every dashboard chart; also picks the KPI tiles)
 #
 # EVDS codes below were verified on 2026-09-24 via the EVDS3 metadata endpoints:
@@ -229,6 +231,140 @@ series:
     frequency: weekly
     module: credit
     category: commercial
+
+# ---------------------------------------------------------------------------------------------
+# BDDK weekly bulletin, other tables, module "banking" (the dashboard's "Sektör" tab).
+# Verified 2026-09-29: row ids read from the bulletin page's own tables (tabloId 292 Mevduat,
+# 290 Takipteki Alacaklar), values equal to the page for 2026-09-18, full history from
+# 2014-01-03 (664 weeks), and state + domestic private + foreign = sector, exactly.
+# Same code format and units as the loans above: <row>:<bank group>:<currency>:<column>.
+
+  # Mevduat 1: Mevduat (Katılım Fonu) (2+5+8), TOPLAM
+  - source: bddk
+    code: "4.0.1:10001:TRY:3"
+    name_tr: Toplam mevduat
+    name_en: Total deposits
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: deposits
+
+  # Mevduat 1, YP column: the FX part of all deposits, in TRY
+  - source: bddk
+    code: "4.0.1:10001:TRY:2"
+    name_tr: Döviz mevduatı (TL karşılığı)
+    name_en: FX deposits (in TRY)
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: fx_deposits
+
+  # Mevduat 2: Gerçek Kişiler (3+4)
+  - source: bddk
+    code: "4.0.2:10001:TRY:3"
+    name_tr: Gerçek kişi mevduatı
+    name_en: Deposits of individuals
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: household_deposits
+
+  # Mevduat 5: Ticari Kuruluşlar (6+7)
+  - source: bddk
+    code: "4.0.5:10001:TRY:3"
+    name_tr: Ticari kuruluş mevduatı
+    name_en: Deposits of companies
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: commercial_deposits
+
+  # Takipteki Alacaklar 1: Takipteki Alacaklar (2+8)
+  - source: bddk
+    code: "2.0.1:10001:TRY:3"
+    name_tr: Takipteki alacaklar
+    name_en: Non-performing loans
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: npl
+
+  # Takipteki Alacaklar 2: Tüketici Kredileri ve Bireysel Kredi Kartları (3+7)
+  # (lists 18.12.2020 and 5.02.2021 twice with the same value; the parser keeps one)
+  - source: bddk
+    code: "2.0.9:10001:TRY:3"
+    name_tr: Takipteki tüketici kredileri ve kartlar
+    name_en: Non-performing consumer loans and cards
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: npl_consumer
+
+  # Takipteki Alacaklar 8: Ticari ve Diğer Krediler
+  - source: bddk
+    code: "2.0.5:10001:TRY:3"
+    name_tr: Takipteki ticari ve diğer krediler
+    name_en: Non-performing commercial and other loans
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: npl_commercial
+
+  # Krediler 1: Toplam Krediler, by bank group (10005 state, 10007 domestic private, 10006 foreign)
+  - source: bddk
+    code: "1.0.1:10005:TRY:3"
+    name_tr: "Toplam krediler: kamu bankaları"
+    name_en: "Total loans: state banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: state_banks
+
+  - source: bddk
+    code: "1.0.1:10007:TRY:3"
+    name_tr: "Toplam krediler: yerli özel bankalar"
+    name_en: "Total loans: domestic private banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: private_banks
+
+  - source: bddk
+    code: "1.0.1:10006:TRY:3"
+    name_tr: "Toplam krediler: yabancı bankalar"
+    name_en: "Total loans: foreign banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: foreign_banks
+
+  # Mevduat 1: Toplam mevduat, by bank group
+  - source: bddk
+    code: "4.0.1:10005:TRY:3"
+    name_tr: "Toplam mevduat: kamu bankaları"
+    name_en: "Total deposits: state banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: state_banks
+
+  - source: bddk
+    code: "4.0.1:10007:TRY:3"
+    name_tr: "Toplam mevduat: yerli özel bankalar"
+    name_en: "Total deposits: domestic private banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: private_banks
+
+  - source: bddk
+    code: "4.0.1:10006:TRY:3"
+    name_tr: "Toplam mevduat: yabancı bankalar"
+    name_en: "Total deposits: foreign banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: foreign_banks
 
 # ---------------------------------------------------------------------------------------------
 # BKM monthly card statistics (https://bkm.com.tr/secilen-aya-ait-istatistikler/), module 2.

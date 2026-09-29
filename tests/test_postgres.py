@@ -1,12 +1,12 @@
 from collections.abc import Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pandas as pd
 import psycopg
 import pytest
 
 from tr_banking.config import SeriesSpec
-from tr_banking.db import PostgresRepository, StorageError
+from tr_banking.db import PostgresRepository, StorageError, Summary
 from tr_banking.db.postgres import describe_connection
 
 SECRET = "pw-must-not-leak"
@@ -19,7 +19,12 @@ HOUSING = SeriesSpec(
     frequency="weekly",
     module="credit",
 )
-MIGRATIONS = ["0001_initial.sql", "0002_dashboard_reader.sql", "0003_fetch_writer.sql"]
+MIGRATIONS = [
+    "0001_initial.sql",
+    "0002_dashboard_reader.sql",
+    "0003_fetch_writer.sql",
+    "0004_summaries.sql",
+]
 AUTO = HOUSING.model_copy(update={"code": "TP.HPBITABLO6.7", "name_en": "Auto loans"})
 
 
@@ -102,6 +107,7 @@ def test_row_level_security_is_on(pg: PostgresRepository) -> None:
         "series": True,
         "observations": True,
         "schema_migrations": True,
+        "summaries": True,
     }
 
 
@@ -122,7 +128,7 @@ def test_supabase_api_roles_get_nothing(
     with psycopg.connect(postgres_url, autocommit=True) as conn:
         conn.execute(f"SET ROLE {api_role}")
 
-        for table in ("series", "observations", "schema_migrations"):
+        for table in ("series", "observations", "schema_migrations", "summaries"):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 conn.execute(f"SELECT * FROM {table}")
 
@@ -181,6 +187,8 @@ def test_fetch_writer_can_upsert_new_and_existing_rows(writer: PostgresRepositor
         "CREATE TABLE extra (id INT)",
         "INSERT INTO schema_migrations (version) VALUES ('9999_fake.sql')",
         "DELETE FROM schema_migrations",
+        "DELETE FROM summaries",
+        "TRUNCATE summaries",
     ],
 )
 def test_fetch_writer_cannot_delete_or_change_the_schema(
@@ -224,3 +232,27 @@ def test_migrate_as_fetch_writer_explains_that_the_owner_is_needed(
     assert "connected as fetch_writer" in message
     assert "0003_fetch_writer.sql" in message
     assert writer.pending_migrations() == ["0003_fetch_writer.sql"]  # nothing was applied
+
+
+# --- weekly summaries (migration 0004) ---
+
+
+def test_fetch_writer_can_write_summaries(writer: PostgresRepository) -> None:
+    week = Summary(date(2026, 9, 18), datetime(2026, 9, 25, 5, 0, tzinfo=UTC), "m", "{}", "a", "b")
+
+    writer.upsert_summary(week)
+    writer.upsert_summary(week._replace(text_tr="c"))  # UPDATE path
+
+    assert writer.latest_summary().text_tr == "c"
+
+
+def test_dashboard_reader_can_read_summaries(postgres_url: str, pg: PostgresRepository) -> None:
+    pg.upsert_summary(
+        Summary(date(2026, 9, 18), datetime(2026, 9, 25, 5, 0, tzinfo=UTC), "m", "{}", "a", "b")
+    )
+    with PostgresRepository(postgres_url) as reader:
+        reader._conn.execute("SET ROLE dashboard_reader")
+
+        assert reader.latest_summary().text_en == "b"
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            reader._conn.execute("DELETE FROM summaries")

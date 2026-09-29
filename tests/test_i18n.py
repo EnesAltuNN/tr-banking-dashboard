@@ -5,6 +5,7 @@ import pytest
 from tr_banking.app.i18n import (
     LANGUAGES,
     MISSING,
+    SHORT_UNIT_LABELS,
     SOURCE_LABELS,
     SOURCE_NOTES,
     TEXTS,
@@ -20,7 +21,9 @@ from tr_banking.app.i18n import (
 NAN = float("nan")
 
 
-@pytest.mark.parametrize("table", [TEXTS, SOURCE_LABELS, SOURCE_NOTES, UNIT_LABELS])
+@pytest.mark.parametrize(
+    "table", [TEXTS, SOURCE_LABELS, SOURCE_NOTES, UNIT_LABELS, SHORT_UNIT_LABELS]
+)
 def test_every_text_exists_in_every_language(table: dict) -> None:
     for key, translations in table.items():
         assert set(translations) == set(LANGUAGES), key
@@ -105,3 +108,9 @@ def test_change_direction_accepts_numpy_values() -> None:
 
     assert change_direction(np.float64(-1.25), 2) == -1
     assert change_direction(np.float64(0.001), 2) == 0
+
+
+def test_short_unit_labels_for_kpi_tiles() -> None:
+    assert unit_label("billion TRY", "en", short=True) == "bn TRY"
+    assert unit_label("billion TRY", "tr", short=True) == "milyar TL"
+    assert unit_label("million cards", "en", short=True) == "million cards"  # no short form

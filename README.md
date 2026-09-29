@@ -10,7 +10,7 @@ dashboard, in nominal and inflation-adjusted terms.
 **Live dashboard: [tr-banking-dashboard.streamlit.app](https://tr-banking-dashboard.streamlit.app/)**
 (Turkish/English)
 
-[![Dashboard: KPI tiles, a summary table and one chart per series, filters in the sidebar](docs/images/dashboard.png)](https://tr-banking-dashboard.streamlit.app/)
+[![Dashboard: a filter row, KPI tiles, a summary table and one chart per series](docs/images/dashboard.png)](https://tr-banking-dashboard.streamlit.app/)
 
 ## Highlights
 
@@ -18,11 +18,11 @@ dashboard, in nominal and inflation-adjusted terms.
   - [TCMB EVDS3](https://evds3.tcmb.gov.tr/) (the central bank's data API): weekly loans, loan
     interest rates, the policy rate and CPI.
   - The [BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) (the banking
-    regulator): weekly loans back to **2014**. Where it covers the same item as EVDS, the two
-    agree within **about 0.3%**.
+    regulator): weekly loans, deposits, non-performing loans and bank groups back to **2014**.
+    Where it covers the same item as EVDS, the two agree within **about 0.3%**.
   - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
     counts back to **2017**.
-  - 25 series in total, all defined in one YAML file.
+  - 38 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -30,7 +30,8 @@ dashboard, in nominal and inflation-adjusted terms.
 - **Interest rates in percentage points:**
   - Loan rates and the policy rate are shown with yearly inflation as a reference line on the
     same axis.
-  - MPC rate decisions are marked on the charts.
+  - Every MPC meeting is marked on the charts, holds included: the meeting calendar comes
+    from the central bank's own press releases, and each decision is read from the rate.
   - The table shows an approximate real rate (rate minus inflation).
 - **Automatic, and loud when it breaks:**
   - GitHub Actions fetches every Tuesday and Friday.
@@ -43,16 +44,23 @@ dashboard, in nominal and inflation-adjusted terms.
     schema.
   - Public workflow artifacts are scanned for secrets before upload.
 - **Bilingual dashboard:**
-  - Three tabs (loans, interest rates, cards), each opening with KPI tiles and sparklines;
-    filters live in the sidebar.
+  - Four tabs (loans, interest rates, cards, banking sector), each opening with KPI tiles and
+    sparklines; the filters are a row of buttons at the top of the tab.
+  - The banking-sector tab computes the NPL ratio, the FX share of deposits, the
+    loan-to-deposit ratio and bank-group shares on the fly from BDDK's tables.
+  - Alerts flag a weekly change far outside the series' own past year (a robust score on
+    the median and MAD; the threshold was calibrated on 12 years of history).
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).
   - Light and dark themes with a color palette checked for color-vision deficiency; each
     category (housing, auto, personal, cards, commercial) keeps one color in every chart.
   - A one-hour shared cache keeps the public page light on the database, and only the open
     tab runs.
-- **Tested:** 340+ tests, most of them on real recorded API responses. CI runs them against a
-  real Postgres 17 container, including tests that prove what each database role can and
-  cannot do.
+- **A weekly summary written by Claude, with the numbers kept honest:** Python computes the
+  facts, the model only writes a short TR/EN text about them, and the facts are stored next
+  to the text so every sentence can be checked.
+- **Tested:** 380+ tests, most of them on real recorded API responses; the Claude API call is
+  tested against a mocked HTTP transport. CI runs them against a real Postgres 17 container,
+  including tests that prove what each database role can and cannot do.
 
 ## Architecture
 
@@ -62,6 +70,7 @@ flowchart LR
     BDDK["BDDK weekly bulletin"] --> GHA
     BKM["BKM monthly card statistics"] --> GHA
     GHA["GitHub Actions<br/>Tue + Fri 04:00 UTC<br/>role: fetch_writer"] -->|"upsert"| DB[("Supabase Postgres<br/>RLS on every table")]
+    GHA <-->|"facts in, text out"| CLAUDE["Claude API<br/>weekly summary"]
     DB -->|"SELECT, cached 1 h"| APP["Streamlit Community Cloud<br/>role: dashboard_reader"]
     APP --> USERS(("Visitors"))
 ```
@@ -148,7 +157,9 @@ Supabase, the scheduled fetch and hosting are described in [docs/SETUP.md](docs/
   arguments. The tabs' `default` followed the open tab, so after one switch the widget was
   rebuilt and the next click went to a widget that no longer existed. The default now changes
   only with the language. The unit tests could not see it (they set state by key), so the fix
-  was verified by clicking through the tabs in a real browser.
+  was verified by clicking through the tabs in a real browser. The same browser check found a
+  sibling: radios and multiselects keep their choice as a label, so switching to English left
+  nothing selected. Translated widgets now get one key per language.
 - **A public page needs a cache.** Streamlit reruns the script on every click. A one-hour
   cache shared by all visitors turns that into at most one short database read per hour. The
   page shows both the last data fetch and the time it read the database, so the cache never
@@ -164,20 +175,22 @@ Done:
   automatic fetch, live bilingual dashboard.
 - ✔ **Real values:** inflation-adjusted view with CPI from EVDS.
 - ✔ **Interest rates:** official weekly loan rates and the policy rate from EVDS, with
-  inflation reference and MPC decision markers.
+  inflation reference and MPC decision markers (hikes, cuts and holds).
 - ✔ **Module 2, card spending:** BKM monthly statistics from 2017 (see
   [DATA_SOURCES.md](docs/DATA_SOURCES.md#bkm-card-statistics-verified-2026-09-27)).
+- ✔ **Banking sector:** BDDK deposits, non-performing loans and bank groups (state, domestic
+  private, foreign), with the ratios built from them.
+- ✔ **Alerts:** unusual weekly changes flagged above the tabs.
+- ✔ **Weekly AI summary:** facts from Python, text from Claude, shown above the tabs.
 
 Planned, in order:
-1. **Module 3, bank rates and campaigns:** daily, from bank websites, starting with three
-   banks.
-2. **Weekly AI summary:** changes computed in Python; a language model only writes the text.
+1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
+   2026-09-29 found that most banks show personalised rates through JavaScript calculators,
+   not comparable rates in their HTML; it needs a decision on browser automation first.
 
 Other ideas:
-- the MPC meeting calendar, so decisions that kept the rate unchanged are marked too;
-- BDDK bank groups (state, domestic private, foreign);
-- deposits and non-performing loans;
-- alerts on unusual weekly changes.
+- the policy rate before September 2018, where the EVDS series is empty;
+- a seasonally adjusted view of card spending.
 
 ## Documentation
 

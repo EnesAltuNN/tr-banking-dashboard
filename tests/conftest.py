@@ -32,6 +32,8 @@ def _no_real_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests must never reach Supabase or EVDS, even if the shell has these variables set."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("EVDS_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("SUMMARY_MODEL", raising=False)
 
 
 @pytest.fixture

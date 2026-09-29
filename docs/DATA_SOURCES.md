@@ -7,7 +7,7 @@ Detailed, verified facts about each source; read this before touching a source c
 | [TCMB EVDS3](#tcmb-evds3-verified-2026-09-24) | 6 weekly loan series | thousand TRY | 2024-06-28 | official API, free key |
 | [TCMB EVDS3, CPI](#consumer-price-index-verified-2026-09-27) | 1 monthly price index (deflator) | index, 2025=100 | 2005-01 | official API, free key |
 | [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, daily policy rate | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
-| [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series | million TRY | 2014-01-03 | public website, no API |
+| [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series; 13 deposit, NPL and bank-group series | million TRY | 2014-01-03 | public website, no API |
 | [BKM](#bkm-card-statistics-verified-2026-09-27) | 4 monthly card spending series, 2 card counts | million TRY, cards | 2017-01 | public website (HTML), no API |
 
 Series codes, names and units are configured in [`config/series.yaml`](../config/series.yaml).
@@ -153,7 +153,7 @@ data.
 
 **Policy rate:** `TP.PY.P02.1H` in data group `bie_pyintbnk`, *(1H) TCMB Kotasyonları SATIŞ
 (%) (1 Haftalık İşlem)*: the CBRT one-week repo lending rate, on business days.
-- Its change dates match the MPC (PPK) decisions, e.g. 2023-06-22 → 15%, 2024-03-21 → 50%,
+- Its change dates are the MPC (PPK) meeting days, e.g. 2023-06-22 → 15%, 2024-03-21 → 50%,
   2024-12-26 → 47.5%, 2025-04-17 → 46%, 2026-01-22 → 37%.
 - The metadata says the series starts in 1996, but **the first value is 2018-09-14** (24%, the
   day after the 13 September 2018 decision). All earlier days since at least 2014 are null, so
@@ -169,10 +169,26 @@ data.
   one-week repo value exists, it does not show that period's actual funding cost. The
   series used here has no values before 2018-09-14 anyway.
 
-**Decision markers** are computed from the data (`app/metrics.py: rate_changes`): every day
-on which the policy rate differs from the previous business day. MPC decisions that kept the
-rate unchanged leave no trace in the data, so they are not marked (see the Backlog item on
-the MPC calendar).
+**MPC calendar and decision markers** (verified 2026-09-29):
+- The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from
+  the first meeting inside the series (2018-10-25). Past dates come from the CBRT's decision
+  press releases (tcmb.gov.tr > PPK > PPK Toplantı Kararları; each release's own page,
+  `.../duyurular/basin/<year>/duy<year>-<no>`, has the date and the decision). Announced
+  dates come from the calendar in "2026 Para Politikası" (Ek 2), which also lists the first
+  four meetings of 2027.
+- The decisions list page is incomplete: it misses the 26 December 2024 cut (release
+  2024-70) and the 10 September 2026 hold (2026-38); both were found on the press release
+  pages.
+- The EVDS series changes **on the meeting day itself**: all 40 changes from 2018-09-14 to
+  2026-09-25 fall exactly on a listed meeting. `app/metrics.py: policy_decisions` therefore
+  compares the rate on the meeting day with the last rate before it (hike, cut or hold).
+  Checked against the wording of every release: 85 meetings, 14 hikes, 26 cuts, 45 holds.
+- The 20 March 2025 interim meeting raised only the overnight lending rate; the policy rate
+  stayed at 42.5%, so it is a hold here.
+- A rate change on a day that is not listed (an unscheduled meeting, or a calendar not yet
+  updated) is still marked, so an out-of-date file only loses hold markers.
+- The CBRT publishes the next year's calendar in December ("2027 Para Politikası" on
+  2026-12-18); add it to the YAML then.
 
 **Yearly inflation and real rates:**
 - Yearly inflation is `CPI(month) / CPI(same month a year earlier) − 1`, from
@@ -219,6 +235,43 @@ sector. Values are weekly (Friday), in million TRY, TRY + FX, from 2014-01-03.
   - The home-page variant `tr/Home/KiyaslamaJsonGetir` caps results at 13 weeks; don't use it.
 - **An unknown row or bank group returns HTTP 200 with empty lists**, so the parser treats an
   empty series as an error.
+- **A week can be listed twice.** Row `2.0.9` returns 18.12.2020 and 5.02.2021 twice, with the
+  same value (seen 2026-09-29). The parser keeps one copy; two different values for one week
+  stay an error.
+
+### Deposits, non-performing loans and bank groups (verified 2026-09-29)
+
+Module `banking`, the dashboard's *Sektör* (*Banking sector*) tab. Same endpoint, code format
+and unit as the loans above; full history from 2014-01-03 (664 weeks on 2026-09-18).
+
+**Finding row ids.** The bulletin page switches tables through a form: `TabloDegistir('289')`
+posts `tabloId` (with the page's anti-forgery token) to `/BultenHaftalik/`. Table ids on the
+page are 289 *Krediler*, 290 *Takipteki Alacaklar*, 291 *Menkul Değerler*, 292 *Mevduat*,
+293-297 other balance sheet tables. Each value cell calls `ShowModalGraph('<row>', ...)`, which
+is where the row ids below come from. The row prefix follows the table: `1.` loans, `2.` NPL,
+`4.` deposits.
+
+| Code | Table / row | Series | 2026-09-18 |
+|---|---|---|---|
+| `4.0.1:10001:TRY:3` | Mevduat 1, total | Total deposits (incl. participation funds) | 32,553,270 |
+| `4.0.1:10001:TRY:2` | Mevduat 1, YP column | FX deposits, at their TRY value | 12,584,999 |
+| `4.0.2:10001:TRY:3` | Mevduat 2 | Deposits of individuals (Gerçek Kişiler) | 18,247,553 |
+| `4.0.5:10001:TRY:3` | Mevduat 5 | Deposits of companies (Ticari Kuruluşlar) | 11,649,094 |
+| `2.0.1:10001:TRY:3` | Takipteki 1 | Non-performing loans | 876,498 |
+| `2.0.9:10001:TRY:3` | Takipteki 2 | NPL: consumer loans and individual cards | 369,835 |
+| `2.0.5:10001:TRY:3` | Takipteki 8 | NPL: commercial and other loans | 506,664 |
+| `1.0.1:{10005,10007,10006}:TRY:3` | Krediler 1 | Total loans of state / domestic private / foreign banks | 13,209,240 / 8,030,389 / 6,998,060 |
+| `4.0.1:{10005,10007,10006}:TRY:3` | Mevduat 1 | Total deposits of the same groups | 15,275,970 / 9,033,830 / 8,243,471 |
+
+- **State + domestic private + foreign = sector, exactly**, for loans and deposits (checked on
+  2026-09-18). Participation and development banks belong to these ownership groups.
+- **Ratios are computed for display, never stored** (`app/metrics.py: ratio_pct`):
+  - NPL ratio = NPL / (loans + NPL): 3.01% on 2026-09-18. BDDK's loan table holds performing
+    loans only, so the denominator adds the NPL back, as BDDK's own reports do. Consumer and
+    commercial NPL ratios use the matching loan rows (`1.0.2`, `1.0.12`).
+  - FX share of deposits = `4.0.1` column 2 / column 3: 38.7%.
+  - Loan-to-deposit ratio = `1.0.1` / `4.0.1`: 86.7%.
+  - Bank-group shares of loans and deposits: group / sector total.
 - **TLS:** `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV
   SSL CA 2018" is missing.
   - Browsers download the missing intermediate themselves; Python on Linux does not.
@@ -286,3 +339,18 @@ Series codes (the label mapping lives in `sources/bkm.py`):
   and stay unchanged.
 - Amounts are nominal flows and are not seasonally adjusted: December and the summer
   (tourism) months stand out, so compare yearly % rather than monthly % across seasons.
+
+## Bank websites (module 3, postponed)
+
+Research on 2026-09-29 (robots.txt, sitemaps, one fetch per product page):
+- `robots.txt` allows the product pages at Ziraat, VakıfBank, Halkbank, Garanti BBVA, İş
+  Bankası, Akbank, Yapı Kredi, ING and Enpara (Enpara also sends "ai-train=no").
+- Comparable rates are rarely in the HTML. İş Bankası states personalised rates ("kişiye özel
+  uygulanacak faiz oranı"); Yapı Kredi and Enpara fill their calculators with JavaScript;
+  Halkbank's product URLs redirect to the home page; Ziraat and Akbank URLs from guesses 404.
+- Only Garanti BBVA shows a statutory "örnek hesaplama" table in HTML (personal loan, 100,000
+  TRY, 36 months, 3.94% monthly, with an update date); ING shows campaign "from" rates.
+- Taşıt and konut pages show almost no rates in HTML.
+- Options when resuming: the JSON endpoints behind the calculators (like BDDK's chart
+  endpoint; undocumented, check each bank's terms), or browser automation (Playwright) in
+  the scheduled job (heavy, fragile). Decide first; campaigns would need their own table.

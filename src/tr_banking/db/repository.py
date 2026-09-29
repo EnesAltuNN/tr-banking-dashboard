@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, NamedTuple, Self
 
 import pandas as pd
 
@@ -44,8 +44,31 @@ ON CONFLICT (series_id, date) DO UPDATE SET
 """
 
 
+UPSERT_SUMMARY_SQL = """
+INSERT INTO summaries (data_date, created_at, model, input, text_tr, text_en)
+VALUES ({p}, {p}, {p}, {p}, {p}, {p})
+ON CONFLICT (data_date) DO UPDATE SET
+    created_at = excluded.created_at,
+    model = excluded.model,
+    input = excluded.input,
+    text_tr = excluded.text_tr,
+    text_en = excluded.text_en
+"""
+
+
 class StorageError(RuntimeError):
     """The database could not be reached or set up."""
+
+
+class Summary(NamedTuple):
+    """One weekly AI-written summary and the facts it was written from."""
+
+    data_date: date  # newest weekly data the summary covers
+    created_at: datetime
+    model: str
+    input: str  # JSON
+    text_tr: str
+    text_en: str
 
 
 class Repository(ABC):
@@ -87,6 +110,10 @@ class Repository(ABC):
     @abstractmethod
     def _write_many(self, sql: str, rows: list[tuple[Any, ...]]) -> None:
         """Run a statement once per row, all in one transaction (all rows or none)."""
+
+    @abstractmethod
+    def _has_table(self, name: str) -> bool:
+        """Whether a table exists (a Postgres database may be one migration behind the code)."""
 
     def _to_db_date(self, day: date) -> Any:
         return day
@@ -136,7 +163,44 @@ class Repository(ABC):
         logger.info("stored %d %s observations", len(rows), source)
         return len(rows)
 
+    def upsert_summary(self, summary: Summary) -> None:
+        """Store the summary of a data week, replacing an earlier one for the same week."""
+        params = [
+            self._to_db_date(summary.data_date),
+            self._to_db_timestamp(summary.created_at.astimezone(UTC).replace(microsecond=0)),
+            summary.model,
+            summary.input,
+            summary.text_tr,
+            summary.text_en,
+        ]
+        self._write_many(self._sql(UPSERT_SUMMARY_SQL), [tuple(params)])  # no RETURNING rows
+        logger.info(
+            "stored the summary of the week ending %s (%s)", summary.data_date, summary.model
+        )
+
     # --- reads ---
+
+    def has_summary(self, data_date: date) -> bool:
+        rows = self._fetch_all(
+            f"SELECT 1 FROM summaries WHERE data_date = {self.placeholder}",
+            [self._to_db_date(data_date)],
+        )
+        return bool(rows)
+
+    def latest_summary(self) -> Summary | None:
+        """The newest summary, or None when there is none or the table does not exist yet."""
+        if not self._has_table("summaries"):
+            return None
+        rows = self._fetch_all(
+            "SELECT data_date, created_at, model, input, text_tr, text_en FROM summaries "
+            "ORDER BY data_date DESC LIMIT 1"
+        )
+        if not rows:
+            return None
+        day, stamp, model, facts, text_tr, text_en = rows[0]
+        day = date.fromisoformat(day) if isinstance(day, str) else day
+        stamp = datetime.fromisoformat(stamp) if isinstance(stamp, str) else stamp
+        return Summary(day, stamp.astimezone(UTC), model, facts, text_tr, text_en)
 
     def list_series(self, module: str | None = None) -> pd.DataFrame:
         query = f"SELECT {', '.join(SERIES_COLUMNS)} FROM series"
