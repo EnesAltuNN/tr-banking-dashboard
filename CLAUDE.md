@@ -1,493 +1,98 @@
 # CLAUDE.md
 
-Turkish Banking Market Dashboard: a learning/portfolio project. Three data modules feed one
-database and one Streamlit dashboard, plus a planned weekly AI-generated summary of all three.
+Turkish Banking Market Dashboard, a learning/portfolio project: EVDS, BDDK and BKM data in one
+database (SQLite locally, Supabase in the cloud), one bilingual Streamlit dashboard and a weekly
+AI summary. Repo `github.com/EnesAltuNN/tr-banking-dashboard` (public); live at
+https://tr-banking-dashboard.streamlit.app/.
 
-## Language rules
+## Every session (keep token use low)
 
-- **Talk to the user in Turkish**: explanations, plans, step summaries and "manual check" notes.
-- **Everything in the repo stays in English**: code, code comments, commit messages,
-  README.md and this file.
+1. Read only this file. Check "Calendar"; tell the user first about anything due or overdue.
+2. Open other files only when the task needs them:
+   - `docs/CONVENTIONS.md`: deployment facts, architecture, data model, coding and dashboard
+     rules. Read the relevant section before changing code.
+   - `docs/DATA_SOURCES.md`: before touching a source client.
+   - `docs/SETUP.md` (commands, hosting, disaster recovery) and `docs/SECURITY.md` (roles,
+     secrets).
+3. Never scan the whole repo; search for what the task names.
+4. At the end of a session, rewrite "Status" below: at most 25 lines, current state only.
+   Delete finished details instead of appending; git history keeps them.
 
-## Working agreement
+## Rules
 
-- **At the start of every session, read "Calendar" below.** If something is due today or
-  overdue, tell the user first.
-- The user is learning: keep explanations short, but say *why* behind key decisions.
-- Work in phases or small steps:
-  1. Show the plan first.
-  2. At the end of each step, run tests + ruff, give a short manual checklist and a suggested
-     commit.
-  3. Then stop and wait for approval.
+- Talk to the user in **Turkish**. Keep replies short and say *why* behind key decisions.
+  Do not paste file contents into the chat.
+- Everything in the repo stays in **English**: code, comments, commits, docs.
+- Work in small steps: show the plan, then run `uv run pytest` and `uv run ruff check .` at
+  the end of each step, and give a short manual checklist and a suggested commit. Then stop.
+  Local commits are fine when the user asks for uninterrupted work; the user pushes.
+- The user is on Windows: give PowerShell commands. Call `gh` by full path:
+  `C:\Program Files\GitHub CLI\gh.exe`. Use it for runs and logs, never for secret values.
+- **Secrets:**
+  - Never read, print or log `.env`, not even key names. Project commands that load it
+    (`tr-banking ...`, the dashboard) are fine.
+  - Never ask for passwords, keys or connection strings. Tell the user where to enter them:
+    `.env`, Streamlit secrets, or GitHub secrets one by one (`gh secret set NAME --repo ...`
+    prompts for the value). Never use `gh secret set -f .env`.
+  - The Supabase owner string lives only in the user's password manager. It is used one-off:
+    `$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL`
+- **SQLite for one command:** set `$env:DATABASE_URL = " "` (a space) and `$env:DB_PATH`.
+  Never `""`: PowerShell 5.1 deletes the variable, `.env` wins, and the command writes to
+  Supabase.
+- **New migration:** the owner applies it **before** the push, or the scheduled fetch fails at
+  its schema check.
+- Every live Claude API call costs money: ask the user first.
+- Never guess data (series codes, dates, rates). Verify it at the source.
 
-  The user usually pushes; commits may be made locally when the user asks for uninterrupted
-  work.
-- The user is on Windows: give PowerShell commands, not bash.
-- Never print, log or read the contents of `.env`, not even key names. Running project
-  commands that load `.env` internally (`tr-banking ...`, the dashboard) is agreed; they never
-  print its values.
-- Never ask for passwords, API keys or connection strings in chat. Tell the user where to
-  enter them and let them do it:
-  - `.env`;
-  - GitHub Secrets, **one by one, by name**: `gh secret set NAME --repo ...` prompts for the
-    value, or use the web UI. Never `gh secret set -f .env`: it turns every `.env` line into a
-    secret without asking, so whatever `.env` holds at that moment ends up in GitHub;
-  - Streamlit secrets.
+## Calendar (UTC)
 
-## Calendar
-
-Check at the start of every session.
-
-| Date (UTC) | Event | What to do |
+| Date | Event | What to do |
 |---|---|---|
-| 2026-09-29 Tue 04:00 | First scheduled fetch | Check the run (`gh run list --workflow fetch.yml`). |
-| 2026-10-02 Fri 04:00 | Second scheduled fetch | If both runs are green, remind the user to remove the Windows task (Backlog 4). |
-| 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the first CI and fetch runs after it. |
-| 2026-11-15 | BDDK TLS certificate expires and gets renewed | Check the next BDDK fetch. On a certificate error, update the bundled intermediate (see [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)). |
-| 2026-12-18 | CBRT publishes "2027 Para Politikası" with the 2027 MPC calendar | Add the remaining 2027 meeting dates to `config/mpc_meetings.yaml` (Jan–Jun 2027 are already there). |
+| 2026-10-02 Fri 04:00 | Scheduled fetch | The Tue 09-29 run never started. Check `gh run list --workflow fetch.yml`; if runs are green, remind the user to remove the Windows task. |
+| 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the next CI and fetch runs. |
+| 2026-11-15 | BDDK TLS certificate renewed | On a certificate error, update the bundled intermediate (DATA_SOURCES). |
+| 2026-12-18 | CBRT publishes "2027 Para Politikası" | Add the rest of the 2027 MPC dates to `config/mpc_meetings.yaml`. |
 
-## Project status (updated 2026-09-28)
+## Status (2026-09-29)
 
-Hosting:
-- Repo: `github.com/EnesAltuNN/tr-banking-dashboard` (**public**).
-- Database: Supabase, project in Frankfurt, reached through the session pooler.
-- Dashboard: **https://tr-banking-dashboard.streamlit.app/** on Streamlit Community Cloud,
-  connected as `dashboard_reader`, Python 3.13.
+- **Live:** 25 series, with Loans, Interest rates and Cards tabs, plus the redesign.
+- **Local, 6 commits not pushed:** the Banking sector tab (13 BDDK series), the translated
+  widget fix, `scripts/screenshots.py`, unusual-change alerts, the weekly AI summary
+  (migration 0004) and the MPC calendar (holds marked).
+- **The user's steps, in order:**
+  1. Apply migration 0004 as the owner.
+  2. `git push`.
+  3. `uv run tr-banking backfill --start 2014-01-03 --source bddk`.
+  4. Add the GitHub secret `ANTHROPIC_API_KEY`.
+  5. The first `summarize` needs the user's go-ahead: run `--dry-run` first.
+  6. On an ImportError, reboot the Streamlit app.
+- **README screenshot:** the user takes it:
+  `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`.
+  After the push, check that the Mermaid diagram renders on GitHub.
+- **Next:** ask the user which item comes next. Show the plan first.
+- **Open questions:**
+  - Module 3: calculator JSON endpoints or Playwright? See the research in DATA_SOURCES.
+  - Real rate column: the latest week is empty until CPI is out. Ask before changing it.
+  - AI summary: tune effort and build a small eval once a few weeks exist.
 
-Cloud migration of module 1 (phases A–E) is done:
-- Supabase is backfilled.
-- The REST API is closed (401).
-- CI is green.
-- The Tue/Fri fetch workflow runs in GitHub Actions.
-- The dashboard is live.
+## Backlog (open items)
 
-Live since 2026-09-28 (pushed and backfilled: 25 series, 10,866 observations):
-- Real values: CPI `TP.TUKFIY2025.GENEL` (module `macro`, `deflator: true`), nominal/real switch.
-- Interest rates tab: EVDS loan rates `TP.KTF10/11/12/18` and the policy rate `TP.PY.P02.1H`
-  (module `rates`), yearly inflation line, MPC decision markers, pp changes, real rate ≈.
-- Module 2 cards tab: BKM, 6 monthly series from 2017-01 (module `cards`).
-- Dashboard tabs: Krediler · Faizler · Kartlar.
-
-Live since 2026-09-28: robustness (per-source monthly lookback, BKM stored every 12 months,
-`clean-raw`) and the dashboard redesign (KPI tiles, sidebar filters, lazy tabs, category
-colors, light/dark theme, chart cards with sources, notes expander, footer).
-
-Built on 2026-09-29, to be pushed: the "Sektör" (banking sector) tab (module `banking`, 13
-BDDK series, ratios computed on the fly), translated-widget fix, `scripts/screenshots.py`,
-alerts on unusual weekly changes, the weekly AI summary (migration `0004_summaries`,
-`tr-banking summarize`, workflow step, dashboard box), and the MPC meeting calendar (holds
-marked on the rate charts).
-
-## Next steps
-
-1. **User, in this order (the 2026-09-29 commits need migration 0004):**
-   1. Apply the migration as the owner **before pushing**, or the scheduled run fails at its
-      schema check: `$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL`
-   2. `git push`.
-   3. Load the new BDDK history once with `.env` (`fetch_writer`):
-      `uv run tr-banking backfill --start 2014-01-03 --source bddk` (about 30 s).
-   4. For the AI summary, add the GitHub secret `ANTHROPIC_API_KEY` by name
-      (`gh secret set ANTHROPIC_API_KEY --repo EnesAltuNN/tr-banking-dashboard`, which prompts
-      for the value). Without it the step is skipped. A first manual run needs the user's
-      go-ahead (it costs money): `summarize --dry-run` first, then `summarize` with the key
-      in `.env`, or trigger the workflow.
-   5. Reboot the app on share.streamlit.io if the page shows an ImportError (seen 2026-09-28).
-2. **User: add the dashboard screenshot** of the new design and check the README on GitHub.
-   - One command writes it to `docs/images/dashboard.png` (the README already links it):
-     `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`
-     (EN, light theme, 1600×1000, warns above 500 KB). The user wanted to take it themselves;
-     offer, do not do it unasked.
-   - Remind the user to check on github.com that the README's Mermaid architecture diagram
-     renders correctly.
-3. **Next roadmap item:** resuming module 3 (Backlog 7, see Open questions) needs a decision
-   first; otherwise the smaller Backlog items (18 policy rate before 2018, 19 seasonal card
-   view, 23 phone tables). Show the plan first.
-
-## Documentation map
-
-- `README.md` is the portfolio showcase: summary, highlights, architecture (Mermaid), quick
-  start, lessons learned, roadmap. Keep it short and move details into `docs/`.
-- [docs/SETUP.md](docs/SETUP.md): setup, CLI usage, Supabase, secrets, scheduled fetch,
-  hosting, development, project layout.
-- [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md): sources, series tables, verified API facts.
-- [docs/SECURITY.md](docs/SECURITY.md): access model, RLS/REST, where secrets live, public
-  artifacts.
-- When behavior changes, update the doc that owns the topic; the README only links to it.
-- The README's roadmap order mirrors the Backlog.
-
-## Deployment facts
-
-- **Streamlit Community Cloud:**
-  - It reads `uv.lock` first and installs with `uv sync` (supported since 2024-11), so no
-    `requirements.txt` is needed.
-  - `streamlit run` promotes root-level string secrets to `os.environ` at bootstrap, before
-    the script runs.
-  - Its secret is TOML with a quoted value:
-    `DATABASE_URL = "postgresql://dashboard_reader.<ref>:<pw>@<pooler-host>:5432/postgres"`.
-    GitHub Secrets take the bare value.
-- **GitHub Actions secrets:**
-  - `EVDS_API_KEY`.
-  - `DATABASE_URL`, the **`fetch_writer`** session pooler string
-    (`postgresql://fetch_writer.<ref>:<pw>@<pooler-host>:5432/postgres`). It never holds the
-    owner string.
-  - `ANTHROPIC_API_KEY` (optional): the Claude API key for the weekly summary step.
-- **GitHub CLI:**
-  - Installed at `C:\Program Files\GitHub CLI\gh.exe` and logged in as EnesAltuNN. It is not
-    on the PATH of old terminals, so call it by full path.
-  - Use it to trigger runs (`gh workflow run fetch.yml`) and to read logs and artifacts.
-  - Never use it to read or set secret values.
-- **Local `.env`:**
-  - Holds `EVDS_API_KEY` and the **`fetch_writer`** `DATABASE_URL`. Daily work (`fetch`,
-    `backfill`, `db check`, the local dashboard) runs as `fetch_writer`. Comment the line out to
-    go back to SQLite.
-  - To use SQLite for one command without editing `.env`, set `$env:DATABASE_URL = " "` (a
-    space) and `$env:DB_PATH`. **Never `""`:** Windows PowerShell 5.1 deletes the variable on an
-    empty assignment, `.env` then wins, and the command writes to Supabase.
-- **Owner string (`postgres.<ref>`):** it lives only in the user's password manager, in no file
-  at all. It is used one-off for migrations and disaster recovery:
-  `$env:DATABASE_URL = Read-Host "postgres URL"; uv run tr-banking db migrate; Remove-Item Env:DATABASE_URL`
-  - `db migrate` checks read-only first. With nothing pending it is a no-op, even as
-    `fetch_writer`.
-  - With a migration pending and a non-owner role it stops with a clear "needs the table owner"
-    message.
-  - `fetch_writer` can read `schema_migrations` (SELECT only) for this check.
-- **Windows task:** it still runs locally on Thursdays at 15:00 and writes to Supabase via
-  `.env`, i.e. as `fetch_writer`. That is harmless because upserts are idempotent. It gets
-  removed per the Calendar.
-- **Local Postgres tests:**
-  - The machine has no Docker. A throwaway `pgserver` works: Python 3.12, and initdb with
-    `--no-locale`, because the Turkish Windows locale crashes initdb.
-  - Point `TEST_DATABASE_URL` at it.
-
-## Disaster recovery
-
-If the Supabase data is lost or the project is recreated, run the owner steps one-off, as
-[docs/SETUP.md](docs/SETUP.md#cloud-database-supabase) describes:
-1. `$env:DATABASE_URL = Read-Host "postgres URL"`
-2. `uv run tr-banking db migrate`
-3. `uv run tr-banking backfill --start 2014-01-03`. This takes about 3 minutes (BKM pages
-   are read 1 s apart); the sources keep the full history.
-4. `Remove-Item Env:DATABASE_URL`
-5. Re-enable both roles' logins in the SQL editor: `sql/enable_fetch_writer.sql` and
-   `sql/enable_dashboard_reader.sql`.
-6. Update `.env` and the GitHub and Streamlit secrets if the project ref or passwords
-   changed.
-
-## Roadmap (3 modules)
-
-| Module | Source | Frequency | `module` value | Status |
-|---|---|---|---|---|
-| 1. Credit market | TCMB EVDS3 + BDDK weekly bulletin | weekly | `credit` | done, live |
-| 1b. Official rates | TCMB EVDS3 loan rates + policy rate | weekly, daily | `rates` | done |
-| 2. Card spending | BKM monthly statistics (HTML tables) | monthly | `cards` | done |
-| 2b. Banking sector | BDDK deposits, NPL, bank groups | weekly | `banking` | done |
-| 3. Bank loan/deposit rates + campaigns | bank websites, scraping | daily | `rates` | postponed (see Open questions) |
-
-- New modules must plug into the existing tables; do not rewrite the schema for them.
-- Module 3's bank rates join module `rates` (the "Faizler" tab), next to the official EVDS
-  averages.
-- `macro` holds inputs such as CPI; it has no tab of its own.
-
-## Backlog
-
-1. ~~Least-privilege writer role for the fetch job~~ **done**: `fetch_writer` (migration 0003);
-   GitHub `DATABASE_URL` switched to it
-2. ~~Add .gitattributes (* text=auto eol=lf)~~ **done**: index was already LF, nothing
-   renormalized
-3. Verify Supabase free-tier project is not paused after a few weeks
-4. Remove the Windows scheduled task once Actions has run reliably (see Calendar)
-5. ~~Decide public vs private repo for portfolio~~ **closed**: public, dashboard live
-6. ~~Module 2: BKM~~ **done**: 6 monthly series from 2017-01, "Kartlar" tab
-7. Module 3: bank rates/campaigns scraping, **postponed on 2026-09-29** (see Open questions
-   for the research findings)
-8. ~~Weekly AI summary~~ **done** (2026-09-29): `summary.py` builds the facts (pure), Claude
-   (`claude-opus-5`, `fallbacks: "default"`, JSON output) writes TR/EN text, stored in
-   `summaries` with its input; once per data week; dashboard box above the tabs
-9. ~~`.devcontainer/devcontainer.json` from Streamlit's deploy flow~~ **closed**: deleted (it used
-   Python 3.11 + pip and could not install this uv project)
-10. ~~Real, inflation-adjusted values~~ **done**: CPI `TP.TUKFIY2025.GENEL`, prices of the
-    latest CPI month
-11. Revision history is not kept. This is a deliberate choice: upserts overwrite revised
-    values. A "vintage" table (value per fetch date) could be added later if revisions matter.
-12. ~~Official weekly loan interest rates from EVDS~~ **done**: `TP.KTF10/11/12/18` and the
-    policy rate `TP.PY.P02.1H` (module `rates`, "Interest rates" tab)
-13. ~~Policy-rate decision markers on the charts~~ **done** (from rate changes only)
-14. ~~MPC (PPK) meeting calendar~~ **done** (2026-09-29): `config/mpc_meetings.yaml` (85 past
-    meetings from the CBRT press releases, plus the announced ones), `metrics.policy_decisions`
-    reads hike/cut/hold from the rate; holds are short, faint ticks
-15. ~~BDDK bank groups (state / domestic private / foreign)~~ **done** (2026-09-29): total
-    loans and deposits per group, shares in the "Sektör" tab
-16. ~~BDDK deposits and non-performing loans~~ **done** (2026-09-29): tables 4 and 2, NPL and
-    FX-share ratios computed on the fly
-17. ~~Alerts on unusual weekly changes~~ **done** (2026-09-29): `metrics.unusual_changes`, a
-    robust score (median and scaled MAD of the past 52 weekly changes, % or pp) >= 5, shown
-    above the tabs; ready to feed the AI summary
-18. Policy rate before 2018-09-14: `TP.PY.P02.1H` is empty then (see DATA_SOURCES). Options:
-    the monthly BIS series `TP.BISPOLFAIZ.TUR`, or a hand-kept YAML of decisions. Decide first.
-19. Seasonal patterns in BKM card spending (December, summer tourism): a seasonally adjusted
-    view or a year-over-year-only default.
-20. ~~Robustness: per-source monthly fetch windows, BKM saved every 12 months, `clean-raw`~~
-    **done** (2026-09-28)
-21. ~~Dashboard redesign: KPI tiles, sidebar filters, category colors, theme, footer~~ **done**
-    (2026-09-28)
-22. ~~Screenshot script in the repo~~ **done** (2026-09-29): `scripts/screenshots.py` writes
-    `docs/images/dashboard.png` (EN, light, 1600×1000, checks the 500 KB limit) and, with
-    `--all`, every tab in both themes; works locally and against the live URL.
-23. Wide tables scroll sideways on phones; consider fewer columns in a narrow layout.
-
-## Open questions
-
-- **Module 3 (bank sites), postponed.** Research on 2026-09-29 (robots.txt, sitemaps, one
-  fetch per product page):
-  - `robots.txt` allows the product pages at Ziraat, VakıfBank, Halkbank, Garanti BBVA, İş
-    Bankası, Akbank, Yapı Kredi, ING and Enpara (Enpara also sends "ai-train=no").
-  - Comparable rates are rarely in the HTML. İş Bankası states personalised rates ("kişiye özel
-    uygulanacak faiz oranı"); Yapı Kredi and Enpara fill their calculators with JavaScript;
-    Halkbank's product URLs redirect to the home page; Ziraat and Akbank URLs from guesses 404.
-  - Only Garanti BBVA shows a statutory "örnek hesaplama" table in HTML (personal loan, 100,000
-    TRY, 36 months, 3.94% monthly, with an update date); ING shows campaign "from" rates.
-  - Taşıt and konut pages show almost no rates in HTML.
-  - Options when resuming: the JSON endpoints behind the calculators (like BDDK's chart
-    endpoint; undocumented, check each bank's terms), or browser automation (Playwright) in
-    the scheduled job (heavy, fragile). Decide first; campaigns would need their own table.
-- **Real rate column:** it uses the CPI of the rate's own month, so it is empty for the
-  latest week most of the month (CPI comes about 3 days after the month ends). The user asked
-  for empty cells; an alternative is to show the last week that has CPI, as the loans tab's
-  real view does. Ask before changing.
-- **AI summary (decided 2026-09-29):** `claude-opus-5` (the skill's default; the user can set
-  `SUMMARY_MODEL`), a GitHub Actions step after the fetch with its own `ANTHROPIC_API_KEY`
-  secret, table `summaries` (migration 0004) with the facts as `input`. Open: effort tuning
-  and a small eval of the texts once a few weeks exist.
-
-## Architecture
-
-```
-config/series.yaml  ->  config.py (validated SeriesSpec)
-                          |
-sources/<source>.py -> DataFrame[code, date, value]  (OBSERVATION_COLUMNS, sources/__init__.py)
-                          |
-pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
-                    open_repository(settings)   or Postgres/Supabase if DATABASE_URL is set
-                                                              |
-                     app/dashboard.py + app/metrics.py (pure) + app/i18n.py (pure)
-```
-
-- `settings.py`: pydantic-settings from env vars / `.env`. `EVDS_API_KEY` is optional there
-  (the dashboard does not need it) and is checked by the fetch pipeline. `DATABASE_URL`
-  (SecretStr) switches storage to Postgres; blank values count as unset.
-- `db/`:
-  - `repository.py` is the abstract `Repository`: validation, upsert SQL and queries written
-    once with a `{p}` placeholder.
-  - `sqlite.py` and `postgres.py` only add connections, transactions and schema setup.
-  - Always open storage via `open_repository(settings)`.
-- `cli.py`:
-  - `tr-banking fetch [--weeks N] [--source evds|bddk|bkm]`
-  - `tr-banking backfill --start YYYY-MM-DD [--end] [--source ...]`
-  - `tr-banking db migrate` (idempotent; needs the owner role)
-  - `tr-banking db migrate --check`: applies nothing, exit 1 if a migration is pending. It works
-    for `fetch_writer`.
-  - `tr-banking db check`: connection kind, migrations, RLS, row counts. It never logs the
-    connection string.
-  - `tr-banking check-freshness [--source]`: exit 1 if a configured series has no data or data
-    older than `freshness.MAX_AGE_DAYS` for its frequency (weekly: 13 days), or than its own
-    `max_age_days` in `series.yaml` (CPI 45, policy rate 14, BKM 100).
-  - `tr-banking scan-raw`: exit 1 if any raw file (name or content) contains a configured
-    secret. The secrets checked are the EVDS key, the full `DATABASE_URL` and its password.
-  - `tr-banking clean-raw [--days 30]`: delete raw files older than N days (by modification
-    time), for local housekeeping.
-  - `tr-banking summarize [--dry-run] [--force]`: facts of the newest data week from
-    `summary.build_brief`, text from Claude via `summary.write_summary`, stored once per data
-    week in `summaries`. Needs `ANTHROPIC_API_KEY` (not for `--dry-run`).
-- `pipeline.run_update` runs each source independently. A failing source is logged and the
-  others still load; the CLI then exits 1.
-- Fetch windows: weekly/daily requests start at `--weeks` back; monthly requests reach back
-  at least `MONTHLY_LOOKBACK_MONTHS` before today's month (EVDS 3, BKM 6) to cover the
-  publication lag. A new monthly source must be added there.
-- Clients that read page by page expose `iter_observations` (BKM, 12 months per chunk); the
-  pipeline upserts each chunk, so an interrupted backfill keeps what it has downloaded.
-- `sources/common.py` holds the shared retry logic (transient 429/5xx and network errors only)
-  and raw-response saving.
-- Every client implements `ObservationClient.fetch_observations(codes, start, end)`.
-
-## Data model
-
-- `series(id, source, code, name_tr, name_en, unit, frequency, module)`, `UNIQUE(source, code)`.
-- `observations(series_id, date, value, fetched_at)`, `PRIMARY KEY(series_id, date)`.
-  - `date` is ISO `YYYY-MM-DD` (period end).
-  - `fetched_at` is an ISO UTC timestamp.
-- Upserts use `ON CONFLICT ... DO UPDATE`, so loads are idempotent and revisions overwrite old
-  values.
-- Allowed `source` / `frequency` / `module` values are `Literal`s in `config.py`, not SQL CHECKs,
-  so adding one never needs a migration.
-- Config-only fields in `series.yaml` (not stored in the database): `deflator: true` (the CPI
-  used for real values) and `policy_rate: true` (its changes are the decision markers), at
-  most one series each; `category` for colors, KPI tiles and ratios (the full list is in
-  `config.py`; banking uses deposits, fx_deposits, npl, npl_consumer, npl_commercial,
-  state_banks, private_banks, foreign_banks and others).
-- Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
-  `app/metrics.py`.
-- `config/mpc_meetings.yaml` (config only, like `series.yaml`): CBRT MPC meeting dates,
-  strictly increasing (`config.MpcCalendar`). Decisions are never typed in; they are read
-  from the policy rate on the meeting day. Unlisted rate changes are still marked.
-- `summaries(data_date PK, created_at, model, input, text_tr, text_en)` (migration 0004): one
-  AI-written summary per data week, with the JSON facts it was written from.
-- Non-numeric data such as bank campaigns (module 3) will need an additional table; that is an
-  addition, not a rewrite.
-- Postgres uses native types: `DATE`, `DOUBLE PRECISION`, `TIMESTAMPTZ`, identity ids.
-  SQLite stores ISO text.
-- **Postgres migrations** are numbered files in `db/migrations/`, applied in order and recorded
-  in `schema_migrations`.
-  - Never edit an applied migration; add a new file instead.
-  - Every new table must enable RLS, revoke `anon`/`authenticated`, and, if the dashboard needs
-    it, grant SELECT plus add a `dashboard_reader` policy.
-  - Keep `db/schema.sql` (SQLite) in step with the migrations.
-- **Supabase access model:**
-  - **Owner `postgres`:** not stored in any file. It is used one-off, via `Read-Host`, for
-    `db migrate` (DDL) and disaster recovery, and bypasses RLS as the table owner.
-  - **`fetch_writer`** (GitHub Actions and the local `.env`):
-    - SELECT, INSERT and UPDATE on `series` and `observations`, plus SELECT on
-      `schema_migrations`.
-    - No DELETE or TRUNCATE, no DDL. RLS policies exist per command.
-    - `statement_timeout` is 60 s.
-  - **`dashboard_reader`** (Streamlit): SELECT only; sessions are read-only.
-  - Both non-owner roles are created NOLOGIN by migrations. Their passwords are set by hand
-    with `sql/enable_*.sql` and never stored in the repo.
-  - `Repository.ensure_ready()` creates the schema on SQLite but only *checks* it on Postgres.
-    The fetch never runs DDL; a pending migration fails it with a clear message.
-  - Every new table needs grants and policies for `fetch_writer` and `dashboard_reader` in its
-    migration.
-  - Use the **session pooler** (port 5432, user `<role>.<project-ref>`). The direct host is
-    IPv6-only and GitHub Actions has no IPv6.
-
-## Data sources
-
-Full, verified details: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md). Read it before touching
-a source client.
-
-- **TCMB EVDS3:**
-  - API key in the `key` header; parameters go in the path without `?`.
-  - Six weekly loan series from data group `bie_hpbitablo6`, in thousand TRY, from 2024-06-28.
-  - CPI `TP.TUKFIY2025.GENEL` (monthly, 2025=100, back-cast to 2005; no own chaining).
-  - Loan rates `TP.KTF10/11/12/18` (weekly, %, from 2002/2012) and the policy rate
-    `TP.PY.P02.1H` (business days, %, values only from 2018-09-14).
-  - Never guess series codes; discover them through the metadata endpoints.
-  - A response holds at most 1000 items (older rows are silently dropped), so the client
-    requests 2-year windows. Never mix frequencies in one request.
-- **BDDK weekly bulletin:**
-  - No official API: one POST per series to the charts' JSON endpoint, 1 s apart.
-  - Seven sector loan series in million TRY from 2014-01-03 (module `credit`), plus 13
-    deposit, NPL and bank-group series (module `banking`). Row ids come from the page's own
-    tables (`ShowModalGraph('<row>', ...)`); prefix `1.` loans, `2.` NPL, `4.` deposits.
-  - A week can appear twice with the same value (row 2.0.9); the parser keeps one copy.
-  - The site omits its TLS intermediate, which is bundled in `sources/certs/`.
-- **BKM (module 2):**
-  - One HTML page per month from 2017-01 (the "Excel" is HTML), requested 1 s apart; cells
-    found by row and column labels (`sources/bkm.py`). Unpublished months are skipped.
-  - 6 series: 4 amounts in million TRY, 2 card counts; `max_age_days: 100` for the 1.5–2
-    month publication lag.
-
-## Coding conventions
-
-- Type hints everywhere; small, single-purpose functions; pure functions where possible
-  (parsing, metrics) so they test without I/O.
-- Series codes, names and units live in `config/series.yaml`, never in code.
-- No secrets in code or logs: the key is a `SecretStr`, sent only as a header.
-- Fail loudly on unexpected data (empty series, unexpected or missing columns, bad dates,
-  non-numeric values) with a clear message; use the standard `logging` module, not `print`.
-- Open files with an explicit `encoding="utf-8"` (Windows defaults to the ANSI codepage).
-- Tests never call the real API or read `.env`:
-  - HTTP goes through `httpx.MockTransport`.
-  - Settings are built with `Settings(_env_file=None, ...)`.
-  - Databases are `:memory:` or `tmp_path`.
-  - `tests/conftest.py` removes `DATABASE_URL` and `EVDS_API_KEY` from the environment for
-    every test.
-  - Postgres tests need `TEST_DATABASE_URL` (a disposable server; CI provides one). Each test
-    gets its own schema. Repository behavior tests run on both backends.
-- **Raw responses are public** (CI artifact of a public repo):
-  - Save only response bodies.
-  - Pass secrets as `redact=` to `save_raw_response` / `request_with_retries`.
-  - Never put secrets in file names.
-- **Scheduled fetch** (`.github/workflows/fetch.yml`):
-  - Runs Tue and Fri 04:00 UTC, plus `workflow_dispatch`.
-  - Secrets `EVDS_API_KEY` and `DATABASE_URL` (`fetch_writer`) go only to the steps that need
-    them.
-  - Steps: db check → `db migrate --check` → fetch → check-freshness → scan-raw → upload
-    artifact (only if the scan passed).
-  - **Adding a migration:**
-    1. Run the one-off owner command (see Deployment facts) **before** pushing code that
-       needs it.
-    2. Otherwise the scheduled run fails at the schema check.
-- **CI** (`.github/workflows/ci.yml`):
-  - Runs on every push: `uv sync --locked`, ruff check/format and pytest, against a
-    `postgres:17` service container.
-  - It uses no secrets. Keep it that way; secrets belong only in the scheduled fetch workflow.
-  - `astral-sh/setup-uv` has no floating major tags since v8, so it is pinned to a full version.
-- Dashboard charts use one series per chart, with each series on its own y-scale. Never use a
-  dual axis. A reference line in the same unit (yearly inflation on a % rate chart) shares the
-  one axis.
-- Real values deflate only monetary units (`metrics.MONETARY_UNITS`); rates stay in % with
-  changes in pp; card counts stay counts.
-- Dashboard layout (`app/dashboard.py`):
-  - Tabs are stateful and lazy (`on_change="rerun"`): only the open tab runs and only its
-    filters appear in the sidebar. The open tab is kept in `st.session_state["open_section"]`.
-    The tabs' `default` is part of the widget identity, so it changes only when the language
-    changes (changing it on every switch dropped every second click).
-  - KPI tiles are `st.metric` with a sparkline. A change that rounds to zero gets
-    `delta_color="off"` and no arrow (st.metric treats "0,0%" as a rise).
-  - One color per `category`: `PALETTE`/`CATEGORY_HUES` in `dashboard.py`, the same steps as
-    `chartCategoricalColors` in `.streamlit/config.toml`. The palette passed the dataviz
-    validator (CVD and contrast) in both modes; three light steps are below 3:1, so every
-    chart names its series in the title and every tab has a table.
-  - Streamlit keeps a radio's or multiselect's choice as its **label**. Widgets with translated
-    option labels (source, nominal/real, series) therefore get one key per language
-    (`source_tr`, `source_en`) and start from the other language's value
-    (`translated_start`); otherwise a language switch leaves nothing selected in the browser.
-    AppTest cannot see this (it keeps the value); check it in a browser.
-  - KPI tiles use short units (`SHORT_UNIT_LABELS`, "bn TRY") so values fit a quarter width.
-  - Time axes use `DATE_AXIS` (labels keep the year).
-  - Alerts: `render_alerts` runs above the tabs on every weekly series except `macro`. The
-    threshold (`ALERT_THRESHOLD = 5`) was calibrated on the 2014-2026 history: about 1.5% of
-    weeks per series. Recalibrate with the history, not by guess, if series are added.
-  - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
-    is often empty as formatted text (e.g. the real-rate column).
-  - Visual checks: run the app on a scratch SQLite (`DATABASE_URL = " "`, `DB_PATH`) and run
-    `scripts/screenshots.py` (Playwright with the installed Edge, via `uv run --with
-    playwright`; not a project dependency). It writes the README image and, with `--all`,
-    every tab in light and dark. AppTest does not see layout or widget-identity bugs.
-- The dashboard is public:
-  - `load_data` is an `st.cache_data` with a 1 h TTL, shared by all visitors. It opens one
-    short connection per cache miss, never one per rerun.
-  - Show the page's read time next to the last fetch time.
-  - Database errors show `i18n` text `db_unavailable`, never exception details.
-    `.streamlit/config.toml` sets `client.showErrorDetails = "type"`.
-  - `.streamlit/secrets.toml` is gitignored.
-- The dashboard is bilingual (TR default, EN). Every UI text and all number/date formatting
-  live in `app/i18n.py`, with both languages always filled in (a test enforces this).
-  - Turkish formats: `18.445,2` and `-1,1%`. English formats: `18,445.2` and `-1.1%`.
-  - Up/down colors always come with a +/- sign.
+3. Check that the Supabase free-tier project does not pause.
+4. Remove the Windows scheduled task (see Calendar).
+7. Module 3: bank rates and campaigns from bank sites. Postponed; decide the approach first.
+11. Revision history: upserts overwrite. Add a vintage table only if revisions matter.
+18. Policy rate before 2018-09-14: the BIS series `TP.BISPOLFAIZ.TUR` or a YAML of
+    decisions. Decide first.
+19. BKM seasonality: a seasonally adjusted view, or a yearly-%-only default.
+23. Wide tables scroll sideways on phones.
 
 ## Commands
 
 ```powershell
-uv sync                                               # install/update dependencies into .venv
-uv run pytest                                         # run tests
-uv run ruff check .                                   # lint
-uv run ruff format .                                  # format
-uv run tr-banking backfill --start 2014-01-03         # load history (all sources)
+uv run pytest; uv run ruff check .; uv run ruff format .
 uv run tr-banking fetch [--source evds|bddk|bkm]      # latest 8 weeks
-uv run tr-banking db migrate                          # up to date? no-op; else needs the owner (one-off)
-uv run tr-banking db migrate --check                  # exit 1 if a migration is pending
-uv run tr-banking db check                            # connection, migrations, RLS, row counts
-uv run tr-banking check-freshness                     # exit 1 if data is stale
-uv run tr-banking scan-raw                            # exit 1 if a raw file holds a secret
-uv run tr-banking clean-raw [--days 30]               # delete old raw response files
-uv run tr-banking summarize [--dry-run] [--force]     # weekly AI summary (Claude API)
-uv run streamlit run src/tr_banking/app/dashboard.py  # dashboard
-uv run --with playwright python scripts/screenshots.py [--url URL] [--all FOLDER]  # README image
-powershell -ExecutionPolicy Bypass -File scripts\register_scheduled_fetch.ps1  # weekly task
+uv run tr-banking backfill --start 2014-01-03 [--source ...]
+uv run tr-banking db migrate [--check] | db check | check-freshness | scan-raw | clean-raw
+uv run tr-banking summarize [--dry-run] [--force]     # Claude API, costs money
+uv run streamlit run src/tr_banking/app/dashboard.py
 ```
-
-The GitHub Actions workflow is the main scheduler. The optional local Windows task
-("tr-banking weekly fetch", Thursdays 15:00) runs `scripts\scheduled_fetch.ps1`, which logs to
-`data\logs\fetch.log`. Keep `.ps1` files pure ASCII: Windows PowerShell 5.1 reads BOM-less
-files as ANSI.

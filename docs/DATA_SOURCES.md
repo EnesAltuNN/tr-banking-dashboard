@@ -1,7 +1,6 @@
 # Data sources
 
-Detailed, verified facts about each source. `CLAUDE.md` keeps only a short summary per source
-and links here. Update the "verified" dates when you re-check a fact.
+Detailed, verified facts about each source; read this before touching a source client. Update the "verified" dates when you re-check a fact.
 
 | Source | Series | Unit (stored) | History from | Access |
 |---|---|---|---|---|
@@ -340,3 +339,18 @@ Series codes (the label mapping lives in `sources/bkm.py`):
   and stay unchanged.
 - Amounts are nominal flows and are not seasonally adjusted: December and the summer
   (tourism) months stand out, so compare yearly % rather than monthly % across seasons.
+
+## Bank websites (module 3, postponed)
+
+Research on 2026-09-29 (robots.txt, sitemaps, one fetch per product page):
+- `robots.txt` allows the product pages at Ziraat, VakıfBank, Halkbank, Garanti BBVA, İş
+  Bankası, Akbank, Yapı Kredi, ING and Enpara (Enpara also sends "ai-train=no").
+- Comparable rates are rarely in the HTML. İş Bankası states personalised rates ("kişiye özel
+  uygulanacak faiz oranı"); Yapı Kredi and Enpara fill their calculators with JavaScript;
+  Halkbank's product URLs redirect to the home page; Ziraat and Akbank URLs from guesses 404.
+- Only Garanti BBVA shows a statutory "örnek hesaplama" table in HTML (personal loan, 100,000
+  TRY, 36 months, 3.94% monthly, with an update date); ING shows campaign "from" rates.
+- Taşıt and konut pages show almost no rates in HTML.
+- Options when resuming: the JSON endpoints behind the calculators (like BDDK's chart
+  endpoint; undocumented, check each bank's terms), or browser automation (Playwright) in
+  the scheduled job (heavy, fragile). Decide first; campaigns would need their own table.
