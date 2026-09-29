@@ -215,6 +215,8 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     weeks per series. Recalibrate with the history, not by guess, if series are added.
   - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
     is often empty as formatted text (e.g. the real-rate column).
+  - Every table is drawn by `show_table`: no inner scroll and a pinned first column, so the
+    series name stays in view when a wide table scrolls sideways on a phone.
   - Visual checks: run the app on a scratch SQLite (`DATABASE_URL = " "`, `DB_PATH`) and run
     `scripts/screenshots.py` (Playwright with the installed Edge, via `uv run --with
     playwright`; not a project dependency). It writes the README image and, with `--all`,

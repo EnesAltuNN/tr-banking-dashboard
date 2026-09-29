@@ -13,6 +13,7 @@ import altair as alt
 import pandas as pd
 import psycopg
 import streamlit as st
+from pandas.io.formats.style import Styler
 from streamlit.delta_generator import DeltaGenerator
 
 from tr_banking.app.i18n import (
@@ -532,7 +533,7 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
         .format(lambda day: format_date(day, lang), subset=[date_col])
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    st.dataframe(styled, hide_index=True, height="content")  # no inner scroll: tables are short
+    show_table(styled, ratio_col)
 
 
 def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:
@@ -905,6 +906,17 @@ def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, 
 # --- tables ---
 
 
+def show_table(styled: Styler, first_col: str) -> None:
+    """Every table looks the same: no inner scroll (they are short) and a pinned first
+    column, so the name stays in view when a wide table scrolls sideways on a phone."""
+    st.dataframe(
+        styled,
+        hide_index=True,
+        height="content",
+        column_config={first_col: st.column_config.Column(pinned=True)},
+    )
+
+
 def render_summary_table(
     summary: pd.DataFrame,
     series: pd.DataFrame,
@@ -955,7 +967,7 @@ def render_summary_table(
         .format(lambda day: format_period(day, lang), subset=[date_col])
         .map(delta_style(theme), subset=pct_cols)
     )
-    st.dataframe(styled, hide_index=True, height="content")  # no inner scroll: tables are short
+    show_table(styled, series_col)
 
 
 def delta_style(theme: str, decimals: int = 1) -> Callable[[float], str]:
@@ -1000,7 +1012,7 @@ def render_rates_table(summary: pd.DataFrame, series: pd.DataFrame, lang: Lang, 
         # A real rate is a level, not a change: it keeps its sign but gets no up/down color.
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    st.dataframe(styled, hide_index=True, height="content")  # no inner scroll: tables are short
+    show_table(styled, series_col)
 
 
 # --- charts ---

@@ -48,7 +48,7 @@ https://tr-banking-dashboard.streamlit.app/.
 
 | Date | Event | What to do |
 |---|---|---|
-| 2026-10-02 Fri 04:00 | Scheduled fetch | The Tue 09-29 run never started. Check `gh run list --workflow fetch.yml`; if runs are green, remind the user to remove the Windows task. |
+| 2026-10-02 Fri 04:00 | Scheduled fetch | The 09-29 run was green on schedule. Check `gh run list --workflow fetch.yml`; the Windows task is no longer needed (Backlog 4). |
 | 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the next CI and fetch runs. |
 | 2026-11-15 | BDDK TLS certificate renewed | On a certificate error, update the bundled intermediate (DATA_SOURCES). |
 | 2026-12-18 | CBRT publishes "2027 Para Politikası" | Add the rest of the 2027 MPC dates to `config/mpc_meetings.yaml`. |
@@ -56,9 +56,12 @@ https://tr-banking-dashboard.streamlit.app/.
 ## Status (2026-09-29)
 
 - **Live:** 25 series, with Loans, Interest rates and Cards tabs, plus the redesign.
-- **Local, 6 commits not pushed:** the Banking sector tab (13 BDDK series), the translated
+- **Local, 7 commits not pushed:** the Banking sector tab (13 BDDK series), the translated
   widget fix, `scripts/screenshots.py`, unusual-change alerts, the weekly AI summary
-  (migration 0004) and the MPC calendar (holds marked).
+  (migration 0004), the MPC calendar and the slimmed CLAUDE.md.
+- **Uncommitted:** `show_table` draws every table with a pinned first column (Backlog 23);
+  `graphify-out/` gitignored. pytest and ruff green; the pinning still needs a phone-width
+  browser check.
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
   2. `git push`.
@@ -66,6 +69,7 @@ https://tr-banking-dashboard.streamlit.app/.
   4. Add the GitHub secret `ANTHROPIC_API_KEY`.
   5. The first `summarize` needs the user's go-ahead: run `--dry-run` first.
   6. On an ImportError, reboot the Streamlit app.
+  7. Remove the Windows scheduled task (the cloud fetch runs green).
 - **README screenshot:** the user takes it:
   `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`.
   After the push, check that the Mermaid diagram renders on GitHub.
@@ -84,7 +88,6 @@ https://tr-banking-dashboard.streamlit.app/.
 18. Policy rate before 2018-09-14: the BIS series `TP.BISPOLFAIZ.TUR` or a YAML of
     decisions. Decide first.
 19. BKM seasonality: a seasonally adjusted view, or a yearly-%-only default.
-23. Wide tables scroll sideways on phones.
 
 ## Commands
 
