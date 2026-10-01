@@ -644,7 +644,21 @@ def test_banking_tab_shows_kpis_ratios_and_sector_series(use_db: Callable, tmp_p
     amounts = app.dataframe[1].value
     sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in DETAIL_CATEGORIES]
     assert amounts["Seri"].tolist() == sector
-    assert len(app.get("vega_lite_chart")) == len(HEADLINE_RATIOS) + len(sector)
+    # Headline ratios, two stacked bank-group share charts, then one chart per series.
+    assert len(app.get("vega_lite_chart")) == len(HEADLINE_RATIOS) + 2 + len(sector)
+    ratio_table = app.dataframe[0].value.set_index("Oran")
+    assert ratio_table.loc["Takipteki alacak oranı", "Konu"] == "Aktif kalitesi"
+    assert ratio_table.loc["Kredilerdeki pay: kamu bankaları", "Konu"] == "Banka grupları"
+    # The period table covers the same series as the amounts table.
+    periods = app.dataframe[2].value
+    assert periods["Seri"].tolist() == sector
+    assert list(periods.columns)[1:] == [
+        "1 hafta",
+        "4 hafta",
+        "13 hafta",
+        "Yılbaşından beri",
+        "52 hafta",
+    ]
     assert "takipteki / (krediler + takipteki)" in page_text(app)
 
 
@@ -655,6 +669,7 @@ def test_banking_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     app.radio(key="lang").set_value("en").run()
 
     assert list(app.dataframe[0].value.columns) == [
+        "Topic",
         "Ratio",
         "Date",
         "Last value (%)",

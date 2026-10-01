@@ -43,6 +43,7 @@ from tr_banking.app.metrics import (
     category_id,
     deflate,
     display_unit,
+    period_changes,
     policy_decisions,
     real_rates,
     spec_id,
@@ -505,6 +506,7 @@ def render_banking_view(
     render_ratio_table(ratios, lang, theme)
     headline = [ratio for ratio in ratios if ratio.key in HEADLINE_RATIOS]
     render_ratio_charts(headline, lang, theme)
+    render_group_shares(ratios, lang, theme)
 
     st.markdown(f"**{text('amounts', lang)}**")
     sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(DETAIL_CATEGORIES), "id"]]
@@ -521,6 +523,8 @@ def render_banking_view(
         selected, month = deflate_money(selected, banking, price_index, lang)
     summary = summarize(selected, as_of=end)
     render_summary_table(summary, banking, lang, theme, month, show_prev=month is None)
+    st.markdown(f"**{text('period_changes', lang)}**")
+    render_period_table(period_changes(selected, as_of=end), banking, lang, theme)
     in_range = selected[selected["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
     render_charts(in_range, banking.set_index("id"), selected_ids, lang, theme, month)
     with st.expander(text("notes", lang)):
@@ -531,10 +535,27 @@ HEADLINE_RATIOS = (
     "ratio_npl",
     "ratio_fx_share",
     "ratio_loan_deposit",
-    "ratio_loans_state_banks",
+    "ratio_bonds_securities",
     "ratio_equity_loans",
     "ratio_wholesale_funding",
 )
+# Topic of each ratio in the ratio table, by key prefix (the first match wins).
+RATIO_TOPICS = (
+    ("ratio_npl", "topic_asset_quality"),
+    ("ratio_fx_share", "topic_deposits"),
+    ("ratio_loan_deposit", "topic_deposits"),
+    ("ratio_equity", "topic_capital"),
+    ("ratio_fx_position", "topic_capital"),
+    ("ratio_wholesale", "topic_funding"),
+    ("ratio_reserves", "topic_funding"),
+    ("ratio_bonds", "topic_securities"),
+    ("ratio_loans_", "topic_groups"),
+    ("ratio_deposits_", "topic_groups"),
+)
+
+
+def ratio_topic(key: str) -> str:
+    return next(topic for prefix, topic in RATIO_TOPICS if key.startswith(prefix))
 
 
 def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
@@ -547,6 +568,9 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
     wow_col, yoy_col = text("col_wow_pp", lang), text("col_yoy_pp", lang)
     frame = pd.DataFrame(
         {
+            text("col_topic", lang): [
+                text(ratio_topic(ratios[i].key), lang) for i in summary["series_id"]
+            ],
             ratio_col: [text(ratios[i].key, lang) for i in summary["series_id"]],
             date_col: summary["last_date"].dt.date,
             last_col: summary["last_value"],
@@ -567,6 +591,77 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
     show_table(styled, ratio_col)
+
+
+def render_group_shares(ratios: list[Ratio], lang: Lang, theme: str) -> None:
+    """Stacked areas of the bank groups' shares of loans and of deposits (they add to 100%)."""
+    by_key = {ratio.key: ratio for ratio in ratios}
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk"][lang])
+    columns = st.columns(CHARTS_PER_ROW)
+    for column, kind in zip(columns, ("loans", "deposits"), strict=False):
+        parts = [
+            by_key[key].values.assign(group=text(f"group_{bank_group}", lang))
+            for bank_group in BANK_GROUPS
+            if (key := f"ratio_{kind}_{bank_group}") in by_key
+        ]
+        if not parts:
+            continue
+        with column.container(border=True):
+            chart_title(text(f"group_shares_{kind}", lang), series_color(BANK_GROUPS[0], theme))
+            st.altair_chart(share_chart(pd.concat(parts, ignore_index=True), lang, theme))
+            st.caption(source)
+
+
+def share_chart(data: pd.DataFrame, lang: Lang, theme: str) -> alt.Chart:
+    """Shares that add up to 100%, stacked in the order of BANK_GROUPS."""
+    labels = [text(f"group_{bank_group}", lang) for bank_group in BANK_GROUPS]
+    colors = [series_color(bank_group, theme) for bank_group in BANK_GROUPS]
+    data = data.assign(order=data["group"].map(labels.index))
+    chart = (
+        alt.Chart(data)
+        .mark_area(opacity=0.85)
+        .encode(
+            x=alt.X("date:T", title=None, axis=DATE_AXIS),
+            y=alt.Y(
+                "value:Q",
+                title="%",
+                stack="zero",
+                scale=alt.Scale(domain=[0, 100]),
+                axis=alt.Axis(format=",.0f"),
+            ),
+            color=alt.Color(
+                "group:N",
+                scale=alt.Scale(domain=labels, range=colors),
+                legend=alt.Legend(orient="bottom", title=None),
+            ),
+            order=alt.Order("order:Q"),
+            tooltip=[
+                alt.Tooltip("date:T", title=text("col_date", lang), format="%d %b %Y"),
+                alt.Tooltip("group:N", title=text("col_group", lang)),
+                alt.Tooltip("value:Q", title=text("col_share", lang), format=",.1f"),
+            ],
+        )
+        .properties(height=CHART_HEIGHT)
+    )
+    return chart.configure(locale=VEGA_LOCALE_TR) if lang == "tr" else chart
+
+
+def render_period_table(
+    changes: pd.DataFrame, series: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """% change of each selected series over 1, 4, 13 and 52 weeks and since New Year."""
+    table = changes.merge(series, left_on="series_id", right_on="id")
+    series_col = text("col_series", lang)
+    names = {"w1": "col_1w", "w4": "col_4w", "w13": "col_13w", "ytd": "col_ytd", "w52": "col_52w"}
+    frame = pd.DataFrame(
+        {series_col: table[f"name_{lang}"]}
+        | {text(label, lang): table[column] for column, label in names.items()}
+    )
+    pct_cols = [text(label, lang) for label in names.values()]
+    styled = frame.style.format(
+        lambda value: format_pct(value, lang), subset=pct_cols, na_rep=MISSING
+    ).map(delta_style(theme), subset=pct_cols)
+    show_table(styled, series_col)
 
 
 def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:

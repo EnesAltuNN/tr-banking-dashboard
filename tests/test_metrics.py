@@ -4,7 +4,7 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from tr_banking.app.metrics import display_unit, pct_change, summarize
+from tr_banking.app.metrics import display_unit, pct_change, period_changes, summarize
 
 LAST = date(2026, 9, 18)
 
@@ -95,3 +95,30 @@ def test_monthly_summary_missing_month_gives_nan() -> None:
 
     assert math.isnan(row.prev_pct)  # June is missing: not compared with May
     assert math.isnan(row.yoy_pct)
+
+
+def test_period_changes_over_weeks_and_since_new_year() -> None:
+    days = pd.date_range("2024-12-27", "2026-01-30", freq="W-FRI")
+    values = pd.Series(range(100, 100 + len(days)), index=days, dtype=float)
+    observations = pd.DataFrame({"series_id": 1, "date": days, "value": values.to_numpy()})
+
+    [row] = period_changes(observations).to_dict("records")
+
+    last = values.iloc[-1]
+    assert row["last_date"] == pd.Timestamp("2026-01-30")
+    assert row["w1"] == pytest.approx((last / values.iloc[-2] - 1) * 100)
+    assert row["w13"] == pytest.approx((last / values.iloc[-14] - 1) * 100)
+    # New Year base: the last Friday of 2025 (26 December).
+    assert row["ytd"] == pytest.approx((last / values[pd.Timestamp("2025-12-26")] - 1) * 100)
+    assert row["w52"] == pytest.approx((last / values.iloc[-53] - 1) * 100)
+
+
+def test_period_changes_are_nan_without_enough_history() -> None:
+    observations = pd.DataFrame(
+        {"series_id": 1, "date": pd.to_datetime(["2026-01-23", "2026-01-30"]), "value": [1.0, 2.0]}
+    )
+
+    [row] = period_changes(observations).to_dict("records")
+
+    assert row["w1"] == pytest.approx(100.0)
+    assert all(math.isnan(row[name]) for name in ("w4", "w13", "ytd", "w52"))

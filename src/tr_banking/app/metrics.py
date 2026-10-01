@@ -258,6 +258,31 @@ def value_near(values: pd.Series, target: pd.Timestamp) -> float:
     return window.iloc[-1] if not window.empty else float("nan")
 
 
+# Lookbacks of the period-change table, in weeks; "ytd" compares with the last value of the
+# previous year (the last Friday of December is within LOOKBACK_TOLERANCE of 31 December).
+PERIOD_WEEKS = {"w1": 1, "w4": 4, "w13": 13, "w52": 52}
+PERIOD_COLUMNS = ["series_id", "last_date", "w1", "w4", "w13", "ytd", "w52"]
+
+
+def period_changes(observations: pd.DataFrame, as_of: date | None = None) -> pd.DataFrame:
+    """% change of each series' latest value over 1, 4, 13 and 52 weeks and since New Year."""
+    if as_of is not None:
+        observations = observations[observations["date"] <= pd.Timestamp(as_of)]
+    rows = []
+    for series_id, group in observations.groupby("series_id"):
+        values = group.set_index("date")["value"].sort_index()
+        last_date = values.index.max()
+        last = values.iloc[-1]
+        bases = {
+            name: value_near(values, last_date - timedelta(weeks=weeks))
+            for name, weeks in PERIOD_WEEKS.items()
+        }
+        bases["ytd"] = value_near(values, pd.Timestamp(last_date.year - 1, 12, 31))
+        changes = {name: (last / base - 1) * 100 for name, base in bases.items()}
+        rows.append({"series_id": series_id, "last_date": last_date, **changes})
+    return pd.DataFrame(rows, columns=PERIOD_COLUMNS)
+
+
 def summarize(
     observations: pd.DataFrame, as_of: date | None = None, frequency: str = "weekly"
 ) -> pd.DataFrame:

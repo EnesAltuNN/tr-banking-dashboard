@@ -95,7 +95,7 @@ def main() -> None:
             for scheme in ("light", "dark"):
                 # Tall viewport: the page scrolls inside Streamlit's own container.
                 tall = browser.new_page(
-                    viewport={"width": 1600, "height": 3000}, color_scheme=scheme
+                    viewport={"width": 1600, "height": 5500}, color_scheme=scheme
                 )
                 every_tab(tall, args.url, args.all, scheme)
                 tall.close()

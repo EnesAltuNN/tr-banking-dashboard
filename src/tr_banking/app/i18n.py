@@ -136,6 +136,32 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "tab_banking": {"tr": "Sektör", "en": "Banking sector"},
     "banking_unavailable": {"tr": "Henüz sektör verisi yok.", "en": "No banking sector data yet."},
     "ratios": {"tr": "Oranlar", "en": "Ratios"},
+    "col_topic": {"tr": "Konu", "en": "Topic"},
+    "topic_asset_quality": {"tr": "Aktif kalitesi", "en": "Asset quality"},
+    "topic_deposits": {"tr": "Mevduat", "en": "Deposits"},
+    "topic_capital": {"tr": "Sermaye", "en": "Capital"},
+    "topic_funding": {"tr": "Fonlama", "en": "Funding"},
+    "topic_securities": {"tr": "Menkul değerler", "en": "Securities"},
+    "topic_groups": {"tr": "Banka grupları", "en": "Bank groups"},
+    "group_shares_loans": {
+        "tr": "Kredilerde banka grubu payları",
+        "en": "Bank-group shares of loans",
+    },
+    "group_shares_deposits": {
+        "tr": "Mevduatta banka grubu payları",
+        "en": "Bank-group shares of deposits",
+    },
+    "group_state_banks": {"tr": "Kamu", "en": "State"},
+    "group_private_banks": {"tr": "Yerli özel", "en": "Domestic private"},
+    "group_foreign_banks": {"tr": "Yabancı", "en": "Foreign"},
+    "col_group": {"tr": "Banka grubu", "en": "Bank group"},
+    "col_share": {"tr": "Pay (%)", "en": "Share (%)"},
+    "period_changes": {"tr": "Dönem değişimleri (%)", "en": "Changes over periods (%)"},
+    "col_1w": {"tr": "1 hafta", "en": "1 week"},
+    "col_4w": {"tr": "4 hafta", "en": "4 weeks"},
+    "col_13w": {"tr": "13 hafta", "en": "13 weeks"},
+    "col_ytd": {"tr": "Yılbaşından beri", "en": "Year to date"},
+    "col_52w": {"tr": "52 hafta", "en": "52 weeks"},
     "amounts": {"tr": "Tutarlar", "en": "Amounts"},
     "col_ratio": {"tr": "Oran", "en": "Ratio"},
     "ratio_npl": {"tr": "Takipteki alacak oranı", "en": "Non-performing loan ratio"},
@@ -228,7 +254,10 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "değişimi yüzde puan (puan) cinsindendir. **Mevduat dışı fonlama** = TCMB'ye borçlar + "
             "repo + yurt dışı bankalara borçlar + ihraç edilen menkul kıymetler. Döviz net genel "
             "pozisyonunun yasal sınırı özkaynağın ±%20'sidir. Devlet tahvili payı, menkul "
-            "değerler tablosundaki üç devlet tahvili satırının toplamıdır."
+            "değerler tablosundaki üç devlet tahvili satırının toplamıdır. Bir banka el "
+            "değiştirdiğinde grubu da değişir; grup paylarındaki ani sıçramalar (ör. 2016) "
+            "bundandır. Dönem değişimleri, son değeri 1, 4, 13 ve 52 hafta önceki değerle ve "
+            "önceki yılın son haftasıyla karşılaştırır."
         ),
         "en": (
             "Source: BDDK weekly bulletin, tables *Mevduat* (deposits), *Takipteki Alacaklar* "
@@ -243,7 +272,10 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "Changes of ratios are in percentage points (pp). **Non-deposit funding** = due to the "
             "CBRT + repo + due to foreign banks + securities issued. The legal limit of the net "
             "FX position is ±20% of own funds. The bond share sums the three government bond "
-            "rows of the securities table."
+            "rows of the securities table. When a bank changes hands it moves to another group, "
+            "which causes the sudden jumps in group shares (e.g. 2016). The period changes "
+            "compare the latest value with 1, 4, 13 and 52 weeks earlier and with the last week "
+            "of the previous year."
         ),
     },
     "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},
