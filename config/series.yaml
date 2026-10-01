@@ -92,6 +92,19 @@ series:
     max_age_days: 45
     deflator: true
 
+  # USD/TRY, CBRT indicative buying rate (Döviz Alış), data group bie_dkdovytl, business days
+  # from 1950, verified 2026-10-01. BDDK values FX items at the CBRT buying rate, so this one
+  # turns FX deposits into USD. Holidays can last 9 days, hence max_age_days 14.
+  - source: evds
+    code: TP.DK.USD.A.YTL
+    name_tr: ABD doları kuru (TCMB döviz alış)
+    name_en: USD/TRY (CBRT buying rate)
+    unit: TRY
+    frequency: daily
+    module: macro
+    max_age_days: 14
+    category: usd_try
+
   # Loan interest rates. Data group bie_kt100h "Kredi Faiz Oranlari (Akim)", verified 2026-09-27:
   # weighted average rates banks apply to new TRY loans that week (flow data), weekly (Friday),
   # percent, 2002-01-04 onward (TP.KTF18 from 2012-07-27). Both personal and commercial rates
@@ -137,6 +150,19 @@ series:
     module: rates
     category: commercial
 
+  # TL deposit rate, all maturities: data group bie_mt100h "Mevduat Faiz Oranlari (Akim)",
+  # "Toplam (TL Mevduat, Akim, %)", weekly (Friday) from 2002-01-04, verified 2026-10-01: the
+  # weighted average rate on new TL deposits that week, the deposit side of the loan rates.
+  - source: evds
+    code: TP.TRY.MT06
+    name_tr: TL mevduat faizi
+    name_en: TRY deposit rate
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_rate
+    alerts: false
+
   # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
   # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
   # MPC (PPK) decisions. No value on holidays, and long holidays last up to 9 days, hence 14 days.
@@ -150,6 +176,21 @@ series:
     category: policy
     max_age_days: 14
     policy_rate: true
+
+  # Weighted average cost of CBRT funding (AOFM). Data group bie_apifon, business days,
+  # verified 2026-10-01: values from 2014-01-02, so it covers the years the one-week repo
+  # series does not. It is the better measure for 2016-2018, when the CBRT funded banks
+  # mostly through other facilities: in 2017 this ran at 8.28-12.75% while the one-week repo
+  # stayed at 8%. Since 2018 the two agree (both 37.00% on 2026-09-30).
+  - source: evds
+    code: TP.APIFON4
+    name_tr: TCMB ağırlıklı ortalama fonlama maliyeti
+    name_en: CBRT weighted average cost of funding
+    unit: "%"
+    frequency: daily
+    module: rates
+    category: policy
+    max_age_days: 14
 
 # ---------------------------------------------------------------------------------------------
 # BDDK weekly bulletin (https://www.bddk.org.tr/BultenHaftalik), table 1 "Krediler".
@@ -365,6 +406,167 @@ series:
     frequency: weekly
     module: banking
     category: foreign_banks
+
+  - source: bddk
+    code: "2.0.1:10005:TRY:3"
+    name_tr: "Takipteki alacaklar: kamu bankaları"
+    name_en: "Non-performing loans: state banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: state_banks
+    alerts: false
+
+  - source: bddk
+    code: "2.0.1:10007:TRY:3"
+    name_tr: "Takipteki alacaklar: yerli özel bankalar"
+    name_en: "Non-performing loans: domestic private banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: private_banks
+    alerts: false
+
+  - source: bddk
+    code: "2.0.1:10006:TRY:3"
+    name_tr: "Takipteki alacaklar: yabancı bankalar"
+    name_en: "Non-performing loans: foreign banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: foreign_banks
+    alerts: false
+
+  - source: bddk
+    code: "4.0.1:10005:TRY:2"
+    name_tr: "YP mevduat: kamu bankaları"
+    name_en: "FX deposits: state banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: state_banks
+
+  - source: bddk
+    code: "4.0.1:10007:TRY:2"
+    name_tr: "YP mevduat: yerli özel bankalar"
+    name_en: "FX deposits: domestic private banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: private_banks
+
+  - source: bddk
+    code: "4.0.1:10006:TRY:2"
+    name_tr: "YP mevduat: yabancı bankalar"
+    name_en: "FX deposits: foreign banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: foreign_banks
+
+  # Yabancı Para Pozisyonu tablosu (tabloId 297): only the TOPLAM column (3) has values
+  - source: bddk
+    code: "9.0.18:10001:TRY:3"
+    name_tr: "Yasal özkaynak"
+    name_en: "Regulatory capital (own funds)"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: equity
+    alerts: false
+
+  - source: bddk
+    code: "9.0.17:10001:TRY:3"
+    name_tr: "Yabancı para net genel pozisyonu"
+    name_en: "Net FX position (on + off balance sheet)"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: fx_position
+    alerts: false
+
+  # Diğer Bilanço Kalemleri (tabloId 293): non-deposit funding and reserves
+  - source: bddk
+    code: "5.0.8:10001:TRY:3"
+    name_tr: "TCMB'ye borçlar"
+    name_en: "Due to the CBRT"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: cbrt_funding
+
+  - source: bddk
+    code: "5.0.16:10001:TRY:3"
+    name_tr: "Repo işlemlerinden sağlanan fonlar"
+    name_en: "Funds from repo transactions"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: repo_funding
+
+  - source: bddk
+    code: "5.0.11:10001:TRY:3"
+    name_tr: "Yurt dışı bankalara borçlar"
+    name_en: "Due to foreign banks"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: foreign_bank_funding
+
+  - source: bddk
+    code: "5.0.12:10001:TRY:3"
+    name_tr: "İhraç edilen menkul kıymetler (net)"
+    name_en: "Securities issued (net)"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: issued_securities
+
+  - source: bddk
+    code: "5.0.4:10001:TRY:3"
+    name_tr: "Zorunlu karşılıklar"
+    name_en: "Reserve requirements"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: reserve_requirements
+
+  # Menkul Değerler (tabloId 291); the three government bond rows are summed for the bond share
+  - source: bddk
+    code: "3.0.1:10001:TRY:3"
+    name_tr: "Toplam menkul değerler"
+    name_en: "Total securities"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: securities
+
+  - source: bddk
+    code: "3.0.15:10001:TRY:3"
+    name_tr: "Devlet tahvilleri: gerçeğe uygun değer farkı K/Z"
+    name_en: "Government bonds: fair value through P&L"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: government_bonds
+
+  - source: bddk
+    code: "3.0.18:10001:TRY:3"
+    name_tr: "Devlet tahvilleri: gerçeğe uygun değer farkı diğer kapsamlı gelir"
+    name_en: "Government bonds: fair value through OCI"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: government_bonds
+
+  - source: bddk
+    code: "3.0.21:10001:TRY:3"
+    name_tr: "Devlet tahvilleri: itfa edilmiş maliyet"
+    name_en: "Government bonds: amortised cost"
+    unit: million TRY
+    frequency: weekly
+    module: banking
+    category: government_bonds
 
 # ---------------------------------------------------------------------------------------------
 # BKM monthly card statistics (https://bkm.com.tr/secilen-aya-ait-istatistikler/), module 2.

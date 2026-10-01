@@ -32,11 +32,14 @@ def test_project_series_yaml_loads() -> None:
         "TP.HPBITABLO6.16",
         "TP.HPBITABLO6.20",
         "TP.TUKFIY2025.GENEL",
+        "TP.DK.USD.A.YTL",
         "TP.KTF10",
         "TP.KTF11",
         "TP.KTF12",
         "TP.KTF18",
+        "TP.TRY.MT06",
         "TP.PY.P02.1H",
+        "TP.APIFON4",
     ]
     assert {spec.module for spec in config.series} == {
         "credit",
@@ -99,7 +102,7 @@ def test_project_bddk_series_have_valid_codes() -> None:
 
     loans = [spec for spec in specs if spec.module == "credit"]
     banking = [spec for spec in specs if spec.module == "banking"]
-    assert (len(loans), len(banking)) == (7, 13)
+    assert (len(loans), len(banking)) == (7, 30)
     assert {parse_series_code(spec.code).group for spec in loans} == {"10001"}
     # Bank groups: state, domestic private and foreign add up to the sector (10001).
     assert {parse_series_code(spec.code).group for spec in banking} == {
@@ -108,7 +111,15 @@ def test_project_bddk_series_have_valid_codes() -> None:
         "10006",
         "10007",
     }
-    assert {parse_series_code(spec.code).row.split(".")[0] for spec in banking} == {"1", "2", "4"}
+    # Tables: 1 loans, 2 NPL, 3 securities, 4 deposits, 5 other items, 9 FX position.
+    assert {parse_series_code(spec.code).row.split(".")[0] for spec in banking} == {
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "9",
+    }
     assert {spec.unit for spec in specs} == {"million TRY"}
 
 
@@ -175,3 +186,19 @@ def test_optional_fields_default_to_off() -> None:
 def test_max_age_days_must_be_positive() -> None:
     with pytest.raises(ValidationError, match="max_age_days"):
         SeriesConfig.model_validate({"series": [{**VALID_SPEC, "max_age_days": 0}]})
+
+
+def test_noisy_series_are_kept_out_of_the_alerts() -> None:
+    # Measured on 2014-2026: these flagged 3.8-7.5% of weeks (target about 1.5%). NPL drops
+    # with monthly write-offs, own funds jump with monthly profits, the net FX position sits
+    # near zero (so its % change means nothing), and the weekly deposit rate is a noisy flow.
+    specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").series
+
+    assert {spec.code for spec in specs if not spec.alerts} == {
+        "2.0.1:10005:TRY:3",
+        "2.0.1:10006:TRY:3",
+        "2.0.1:10007:TRY:3",
+        "9.0.17:10001:TRY:3",
+        "9.0.18:10001:TRY:3",
+        "TP.TRY.MT06",
+    }

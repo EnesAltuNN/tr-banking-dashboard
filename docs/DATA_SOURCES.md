@@ -6,7 +6,7 @@ Detailed, verified facts about each source; read this before touching a source c
 |---|---|---|---|---|
 | [TCMB EVDS3](#tcmb-evds3-verified-2026-09-24) | 6 weekly loan series | thousand TRY | 2024-06-28 | official API, free key |
 | [TCMB EVDS3, CPI](#consumer-price-index-verified-2026-09-27) | 1 monthly price index (deflator) | index, 2025=100 | 2005-01 | official API, free key |
-| [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, daily policy rate | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
+| [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, the daily policy rate and the daily funding cost | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
 | [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series; 13 deposit, NPL and bank-group series | million TRY | 2014-01-03 | public website, no API |
 | [BKM](#bkm-card-statistics-verified-2026-09-27) | 4 monthly card spending series, 2 card counts | million TRY, cards | 2017-01 | public website (HTML), no API |
 
@@ -169,6 +169,36 @@ data.
   one-week repo value exists, it does not show that period's actual funding cost. The
   series used here has no values before 2018-09-14 anyway.
 
+**Funding cost:** `TP.APIFON4` in data group `bie_apifon`, the CBRT's weighted average cost of
+funding (AOFM), on business days (verified 2026-10-01).
+- It runs from **2014-01-02**, so it covers the years the one-week repo series does not, and
+  it is what the 2016-2018 note above calls for: in 2017 it ranged 8.28-12.75% while the
+  one-week repo rate stayed at 8%.
+- Since 2018 the two agree: both were 37.00% on 2026-09-30, and both 50.00% -> 47.50% over the
+  test fixture's window (`evds_funding_cost_2024_2025.json`, recorded 2026-10-01).
+- It is charted as a plain line, not a step: unlike a policy rate it moves between meetings.
+  It shares the `policy` category and so gets no real-rate column, which is for loan rates.
+- This is why the dashboard does **not** splice a pre-2018 policy rate from another source:
+  the two measures are different things and are shown as two series.
+
+**Deposit rate** (verified 2026-10-01): `TP.TRY.MT06` in data group `bie_mt100h`, *Mevduat
+Faiz Oranları (Akım)*, "Toplam (TL Mevduat, Akım, %)": the weighted average rate on new TRY
+deposits that week, all maturities, weekly (Friday) from 2002-01-04. It is the deposit side
+of `bie_kt100h`. 43.56% on 2026-09-18.
+- The same group has 1, 3, 6, 12 and 12+ month maturities (`MT01`-`MT05`), USD and EUR
+  deposits, and savings (`TAS`) and commercial (`TIC`) splits from 2012-07-06; not used.
+- **Spread** (`app/metrics.py: rate_spread`) = `TP.KTF18` commercial loan rate − deposit rate:
+  6.2 pp on 2026-09-18, between −17.8 and +15.9 pp since 2014. There is no single rate for
+  all loans; commercial loans are the largest book.
+- `alerts: false`: the weekly flow rate flagged 3.8% of weeks.
+
+**USD/TRY** (verified 2026-10-01): `TP.DK.USD.A.YTL` in data group `bie_dkdovytl`, *Döviz
+Kurları*, the CBRT indicative USD buying rate (Döviz Alış), business days from 1950
+(weekend dates come back null). Module `macro`, no tab. It turns FX deposits into USD
+(`app/metrics.py: in_usd`, the latest rate within 6 days up to each Friday): about 259
+billion USD on 2026-09-18, up from 231 a year earlier, while the TRY value rose 32%.
+Euro and gold are converted at the dollar rate too, so the USD figure is approximate.
+
 **MPC calendar and decision markers** (verified 2026-09-29):
 - The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from
   the first meeting inside the series (2018-10-25). Past dates come from the CBRT's decision
@@ -262,9 +292,26 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
 | `2.0.5:10001:TRY:3` | Takipteki 8 | NPL: commercial and other loans | 506,664 |
 | `1.0.1:{10005,10007,10006}:TRY:3` | Krediler 1 | Total loans of state / domestic private / foreign banks | 13,209,240 / 8,030,389 / 6,998,060 |
 | `4.0.1:{10005,10007,10006}:TRY:3` | Mevduat 1 | Total deposits of the same groups | 15,275,970 / 9,033,830 / 8,243,471 |
+| `2.0.1:{10005,10007,10006}:TRY:3` | Takipteki 1 | NPL of the same groups | 324,873 / 294,555 / 257,071 |
+| `4.0.1:{10005,10007,10006}:TRY:2` | Mevduat 1, YP | FX deposits of the same groups | 5,524,920 / 3,606,521 / 3,453,558 |
+| `9.0.18:10001:TRY:3` | YP Pozisyonu 8 | Regulatory capital (Yasal Özkaynak) | 6,056,344 |
+| `9.0.17:10001:TRY:3` | YP Pozisyonu 7 | Net FX position, on + off balance sheet | 6,854 |
+| `5.0.8:10001:TRY:3` | Diğer Bilanço 8 | Due to the CBRT | 878,758 |
+| `5.0.16:10001:TRY:3` | Diğer Bilanço 13 | Funds from repo transactions | 3,334,973 |
+| `5.0.11:10001:TRY:3` | Diğer Bilanço 12 | Due to foreign banks | 6,600,424 |
+| `5.0.12:10001:TRY:3` | Diğer Bilanço 14 | Securities issued (net) | 2,158,790 |
+| `5.0.4:10001:TRY:3` | Diğer Bilanço 4 | Reserve requirements | 4,365,021 |
+| `3.0.1:10001:TRY:3` | Menkul 1 | Total securities | 8,045,613 |
+| `3.0.{15,18,21}:10001:TRY:3` | Menkul 3, 6, 9 | Government bonds at FV through P&L / through OCI / amortised cost | 353,636 / 2,722,927 / 1,650,340 |
 
 - **State + domestic private + foreign = sector, exactly**, for loans and deposits (checked on
   2026-09-18). Participation and development banks belong to these ownership groups.
+- **New rows checked on 2026-10-01** against the live endpoint: all start on 2014-01-03, and
+  the three groups' NPL and FX deposits add up to the sector rows.
+- **Table 297 (FX position) has only a TOPLAM column**: column 1 returns 0, use column 3.
+- **"Due to the CBRT" (`5.0.8`) leaves weeks out before 2018-09-28**: it sends a few weeks,
+  all 0 (2015-05-29 to 2017-10-13), and nothing for the rest. The non-deposit funding sum
+  counts those weeks as 0; from 2018-09-28 the row is complete.
 - **Ratios are computed for display, never stored** (`app/metrics.py: ratio_pct`):
   - NPL ratio = NPL / (loans + NPL): 3.01% on 2026-09-18. BDDK's loan table holds performing
     loans only, so the denominator adds the NPL back, as BDDK's own reports do. Consumer and
@@ -272,6 +319,15 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
   - FX share of deposits = `4.0.1` column 2 / column 3: 38.7%.
   - Loan-to-deposit ratio = `1.0.1` / `4.0.1`: 86.7%.
   - Bank-group shares of loans and deposits: group / sector total.
+  - NPL ratio and FX share of deposits per bank group, as above with the group's rows.
+  - Own funds / loans: 21.5%. Net FX position / own funds: 0.1% (legal limit ±20%).
+  - Non-deposit funding / deposits: (due to the CBRT + repo + due to foreign banks +
+    securities issued) / deposits: 39.9%. Reserve requirements / deposits: 13.4%.
+  - Government bonds in securities: the three bond rows / `3.0.1`: 58.8%. **It starts on
+    2022-09-16**: that week the three bond rows nearly doubled (e.g. `3.0.18` 366 -> 620
+    billion TRY) while `3.0.1` moved from 2,088 to 2,113, a definition break rather than
+    purchases. The share was about 33% before and 59% after; the bond rows themselves keep
+    the break (they are detail series, hidden by default).
 - **TLS:** `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV
   SSL CA 2018" is missing.
   - Browsers download the missing intermediate themselves; Python on Linux does not.

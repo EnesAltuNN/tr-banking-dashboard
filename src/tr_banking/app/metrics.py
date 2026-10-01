@@ -258,6 +258,54 @@ def value_near(values: pd.Series, target: pd.Timestamp) -> float:
     return window.iloc[-1] if not window.empty else float("nan")
 
 
+def rate_spread(loan: pd.DataFrame, deposit: pd.DataFrame) -> pd.DataFrame:
+    """date/value rows of loan rate minus deposit rate in pp, on the weeks both have."""
+    merged = loan[["date", "value"]].merge(deposit[["date", "value"]], on="date")
+    spread = merged["value_x"] - merged["value_y"]
+    return pd.DataFrame({"date": merged["date"], "value": spread}).sort_values("date")
+
+
+def in_usd(amounts: pd.DataFrame, usd_try: pd.DataFrame) -> pd.DataFrame:
+    """date/value rows of TRY amounts divided by the USD/TRY rate of that day.
+
+    The rate is a business-day series, so each date takes the latest rate within
+    LOOKBACK_TOLERANCE up to it; dates without one are left out.
+    """
+    rates = usd_try[["date", "value"]].rename(columns={"value": "rate"}).sort_values("date")
+    merged = pd.merge_asof(
+        amounts[["date", "value"]].sort_values("date"),
+        rates,
+        on="date",
+        tolerance=pd.Timedelta(LOOKBACK_TOLERANCE),
+    ).dropna()
+    return pd.DataFrame({"date": merged["date"], "value": merged["value"] / merged["rate"]})
+
+
+# Lookbacks of the period-change table, in weeks; "ytd" compares with the last value of the
+# previous year (the last Friday of December is within LOOKBACK_TOLERANCE of 31 December).
+PERIOD_WEEKS = {"w1": 1, "w4": 4, "w13": 13, "w52": 52}
+PERIOD_COLUMNS = ["series_id", "last_date", "w1", "w4", "w13", "ytd", "w52"]
+
+
+def period_changes(observations: pd.DataFrame, as_of: date | None = None) -> pd.DataFrame:
+    """% change of each series' latest value over 1, 4, 13 and 52 weeks and since New Year."""
+    if as_of is not None:
+        observations = observations[observations["date"] <= pd.Timestamp(as_of)]
+    rows = []
+    for series_id, group in observations.groupby("series_id"):
+        values = group.set_index("date")["value"].sort_index()
+        last_date = values.index.max()
+        last = values.iloc[-1]
+        bases = {
+            name: value_near(values, last_date - timedelta(weeks=weeks))
+            for name, weeks in PERIOD_WEEKS.items()
+        }
+        bases["ytd"] = value_near(values, pd.Timestamp(last_date.year - 1, 12, 31))
+        changes = {name: (last / base - 1) * 100 for name, base in bases.items()}
+        rows.append({"series_id": series_id, "last_date": last_date, **changes})
+    return pd.DataFrame(rows, columns=PERIOD_COLUMNS)
+
+
 def summarize(
     observations: pd.DataFrame, as_of: date | None = None, frequency: str = "weekly"
 ) -> pd.DataFrame:
@@ -308,11 +356,20 @@ BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
 
 
 def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
-    """Adds each series' config-only `category` (not stored in the database)."""
-    categories = {(spec.source, spec.code): spec.category for spec in config.series}
+    """Adds the config-only `category` and `alerts` flag of each series (not stored)."""
+    specs = {(spec.source, spec.code): spec for spec in config.series}
+    found = [specs.get((row.source, row.code)) for row in series.itertuples()]
     return series.assign(
-        category=[categories.get((row.source, row.code)) for row in series.itertuples()]
+        category=[spec.category if spec else None for spec in found],
+        alerts=[spec.alerts if spec else True for spec in found],
     )
+
+
+def alert_series(series: pd.DataFrame) -> pd.DataFrame:
+    """The series checked for unusual weekly changes: weekly, not macro, alerts not off."""
+    return series[
+        (series["frequency"] == "weekly") & (series["module"] != "macro") & series["alerts"]
+    ]
 
 
 def spec_id(series: pd.DataFrame, spec: SeriesSpec | None) -> int | None:
@@ -342,6 +399,11 @@ def category_id(series: pd.DataFrame, category: str, monetary: bool | None = Non
 # --- banking sector ratios ---
 
 
+# BDDK's three government bond rows nearly doubled in the week of 2022-09-16 while total
+# securities hardly moved: a definition break, not purchases. The bond share starts there.
+BOND_SHARE_START = pd.Timestamp("2022-09-16")
+
+
 class Ratio(NamedTuple):
     """A ratio of two stored series, computed for display only (never stored)."""
 
@@ -351,7 +413,7 @@ class Ratio(NamedTuple):
 
 
 def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Ratio]:
-    """NPL ratios, FX share of deposits, loan-to-deposit ratio and bank-group shares.
+    """NPL, deposit, capital, funding and securities ratios, overall and per bank group.
 
     Loan totals come from BDDK's loan table (module "credit"), so every ratio compares BDDK
     with BDDK. A ratio whose inputs are not loaded is left out.
@@ -365,15 +427,39 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
         found = observations[observations["series_id"] == series_id]
         return found if not found.empty else None
 
-    def group(category: str, row: str) -> int | None:
+    def group(category: str, row: str, column: str = "3") -> int | None:
+        keys = banking["code"].map(bddk_key)
         matches = banking[
             (banking["category"] == category)
-            & (banking["code"].map(lambda code: bddk_key(code).row) == row)
+            & (keys.map(lambda key: key.row) == row)
+            & (keys.map(lambda key: key.column) == column)
         ]
         return int(matches["id"].iloc[0]) if not matches.empty else None
 
+    def since(frame: pd.DataFrame | None, start: pd.Timestamp) -> pd.DataFrame | None:
+        return None if frame is None else frame[frame["date"] >= start]
+
+    def total(*categories: str, zero_if_missing: tuple[str, ...] = ()) -> pd.DataFrame | None:
+        """Sum of every series in these categories, on the weeks all of them have.
+
+        A series in `zero_if_missing` counts as 0 in weeks it leaves out: BDDK omits most
+        weeks of "Due to the CBRT" before 2018-09-28, and the weeks it does send are 0.
+        """
+        chosen = banking[banking["category"].isin(categories)]
+        found = observations[observations["series_id"].isin(chosen["id"])]
+        if chosen.empty or found.empty:
+            return None
+        wide = found.pivot_table(index="date", columns="series_id", values="value")
+        optional = chosen.loc[chosen["category"].isin(zero_if_missing), "id"]
+        wide[wide.columns.intersection(optional)] = wide[
+            wide.columns.intersection(optional)
+        ].fillna(0)
+        complete = wide.reindex(columns=chosen["id"]).dropna()
+        return complete.sum(axis=1).rename("value").reset_index() if not complete.empty else None
+
     loans = rows(category_id(bddk_loans, "total"))
     deposits = rows(category_id(banking, "deposits"))
+    equity = rows(category_id(banking, "equity"))
     definitions: list[tuple[str, str | None, pd.DataFrame | None, pd.DataFrame | None, bool]] = [
         ("ratio_npl", "npl", rows(category_id(banking, "npl")), loans, True),
         (
@@ -390,14 +476,75 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
             rows(category_id(bddk_loans, "commercial")),
             True,
         ),
+    ]
+    definitions += [
+        (
+            f"ratio_npl_{bank_group}",
+            bank_group,
+            rows(group(bank_group, "2.0.1")),
+            rows(group(bank_group, "1.0.1")),
+            True,
+        )
+        for bank_group in BANK_GROUPS
+    ]
+    definitions.append(
         (
             "ratio_fx_share",
             "fx_deposits",
             rows(category_id(banking, "fx_deposits")),
             deposits,
             False,
-        ),
+        )
+    )
+    definitions += [
+        (
+            f"ratio_fx_share_{bank_group}",
+            bank_group,
+            rows(group(bank_group, "4.0.1", column="2")),
+            rows(group(bank_group, "4.0.1")),
+            False,
+        )
+        for bank_group in BANK_GROUPS
+    ]
+    definitions += [
         ("ratio_loan_deposit", None, loans, deposits, False),
+        # Capital: own funds against loans, and the net FX position (legal limit: +/-20%).
+        ("ratio_equity_loans", "equity", equity, loans, False),
+        (
+            "ratio_fx_position_equity",
+            "fx_position",
+            rows(category_id(banking, "fx_position")),
+            equity,
+            False,
+        ),
+        # Funding beyond deposits: the CBRT, repo, foreign banks and bonds the banks issued.
+        (
+            "ratio_wholesale_funding",
+            "foreign_bank_funding",
+            total(
+                "cbrt_funding",
+                "repo_funding",
+                "foreign_bank_funding",
+                "issued_securities",
+                zero_if_missing=("cbrt_funding",),
+            ),
+            deposits,
+            False,
+        ),
+        (
+            "ratio_reserves_deposits",
+            "reserve_requirements",
+            rows(category_id(banking, "reserve_requirements")),
+            deposits,
+            False,
+        ),
+        (
+            "ratio_bonds_securities",
+            "government_bonds",
+            since(total("government_bonds"), BOND_SHARE_START),
+            rows(category_id(banking, "securities")),
+            False,
+        ),
     ]
     for bank_group in BANK_GROUPS:
         definitions.append(

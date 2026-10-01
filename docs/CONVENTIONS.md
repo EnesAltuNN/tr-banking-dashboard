@@ -114,7 +114,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   used for real values) and `policy_rate: true` (its changes are the decision markers), at
   most one series each; `category` for colors, KPI tiles and ratios (the full list is in
   `config.py`; banking uses deposits, fx_deposits, npl, npl_consumer, npl_commercial,
-  state_banks, private_banks, foreign_banks and others).
+  state_banks, private_banks, foreign_banks, equity, fx_position, the funding items,
+  reserve_requirements, securities, government_bonds and others). `alerts: false` keeps a
+  noisy series out of the alerts.
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
 - `config/mpc_meetings.yaml` (config only, like `series.yaml`): CBRT MPC meeting dates,
@@ -197,12 +199,14 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     filters are drawn. The open tab is kept in `st.session_state["open_section"]`.
     The tabs' `default` is part of the widget identity, so it changes only when the language
     changes (changing it on every switch dropped every second click).
-  - There is no sidebar: `filter_bar` opens one row of buttons at the top of the open tab
-    and every picker of that tab draws into it as an `st.popover`, wherever in the view it is
-    called. Each button carries its own choice ("Kaynak: TCMB EVDS", "6 seri", the date
-    range), read from the widget's own state, which Streamlit has updated by the time the
-    click reruns the script. The row wraps on a phone; an inline box of controls did not fit
-    there and left a wide empty strip on a desktop.
+  - There is no sidebar: `filter_bar` opens one row of controls at the top of the open tab and
+    every picker of that tab draws into it, wherever in the view it is called. The source,
+    value-mode and series pickers each sit in an `st.popover` whose button carries the current
+    choice ("Kaynak: TCMB EVDS", "Seriler: tümü", "Seriler: 3/6"), read from the widget's own
+    state, which Streamlit has updated by the time the click reruns the script. The date range
+    is the `st.date_input` itself: it already shows the range and opens the calendar on the
+    first click, so a button around it only added one. The row wraps on a phone; an inline box
+    of controls did not fit there and left a wide empty strip on a desktop.
   - KPI tiles are `st.metric` with a sparkline. A change that rounds to zero gets
     `delta_color="off"` and no arrow (st.metric treats "0,0%" as a rise).
   - One color per `category`: `PALETTE`/`CATEGORY_HUES` in `dashboard.py`, the same steps as
@@ -219,6 +223,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - Alerts: `render_alerts` runs above the tabs on every weekly series except `macro`. The
     threshold (`ALERT_THRESHOLD = 5`) was calibrated on the 2014-2026 history: about 1.5% of
     weeks per series. Recalibrate with the history, not by guess, if series are added.
+    A series that flags far more often gets `alerts: false` in `series.yaml` (on 2026-10-01:
+    the bank groups' NPL, own funds and the net FX position, 4.5-7.5% of weeks).
+    `metrics.alert_series` picks the checked series for the dashboard and the AI summary.
   - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
     is often empty as formatted text (e.g. the real-rate column).
   - Every table is drawn by `show_table`: no inner scroll and a pinned first column, so the

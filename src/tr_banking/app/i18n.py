@@ -136,6 +136,43 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "tab_banking": {"tr": "Sektör", "en": "Banking sector"},
     "banking_unavailable": {"tr": "Henüz sektör verisi yok.", "en": "No banking sector data yet."},
     "ratios": {"tr": "Oranlar", "en": "Ratios"},
+    "col_topic": {"tr": "Konu", "en": "Topic"},
+    "topic_asset_quality": {"tr": "Aktif kalitesi", "en": "Asset quality"},
+    "topic_deposits": {"tr": "Mevduat", "en": "Deposits"},
+    "topic_capital": {"tr": "Sermaye", "en": "Capital"},
+    "topic_funding": {"tr": "Fonlama", "en": "Funding"},
+    "topic_securities": {"tr": "Menkul değerler", "en": "Securities"},
+    "topic_groups": {"tr": "Banka grupları", "en": "Bank groups"},
+    "group_shares_loans": {
+        "tr": "Kredilerde banka grubu payları",
+        "en": "Bank-group shares of loans",
+    },
+    "group_shares_deposits": {
+        "tr": "Mevduatta banka grubu payları",
+        "en": "Bank-group shares of deposits",
+    },
+    "group_state_banks": {"tr": "Kamu", "en": "State"},
+    "group_private_banks": {"tr": "Yerli özel", "en": "Domestic private"},
+    "group_foreign_banks": {"tr": "Yabancı", "en": "Foreign"},
+    "col_group": {"tr": "Banka grubu", "en": "Bank group"},
+    "col_share": {"tr": "Pay (%)", "en": "Share (%)"},
+    "rate_spread": {
+        "tr": "Ticari kredi faizi − TL mevduat faizi",
+        "en": "Commercial loan rate − TRY deposit rate",
+    },
+    "fx_deposits_usd": {
+        "tr": "Döviz mevduatı, ABD doları karşılığı ≈",
+        "en": "FX deposits in US dollars ≈",
+    },
+    "usd_try_rate": {"tr": "ABD doları kuru (TCMB döviz alış)", "en": "USD/TRY (CBRT buying rate)"},
+    "billion_usd": {"tr": "milyar USD", "en": "bn USD"},
+    "try_per_usd": {"tr": "TL", "en": "TRY"},
+    "period_changes": {"tr": "Dönem değişimleri (%)", "en": "Changes over periods (%)"},
+    "col_1w": {"tr": "1 hafta", "en": "1 week"},
+    "col_4w": {"tr": "4 hafta", "en": "4 weeks"},
+    "col_13w": {"tr": "13 hafta", "en": "13 weeks"},
+    "col_ytd": {"tr": "Yılbaşından beri", "en": "Year to date"},
+    "col_52w": {"tr": "52 hafta", "en": "52 weeks"},
     "amounts": {"tr": "Tutarlar", "en": "Amounts"},
     "col_ratio": {"tr": "Oran", "en": "Ratio"},
     "ratio_npl": {"tr": "Takipteki alacak oranı", "en": "Non-performing loan ratio"},
@@ -173,27 +210,93 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "tr": "Mevduattaki pay: yabancı bankalar",
         "en": "Share of deposits: foreign banks",
     },
+    "ratio_npl_state_banks": {
+        "tr": "Takipteki oranı: kamu bankaları",
+        "en": "NPL ratio: state banks",
+    },
+    "ratio_npl_private_banks": {
+        "tr": "Takipteki oranı: yerli özel bankalar",
+        "en": "NPL ratio: domestic private banks",
+    },
+    "ratio_npl_foreign_banks": {
+        "tr": "Takipteki oranı: yabancı bankalar",
+        "en": "NPL ratio: foreign banks",
+    },
+    "ratio_fx_share_state_banks": {
+        "tr": "Mevduatta döviz payı: kamu bankaları",
+        "en": "FX share of deposits: state banks",
+    },
+    "ratio_fx_share_private_banks": {
+        "tr": "Mevduatta döviz payı: yerli özel bankalar",
+        "en": "FX share of deposits: domestic private banks",
+    },
+    "ratio_fx_share_foreign_banks": {
+        "tr": "Mevduatta döviz payı: yabancı bankalar",
+        "en": "FX share of deposits: foreign banks",
+    },
+    "ratio_equity_loans": {"tr": "Yasal özkaynak / krediler", "en": "Own funds / loans"},
+    "ratio_fx_position_equity": {
+        "tr": "Döviz net genel pozisyonu / özkaynak",
+        "en": "Net FX position / own funds",
+    },
+    "ratio_wholesale_funding": {
+        "tr": "Mevduat dışı fonlama / mevduat",
+        "en": "Non-deposit funding / deposits",
+    },
+    "ratio_reserves_deposits": {
+        "tr": "Zorunlu karşılıklar / mevduat",
+        "en": "Reserve requirements / deposits",
+    },
+    "ratio_bonds_securities": {
+        "tr": "Menkul değerlerde devlet tahvili payı",
+        "en": "Government bonds in securities",
+    },
     "week_of": {"tr": "{week} haftası", "en": "week ending {week}"},
     "banking_note": {
         "tr": (
-            "Kaynak: BDDK haftalık bülteni, *Mevduat*, *Takipteki Alacaklar* ve *Krediler* "
+            "Kaynak: BDDK haftalık bülteni, *Mevduat*, *Takipteki Alacaklar*, *Krediler*, "
+            "*Yabancı Para Pozisyonu*, *Diğer Bilanço Kalemleri* ve *Menkul Değerler* "
             "tabloları, haftalık cuma değerleri, TL + YP, 03.01.2014'ten itibaren. Mevduat "
             "katılım fonlarını içerir; döviz mevduatı YP sütununun TL karşılığıdır. **Takipteki "
             "alacak oranı = takipteki / (krediler + takipteki)**: BDDK'nın kredi tablosu yalnız "
             "donmamış kredileri içerir. Kredi/mevduat oranı ve banka grubu payları BDDK sektör "
             "toplamlarına göre hesaplanır; kamu + yerli özel + yabancı bankalar sektör toplamını "
             "tam olarak verir (katılım ve kalkınma bankaları bu gruplara dağılmıştır). Oranların "
-            "değişimi yüzde puan (puan) cinsindendir."
+            "değişimi yüzde puan (puan) cinsindendir. **Mevduat dışı fonlama** = TCMB'ye borçlar + "
+            "repo + yurt dışı bankalara borçlar + ihraç edilen menkul kıymetler. Döviz net genel "
+            "pozisyonunun yasal sınırı özkaynağın ±%20'sidir. Devlet tahvili payı, menkul "
+            "değerler tablosundaki üç devlet tahvili satırının toplamıdır; bu satırlar "
+            "16.09.2022 haftasında, toplam menkul değerler neredeyse değişmeden ikiye katlandığı "
+            "için (tanım kırılması) oran o haftadan başlar. Bir banka el "
+            "değiştirdiğinde grubu da değişir; grup paylarındaki ani sıçramalar (ör. 2016) "
+            "bundandır. Dönem değişimleri, son değeri 1, 4, 13 ve 52 hafta önceki değerle ve "
+            "önceki yılın son haftasıyla karşılaştırır. **Döviz mevduatının dolar karşılığı ≈** "
+            "TL karşılığının o haftaki TCMB döviz alış kuruna bölünmesidir; euro ve altın da "
+            "dolar kuruyla çevrildiği için yaklaşıktır. TL'nin değer kaybı döviz mevduatının TL "
+            "değerini şişirir; dolar cinsinden seri gerçek dolarizasyonu gösterir."
         ),
         "en": (
             "Source: BDDK weekly bulletin, tables *Mevduat* (deposits), *Takipteki Alacaklar* "
-            "(non-performing loans) and *Krediler* (loans), weekly Friday values, TRY + FX, from "
+            "(non-performing loans), *Krediler* (loans), *Yabancı Para Pozisyonu* (FX "
+            "position), *Diğer Bilanço Kalemleri* (other balance sheet items) and *Menkul "
+            "Değerler* (securities), weekly Friday values, TRY + FX, from "
             "2014-01-03. Deposits include participation funds; FX deposits are the FX column at "
             "its TRY value. **NPL ratio = NPL / (loans + NPL)**: BDDK's loan table holds "
             "performing loans only. The loan-to-deposit ratio and the bank-group shares use "
             "BDDK's sector totals; state + domestic private + foreign banks add up to the sector "
             "exactly (participation and development banks are spread over these groups). "
-            "Changes of ratios are in percentage points (pp)."
+            "Changes of ratios are in percentage points (pp). **Non-deposit funding** = due to the "
+            "CBRT + repo + due to foreign banks + securities issued. The legal limit of the net "
+            "FX position is ±20% of own funds. The bond share sums the three government bond "
+            "rows of the securities table; those rows nearly doubled in the week of 2022-09-16 "
+            "while total securities hardly moved (a definition break), so the share starts "
+            "there. When a bank changes hands it moves to another group, "
+            "which causes the sudden jumps in group shares (e.g. 2016). The period changes "
+            "compare the latest value with 1, 4, 13 and 52 weeks earlier and with the last week "
+            "of the previous year. **FX deposits in US dollars ≈** divide the TRY value by that "
+            "week's CBRT USD buying rate; euro and gold are converted at the dollar rate too, so "
+            "it is approximate. A weaker lira inflates the TRY value of FX deposits; the dollar "
+            "series shows the real dollarization."
         ),
     },
     "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},
@@ -246,7 +349,7 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "mode_real": {"tr": "Reel (enflasyondan arındırılmış)", "en": "Real (inflation-adjusted)"},
     "mode_nominal_short": {"tr": "Nominal", "en": "Nominal"},
     "mode_real_short": {"tr": "Reel", "en": "Real"},
-    "series_count": {"tr": "{count} seri", "en": "{count} series"},
+    "series_all": {"tr": "tümü", "en": "all"},
     "real_unit": {"tr": "{unit}, {month} fiyatlarıyla", "en": "{unit}, {month} prices"},
     "real_note": {
         "tr": (
@@ -302,7 +405,11 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "enflasyondur. Değişimler yüzde puan (puan) cinsindendir: haftalık bir hafta, "
             "yıllık 52 hafta önceki değerle karşılaştırır. **Reel faiz ≈ faiz − yıllık "
             "enflasyon**: basit farktır, Fisher denklemi değildir; yalnız kredi faizleri için "
-            "hesaplanır ve TÜFE'si henüz açıklanmamış aylarda boş kalır."
+            "hesaplanır ve TÜFE'si henüz açıklanmamış aylarda boş kalır. TL mevduat faizi "
+            "`bie_mt100h` grubundandır: o hafta açılan TL mevduatlara uygulanan ağırlıklı "
+            "ortalama faiz (tüm vadeler). **Faiz farkı = ticari kredi faizi − TL mevduat "
+            "faizi**: bankanın kaba kredi marjıdır; tüm kredileri kapsayan tek bir faiz serisi "
+            "olmadığı için en büyük kalem olan ticari kredi kullanılır."
         ),
         "en": (
             "Source: CBRT (TCMB) EVDS. Loan rates come from data group `bie_kt100h`: the "
@@ -316,7 +423,11 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "inflation computed from CPI. Changes are in percentage points (pp): weekly compares "
             "with a week earlier, yearly with 52 weeks earlier. **Real rate ≈ rate − yearly "
             "inflation**: a simple difference, not the Fisher equation; shown for loan rates "
-            "only and left empty for months whose CPI is not published yet."
+            "only and left empty for months whose CPI is not published yet. The TRY deposit "
+            "rate comes from data group `bie_mt100h`: the weighted average rate on new TRY "
+            "deposits that week (all maturities). **Spread = commercial loan rate − TRY deposit "
+            "rate**: a rough lending margin; there is no single rate for all loans, so the "
+            "largest book, commercial loans, is used."
         ),
     },
     "inflation_note": {

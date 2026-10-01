@@ -37,12 +37,16 @@ from tr_banking.app.metrics import (
     MONETARY_UNITS,
     YEAR,
     Ratio,
+    alert_series,
     annual_inflation,
     banking_ratios,
     category_id,
     deflate,
     display_unit,
+    in_usd,
+    period_changes,
     policy_decisions,
+    rate_spread,
     real_rates,
     spec_id,
     spec_observations,
@@ -109,7 +113,28 @@ CATEGORY_HUES = {
     "state_banks": "orange",
     "private_banks": "violet",
     "foreign_banks": "aqua",
+    "fx_position": "yellow",
+    "cbrt_funding": "red",
+    "repo_funding": "violet",
+    "foreign_bank_funding": "aqua",
+    "issued_securities": "magenta",
+    "reserve_requirements": "orange",
+    "securities": "green",
+    "government_bonds": "red",
+    "deposit_rate": "yellow",
+    "usd_try": "green",
 }
+# Banking series a click away in the filter bar rather than charted by default: bank groups,
+# the single funding items and the bond rows (their totals and ratios are shown).
+DETAIL_CATEGORIES = (
+    *BANK_GROUPS,
+    "fx_position",
+    "cbrt_funding",
+    "repo_funding",
+    "foreign_bank_funding",
+    "issued_securities",
+    "government_bonds",
+)
 CROSSHAIR_COLOR = "#898781"
 # Yearly inflation is a reference, not a series of its own: a muted grey, dashed line.
 INFLATION_COLORS = {"light": "#6f6d66", "dark": "#a3a19a"}
@@ -263,7 +288,7 @@ def render_info_line(fetched_at: datetime | None, loaded_at: datetime, lang: Lan
 
 def render_alerts(series: pd.DataFrame, observations: pd.DataFrame, lang: Lang) -> None:
     """Weekly series whose latest change is far outside their own past year (all tabs)."""
-    weekly = series[(series["frequency"] == "weekly") & (series["module"] != "macro")]
+    weekly = alert_series(series)
     rows = observations[observations["series_id"].isin(weekly["id"])]
     points = weekly.loc[weekly["unit"] == "%", "id"]
     alerts = unusual_changes(rows, points_ids=points)
@@ -396,7 +421,8 @@ def render_rates_view(
     selected_ids, start, end = filters
     selected = observations[observations["series_id"].isin(selected_ids)]
 
-    loan_ids = [int(series_id) for series_id in series["id"] if series_id != policy_id]
+    # A real rate is for loans: the policy rate and the funding cost are policy rates.
+    loan_ids = [int(row.id) for row in series.itertuples() if row.category != "policy"]
     summary = summarize_rates(selected, inflation, as_of=end, real_rate_ids=loan_ids)
     render_rates_table(summary, series, lang, theme)
 
@@ -416,6 +442,7 @@ def render_rates_view(
         lang,
         theme,
     )
+    render_spread_chart(series, observations, in_range, lang, theme)
     with st.expander(text("notes", lang)):
         st.caption(text("rates_note", lang))
 
@@ -484,10 +511,11 @@ def render_banking_view(
     render_ratio_table(ratios, lang, theme)
     headline = [ratio for ratio in ratios if ratio.key in HEADLINE_RATIOS]
     render_ratio_charts(headline, lang, theme)
+    render_group_shares(ratios, lang, theme)
+    render_fx_in_usd(series, observations, lang, theme)
 
     st.markdown(f"**{text('amounts', lang)}**")
-    # Bank-group amounts are a click away in the filter bar; sector series show by default.
-    sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(BANK_GROUPS), "id"]]
+    sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(DETAIL_CATEGORIES), "id"]]
     filters = render_filters(bar, banking, observations_of_tab, lang, "banking", sector_ids)
     if filters is None:
         return
@@ -501,13 +529,39 @@ def render_banking_view(
         selected, month = deflate_money(selected, banking, price_index, lang)
     summary = summarize(selected, as_of=end)
     render_summary_table(summary, banking, lang, theme, month, show_prev=month is None)
+    st.markdown(f"**{text('period_changes', lang)}**")
+    render_period_table(period_changes(selected, as_of=end), banking, lang, theme)
     in_range = selected[selected["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
     render_charts(in_range, banking.set_index("id"), selected_ids, lang, theme, month)
     with st.expander(text("notes", lang)):
         st.caption(text("banking_note", lang))
 
 
-HEADLINE_RATIOS = ("ratio_npl", "ratio_fx_share", "ratio_loan_deposit", "ratio_loans_state_banks")
+HEADLINE_RATIOS = (
+    "ratio_npl",
+    "ratio_fx_share",
+    "ratio_loan_deposit",
+    "ratio_bonds_securities",
+    "ratio_equity_loans",
+    "ratio_wholesale_funding",
+)
+# Topic of each ratio in the ratio table, by key prefix (the first match wins).
+RATIO_TOPICS = (
+    ("ratio_npl", "topic_asset_quality"),
+    ("ratio_fx_share", "topic_deposits"),
+    ("ratio_loan_deposit", "topic_deposits"),
+    ("ratio_equity", "topic_capital"),
+    ("ratio_fx_position", "topic_capital"),
+    ("ratio_wholesale", "topic_funding"),
+    ("ratio_reserves", "topic_funding"),
+    ("ratio_bonds", "topic_securities"),
+    ("ratio_loans_", "topic_groups"),
+    ("ratio_deposits_", "topic_groups"),
+)
+
+
+def ratio_topic(key: str) -> str:
+    return next(topic for prefix, topic in RATIO_TOPICS if key.startswith(prefix))
 
 
 def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
@@ -520,6 +574,9 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
     wow_col, yoy_col = text("col_wow_pp", lang), text("col_yoy_pp", lang)
     frame = pd.DataFrame(
         {
+            text("col_topic", lang): [
+                text(ratio_topic(ratios[i].key), lang) for i in summary["series_id"]
+            ],
             ratio_col: [text(ratios[i].key, lang) for i in summary["series_id"]],
             date_col: summary["last_date"].dt.date,
             last_col: summary["last_value"],
@@ -540,6 +597,142 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
     show_table(styled, ratio_col)
+
+
+def render_spread_chart(
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    in_range: Callable[[pd.DataFrame], pd.DataFrame],
+    lang: Lang,
+    theme: str,
+) -> None:
+    """Commercial loan rate minus the TRY deposit rate, in pp (a rough lending margin)."""
+    loan_id, deposit_id = category_id(series, "commercial"), category_id(series, "deposit_rate")
+    if loan_id is None or deposit_id is None:
+        return
+    spread = in_range(
+        rate_spread(
+            observations[observations["series_id"] == loan_id],
+            observations[observations["series_id"] == deposit_id],
+        )
+    )
+    if spread.empty:
+        return
+    color = series_color("deposit_rate", theme)
+    with st.columns(CHARTS_PER_ROW)[0].container(border=True):
+        chart_title(text("rate_spread", lang), color)
+        st.altair_chart(line_chart(spread, text("pp", lang), color, lang, axis_format=",.0f"))
+        st.caption(text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang]))
+
+
+def render_fx_in_usd(
+    series: pd.DataFrame, observations: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """FX deposits at the USD/TRY rate of their week, next to the rate itself.
+
+    Separates real dollarization from the TRY value of FX deposits rising with the rate.
+    """
+    usd_id, fx_id = category_id(series, "usd_try"), category_id(series, "fx_deposits")
+    if usd_id is None or fx_id is None:
+        return
+    usd_rows = observations[observations["series_id"] == usd_id]
+    fx_usd = in_usd(observations[observations["series_id"] == fx_id], usd_rows)
+    if fx_usd.empty:
+        return
+    charts = (
+        (
+            "fx_deposits_usd",
+            fx_usd.assign(value=fx_usd["value"] * 1e-3),
+            "billion_usd",
+            "fx_deposits",
+            ",.0f",
+        ),
+        ("usd_try_rate", usd_rows, "try_per_usd", "usd_try", ",.1f"),
+    )
+    for column, (title, data, unit, category, axis_format) in zip(
+        st.columns(CHARTS_PER_ROW), charts, strict=False
+    ):
+        color = series_color(category, theme)
+        with column.container(border=True):
+            chart_title(text(title, lang), color)
+            st.altair_chart(
+                line_chart(data, text(unit, lang), color, lang, axis_format=axis_format)
+            )
+            source = SOURCE_LABELS["evds"][lang]
+            if title == "fx_deposits_usd":
+                source = f"{SOURCE_LABELS['bddk'][lang]}, {source}"
+            st.caption(text("chart_source", lang).format(source=source))
+
+
+def render_group_shares(ratios: list[Ratio], lang: Lang, theme: str) -> None:
+    """Stacked areas of the bank groups' shares of loans and of deposits (they add to 100%)."""
+    by_key = {ratio.key: ratio for ratio in ratios}
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk"][lang])
+    columns = st.columns(CHARTS_PER_ROW)
+    for column, kind in zip(columns, ("loans", "deposits"), strict=False):
+        parts = [
+            by_key[key].values.assign(group=text(f"group_{bank_group}", lang))
+            for bank_group in BANK_GROUPS
+            if (key := f"ratio_{kind}_{bank_group}") in by_key
+        ]
+        if not parts:
+            continue
+        with column.container(border=True):
+            chart_title(text(f"group_shares_{kind}", lang), series_color(BANK_GROUPS[0], theme))
+            st.altair_chart(share_chart(pd.concat(parts, ignore_index=True), lang, theme))
+            st.caption(source)
+
+
+def share_chart(data: pd.DataFrame, lang: Lang, theme: str) -> alt.Chart:
+    """Shares that add up to 100%, stacked in the order of BANK_GROUPS."""
+    labels = [text(f"group_{bank_group}", lang) for bank_group in BANK_GROUPS]
+    colors = [series_color(bank_group, theme) for bank_group in BANK_GROUPS]
+    data = data.assign(order=data["group"].map(labels.index))
+    chart = (
+        alt.Chart(data)
+        .mark_area(opacity=0.85)
+        .encode(
+            x=alt.X("date:T", title=None, axis=DATE_AXIS),
+            y=alt.Y(
+                "value:Q",
+                title="%",
+                stack="zero",
+                scale=alt.Scale(domain=[0, 100]),
+                axis=alt.Axis(format=",.0f"),
+            ),
+            color=alt.Color(
+                "group:N",
+                scale=alt.Scale(domain=labels, range=colors),
+                legend=alt.Legend(orient="bottom", title=None),
+            ),
+            order=alt.Order("order:Q"),
+            tooltip=[
+                alt.Tooltip("date:T", title=text("col_date", lang), format="%d %b %Y"),
+                alt.Tooltip("group:N", title=text("col_group", lang)),
+                alt.Tooltip("value:Q", title=text("col_share", lang), format=",.1f"),
+            ],
+        )
+        .properties(height=CHART_HEIGHT)
+    )
+    return chart.configure(locale=VEGA_LOCALE_TR) if lang == "tr" else chart
+
+
+def render_period_table(
+    changes: pd.DataFrame, series: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """% change of each selected series over 1, 4, 13 and 52 weeks and since New Year."""
+    table = changes.merge(series, left_on="series_id", right_on="id")
+    series_col = text("col_series", lang)
+    names = {"w1": "col_1w", "w4": "col_4w", "w13": "col_13w", "ytd": "col_ytd", "w52": "col_52w"}
+    frame = pd.DataFrame(
+        {series_col: table[f"name_{lang}"]}
+        | {text(label, lang): table[column] for column, label in names.items()}
+    )
+    pct_cols = [text(label, lang) for label in names.values()]
+    styled = frame.style.format(
+        lambda value: format_pct(value, lang), subset=pct_cols, na_rep=MISSING
+    ).map(delta_style(theme), subset=pct_cols)
+    show_table(styled, series_col)
 
 
 def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:
@@ -863,12 +1056,6 @@ def render_value_mode(bar: DeltaGenerator, lang: Lang, key: str = "value_mode") 
     )
 
 
-def range_label(picked: object, lang: Lang) -> str:
-    """The date button: both dates, or only the first while the user is still choosing."""
-    days = picked if isinstance(picked, tuple) else (picked,)
-    return " – ".join(format_date(day, lang) for day in days)
-
-
 def render_filters(
     bar: DeltaGenerator,
     series: pd.DataFrame,
@@ -886,7 +1073,9 @@ def render_filters(
     start = translated_start(name, lang, list(labels) if default_ids is None else default_ids)
     chosen = st.session_state.get(f"{name}_{lang}", start)
     count = sum(1 for series_id in chosen if series_id in labels)
-    with bar.popover(text("series_count", lang).format(count=count), icon=SERIES_ICON):
+    # The button says what is on screen: all of them, or how many of how many.
+    picked_label = text("series_all", lang) if count == len(labels) else f"{count}/{len(labels)}"
+    with bar.popover(f"{text('series', lang)}: {picked_label}", icon=SERIES_ICON):
         selected_ids = st.multiselect(
             text("series", lang),
             options=list(labels),
@@ -897,18 +1086,18 @@ def render_filters(
             width=SERIES_FILTER_WIDTH,
         )
     st.session_state[f"{name}__value"] = selected_ids
-    with bar.popover(range_label(st.session_state.get(f"{key}_range", (first, last)), lang)):
-        picked = st.date_input(
-            text("date_range", lang),
-            value=(first, last),
-            min_value=first,
-            max_value=last,
-            format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
-            key=f"{key}_range",
-            label_visibility="collapsed",
-            # A date range needs both dates side by side; "content" is not a legal width here.
-            width=DATE_FILTER_WIDTH,
-        )
+    # Not in a popover: the field already shows the range and opens the calendar on a click.
+    picked = bar.date_input(
+        text("date_range", lang),
+        value=(first, last),
+        min_value=first,
+        max_value=last,
+        format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
+        key=f"{key}_range",
+        label_visibility="collapsed",
+        # A date range needs both dates side by side; "content" is not a legal width here.
+        width=DATE_FILTER_WIDTH,
+    )
 
     if not selected_ids:
         st.info(text("select_series", lang))

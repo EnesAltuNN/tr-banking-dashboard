@@ -12,6 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 from tr_banking import db as db_module
 from tr_banking import settings as settings_module
+from tr_banking.app.dashboard import DETAIL_CATEGORIES, HEADLINE_RATIOS
 from tr_banking.config import load_series_config
 from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
@@ -25,10 +26,12 @@ CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
 SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
 CPI_SPEC = CONFIG.deflator
 RATE_SPECS = [spec for spec in CONFIG.series if spec.module == "rates"]
+FUNDING_CODE = "TP.APIFON4"  # the CBRT funding cost, the other "policy" series
+DEPOSIT_RATE_CODE = "TP.TRY.MT06"
+USD_SPEC = next(spec for spec in CONFIG.series if spec.category == "usd_try")
 ALL_BDDK_SPECS = CONFIG.for_source("bddk")
 BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
 BANKING_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "banking"]
-BANK_GROUPS = {"state_banks", "private_banks", "foreign_banks"}
 BKM_SPECS = CONFIG.for_source("bkm")
 # The real July 2026 BKM page, stored for three months at these fractions of its values.
 BKM_MONTHS = {"2023-07-31": 0.5, "2024-06-30": 0.9, "2024-07-31": 1.0}
@@ -95,10 +98,13 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         parse_evds_response(fixture(name), [CPI_SPEC.code])
         for name in ("evds_cpi_2023.json", "evds_cpi_2024.json")
     )
-    loan_codes = [spec.code for spec in RATE_SPECS if not spec.policy_rate]
+    loan_codes = [
+        spec.code for spec in RATE_SPECS if spec.category not in ("policy", "deposit_rate")
+    ]
+    # Same window as the policy rate: since 2018 the two policy-category series agree.
     with SqliteRepository(path) as repo:
         repo.init_schema()
-        for spec in [*SPECS, CPI_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
+        for spec in [*SPECS, CPI_SPEC, USD_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
             repo.upsert_series(spec)
         repo.upsert_observations("bkm", bkm_rows())
         evds = fixture("evds_hpbitablo6_2024.json")
@@ -111,6 +117,12 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         )
         policy = fixture("evds_policy_rate_2024_2025.json")
         repo.upsert_observations("evds", parse_evds_response(policy, [CONFIG.policy_rate.code]))
+        funding = fixture("evds_funding_cost_2024_2025.json")
+        repo.upsert_observations("evds", parse_evds_response(funding, [FUNDING_CODE]))
+        deposit = fixture("evds_deposit_rate_2024.json")
+        repo.upsert_observations("evds", parse_evds_response(deposit, [DEPOSIT_RATE_CODE]))
+        usd = fixture("evds_usd_try_2024_2025.json")
+        repo.upsert_observations("evds", parse_evds_response(usd, [USD_SPEC.code]))
         bddk = fixture("bddk_konut_2024.json")
         for spec in ALL_BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
@@ -353,6 +365,9 @@ def test_rates_tab_shows_levels_pp_changes_and_real_rates(use_db: Callable, tmp_
     policy = rows.loc["TCMB politika faizi (1 hafta vadeli repo)"]
     assert policy["Son değer (%)"] == 47.5
     assert policy["Reel faiz ≈ (puan)"] == "–"  # real rate only for loan rates
+    funding = rows.loc["TCMB ağırlıklı ortalama fonlama maliyeti"]
+    assert funding["Son değer (%)"] == 47.5  # the same 10 January 2025 value as the policy rate
+    assert funding["Reel faiz ≈ (puan)"] == "–"
     assert "Fisher denklemi değildir" in page_text(app)
 
 
@@ -373,15 +388,23 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
     app = run_dashboard("rates")
 
     charts = [json.loads(chart.proto.spec) for chart in app.get("vega_lite_chart")]
-    assert len(charts) == len(RATE_SPECS)
+    # One chart per rate, then the loan-deposit spread (the fixtures share their weeks).
+    assert len(charts) == len(RATE_SPECS) + 1
+    charts = charts[: len(RATE_SPECS)]
     for spec in charts:
         text = json.dumps(spec, ensure_ascii=False)
         assert "Yıllık enflasyon (TÜFE)" in text  # the reference line
         assert "PPK kararı" in text  # the 26 Dec 2024 cut is in the date range
         assert '"title": "Karar"' in text  # the tooltip names hike, cut or hold
         assert '"resolve"' not in text  # no independent (dual) y-axis
+    # The policy rate is a step function; the funding cost, the other "policy" series, is not.
+    policy_chart = next(
+        chart
+        for chart in charts
+        if CONFIG.policy_rate.name_tr in json.dumps(chart, ensure_ascii=False)
+    )
     policy_marks = [
-        layer["mark"] for layer in charts[-1]["layer"] if isinstance(layer["mark"], dict)
+        layer["mark"] for layer in policy_chart["layer"] if isinstance(layer["mark"], dict)
     ]
     assert {"type": "line", "interpolate": "step-after"}.items() <= policy_marks[0].items()
 
@@ -558,7 +581,11 @@ def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: P
     rate_charts = [json.loads(chart.proto.spec) for chart in rates.get("vega_lite_chart")]
     by_name = dict(zip([s.name_tr for s in SPECS], map(chart_color, credit_charts), strict=True))
     rate_by_name = dict(
-        zip([s.name_tr for s in RATE_SPECS], map(chart_color, rate_charts), strict=True)
+        zip(
+            [s.name_tr for s in RATE_SPECS],
+            map(chart_color, rate_charts[: len(RATE_SPECS)]),
+            strict=True,
+        )
     )
     assert by_name["Konut kredileri"] == rate_by_name["Konut kredisi faizi"] == "#eb6834"
     assert by_name["İhtiyaç kredileri"] == rate_by_name["İhtiyaç kredisi faizi"] == "#4a3aa7"
@@ -622,14 +649,30 @@ def test_banking_tab_shows_kpis_ratios_and_sector_series(use_db: Callable, tmp_p
     ]
     assert kpis["Takipteki alacak oranı"][0] == "50,00%"
     ratios = app.dataframe[0].value.set_index("Oran")["Son değer (%)"]
-    assert len(ratios) == 11
+    assert len(ratios) == 22
     assert ratios["Takipteki alacak oranı"] == pytest.approx(50.0)
     assert ratios["Kredilerdeki pay: kamu bankaları"] == pytest.approx(100.0)
-    # Sector series are shown by default; bank-group amounts are one click away.
+    # Four government-bond-sized parts over one total: the sum works (3 bond rows / 1).
+    assert ratios["Menkul değerlerde devlet tahvili payı"] == pytest.approx(300.0)
+    # Sector series are shown by default; bank groups and single items are one click away.
     amounts = app.dataframe[1].value
-    sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in BANK_GROUPS]
+    sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in DETAIL_CATEGORIES]
     assert amounts["Seri"].tolist() == sector
-    assert len(app.get("vega_lite_chart")) == 4 + len(sector)
+    # Headline ratios, two stacked bank-group share charts, then one chart per series.
+    assert len(app.get("vega_lite_chart")) == len(HEADLINE_RATIOS) + 2 + len(sector)
+    ratio_table = app.dataframe[0].value.set_index("Oran")
+    assert ratio_table.loc["Takipteki alacak oranı", "Konu"] == "Aktif kalitesi"
+    assert ratio_table.loc["Kredilerdeki pay: kamu bankaları", "Konu"] == "Banka grupları"
+    # The period table covers the same series as the amounts table.
+    periods = app.dataframe[2].value
+    assert periods["Seri"].tolist() == sector
+    assert list(periods.columns)[1:] == [
+        "1 hafta",
+        "4 hafta",
+        "13 hafta",
+        "Yılbaşından beri",
+        "52 hafta",
+    ]
     assert "takipteki / (krediler + takipteki)" in page_text(app)
 
 
@@ -640,6 +683,7 @@ def test_banking_tab_in_english(use_db: Callable, tmp_path: Path) -> None:
     app.radio(key="lang").set_value("en").run()
 
     assert list(app.dataframe[0].value.columns) == [
+        "Topic",
         "Ratio",
         "Date",
         "Last value (%)",
