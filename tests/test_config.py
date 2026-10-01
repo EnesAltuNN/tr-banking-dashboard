@@ -32,10 +32,12 @@ def test_project_series_yaml_loads() -> None:
         "TP.HPBITABLO6.16",
         "TP.HPBITABLO6.20",
         "TP.TUKFIY2025.GENEL",
+        "TP.DK.USD.A.YTL",
         "TP.KTF10",
         "TP.KTF11",
         "TP.KTF12",
         "TP.KTF18",
+        "TP.TRY.MT06",
         "TP.PY.P02.1H",
         "TP.APIFON4",
     ]
@@ -187,9 +189,9 @@ def test_max_age_days_must_be_positive() -> None:
 
 
 def test_noisy_series_are_kept_out_of_the_alerts() -> None:
-    # Measured on 2014-2026: these flagged 4.5-7.5% of weeks (target about 1.5%). NPL drops
-    # with monthly write-offs, own funds jump with monthly profits, and the net FX position
-    # sits near zero, so its % change means nothing.
+    # Measured on 2014-2026: these flagged 3.8-7.5% of weeks (target about 1.5%). NPL drops
+    # with monthly write-offs, own funds jump with monthly profits, the net FX position sits
+    # near zero (so its % change means nothing), and the weekly deposit rate is a noisy flow.
     specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").series
 
     assert {spec.code for spec in specs if not spec.alerts} == {
@@ -198,4 +200,5 @@ def test_noisy_series_are_kept_out_of_the_alerts() -> None:
         "2.0.1:10007:TRY:3",
         "9.0.17:10001:TRY:3",
         "9.0.18:10001:TRY:3",
+        "TP.TRY.MT06",
     }

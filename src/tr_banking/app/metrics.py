@@ -258,6 +258,29 @@ def value_near(values: pd.Series, target: pd.Timestamp) -> float:
     return window.iloc[-1] if not window.empty else float("nan")
 
 
+def rate_spread(loan: pd.DataFrame, deposit: pd.DataFrame) -> pd.DataFrame:
+    """date/value rows of loan rate minus deposit rate in pp, on the weeks both have."""
+    merged = loan[["date", "value"]].merge(deposit[["date", "value"]], on="date")
+    spread = merged["value_x"] - merged["value_y"]
+    return pd.DataFrame({"date": merged["date"], "value": spread}).sort_values("date")
+
+
+def in_usd(amounts: pd.DataFrame, usd_try: pd.DataFrame) -> pd.DataFrame:
+    """date/value rows of TRY amounts divided by the USD/TRY rate of that day.
+
+    The rate is a business-day series, so each date takes the latest rate within
+    LOOKBACK_TOLERANCE up to it; dates without one are left out.
+    """
+    rates = usd_try[["date", "value"]].rename(columns={"value": "rate"}).sort_values("date")
+    merged = pd.merge_asof(
+        amounts[["date", "value"]].sort_values("date"),
+        rates,
+        on="date",
+        tolerance=pd.Timedelta(LOOKBACK_TOLERANCE),
+    ).dropna()
+    return pd.DataFrame({"date": merged["date"], "value": merged["value"] / merged["rate"]})
+
+
 # Lookbacks of the period-change table, in weeks; "ytd" compares with the last value of the
 # previous year (the last Friday of December is within LOOKBACK_TOLERANCE of 31 December).
 PERIOD_WEEKS = {"w1": 1, "w4": 4, "w13": 13, "w52": 52}
@@ -376,6 +399,11 @@ def category_id(series: pd.DataFrame, category: str, monetary: bool | None = Non
 # --- banking sector ratios ---
 
 
+# BDDK's three government bond rows nearly doubled in the week of 2022-09-16 while total
+# securities hardly moved: a definition break, not purchases. The bond share starts there.
+BOND_SHARE_START = pd.Timestamp("2022-09-16")
+
+
 class Ratio(NamedTuple):
     """A ratio of two stored series, computed for display only (never stored)."""
 
@@ -407,6 +435,9 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
             & (keys.map(lambda key: key.column) == column)
         ]
         return int(matches["id"].iloc[0]) if not matches.empty else None
+
+    def since(frame: pd.DataFrame | None, start: pd.Timestamp) -> pd.DataFrame | None:
+        return None if frame is None else frame[frame["date"] >= start]
 
     def total(*categories: str, zero_if_missing: tuple[str, ...] = ()) -> pd.DataFrame | None:
         """Sum of every series in these categories, on the weeks all of them have.
@@ -510,7 +541,7 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
         (
             "ratio_bonds_securities",
             "government_bonds",
-            total("government_bonds"),
+            since(total("government_bonds"), BOND_SHARE_START),
             rows(category_id(banking, "securities")),
             False,
         ),

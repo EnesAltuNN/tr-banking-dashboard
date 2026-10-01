@@ -156,6 +156,17 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "group_foreign_banks": {"tr": "Yabancı", "en": "Foreign"},
     "col_group": {"tr": "Banka grubu", "en": "Bank group"},
     "col_share": {"tr": "Pay (%)", "en": "Share (%)"},
+    "rate_spread": {
+        "tr": "Ticari kredi faizi − TL mevduat faizi",
+        "en": "Commercial loan rate − TRY deposit rate",
+    },
+    "fx_deposits_usd": {
+        "tr": "Döviz mevduatı, ABD doları karşılığı ≈",
+        "en": "FX deposits in US dollars ≈",
+    },
+    "usd_try_rate": {"tr": "ABD doları kuru (TCMB döviz alış)", "en": "USD/TRY (CBRT buying rate)"},
+    "billion_usd": {"tr": "milyar USD", "en": "bn USD"},
+    "try_per_usd": {"tr": "TL", "en": "TRY"},
     "period_changes": {"tr": "Dönem değişimleri (%)", "en": "Changes over periods (%)"},
     "col_1w": {"tr": "1 hafta", "en": "1 week"},
     "col_4w": {"tr": "4 hafta", "en": "4 weeks"},
@@ -254,10 +265,15 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "değişimi yüzde puan (puan) cinsindendir. **Mevduat dışı fonlama** = TCMB'ye borçlar + "
             "repo + yurt dışı bankalara borçlar + ihraç edilen menkul kıymetler. Döviz net genel "
             "pozisyonunun yasal sınırı özkaynağın ±%20'sidir. Devlet tahvili payı, menkul "
-            "değerler tablosundaki üç devlet tahvili satırının toplamıdır. Bir banka el "
+            "değerler tablosundaki üç devlet tahvili satırının toplamıdır; bu satırlar "
+            "16.09.2022 haftasında, toplam menkul değerler neredeyse değişmeden ikiye katlandığı "
+            "için (tanım kırılması) oran o haftadan başlar. Bir banka el "
             "değiştirdiğinde grubu da değişir; grup paylarındaki ani sıçramalar (ör. 2016) "
             "bundandır. Dönem değişimleri, son değeri 1, 4, 13 ve 52 hafta önceki değerle ve "
-            "önceki yılın son haftasıyla karşılaştırır."
+            "önceki yılın son haftasıyla karşılaştırır. **Döviz mevduatının dolar karşılığı ≈** "
+            "TL karşılığının o haftaki TCMB döviz alış kuruna bölünmesidir; euro ve altın da "
+            "dolar kuruyla çevrildiği için yaklaşıktır. TL'nin değer kaybı döviz mevduatının TL "
+            "değerini şişirir; dolar cinsinden seri gerçek dolarizasyonu gösterir."
         ),
         "en": (
             "Source: BDDK weekly bulletin, tables *Mevduat* (deposits), *Takipteki Alacaklar* "
@@ -272,10 +288,15 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "Changes of ratios are in percentage points (pp). **Non-deposit funding** = due to the "
             "CBRT + repo + due to foreign banks + securities issued. The legal limit of the net "
             "FX position is ±20% of own funds. The bond share sums the three government bond "
-            "rows of the securities table. When a bank changes hands it moves to another group, "
+            "rows of the securities table; those rows nearly doubled in the week of 2022-09-16 "
+            "while total securities hardly moved (a definition break), so the share starts "
+            "there. When a bank changes hands it moves to another group, "
             "which causes the sudden jumps in group shares (e.g. 2016). The period changes "
             "compare the latest value with 1, 4, 13 and 52 weeks earlier and with the last week "
-            "of the previous year."
+            "of the previous year. **FX deposits in US dollars ≈** divide the TRY value by that "
+            "week's CBRT USD buying rate; euro and gold are converted at the dollar rate too, so "
+            "it is approximate. A weaker lira inflates the TRY value of FX deposits; the dollar "
+            "series shows the real dollarization."
         ),
     },
     "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},
@@ -384,7 +405,11 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "enflasyondur. Değişimler yüzde puan (puan) cinsindendir: haftalık bir hafta, "
             "yıllık 52 hafta önceki değerle karşılaştırır. **Reel faiz ≈ faiz − yıllık "
             "enflasyon**: basit farktır, Fisher denklemi değildir; yalnız kredi faizleri için "
-            "hesaplanır ve TÜFE'si henüz açıklanmamış aylarda boş kalır."
+            "hesaplanır ve TÜFE'si henüz açıklanmamış aylarda boş kalır. TL mevduat faizi "
+            "`bie_mt100h` grubundandır: o hafta açılan TL mevduatlara uygulanan ağırlıklı "
+            "ortalama faiz (tüm vadeler). **Faiz farkı = ticari kredi faizi − TL mevduat "
+            "faizi**: bankanın kaba kredi marjıdır; tüm kredileri kapsayan tek bir faiz serisi "
+            "olmadığı için en büyük kalem olan ticari kredi kullanılır."
         ),
         "en": (
             "Source: CBRT (TCMB) EVDS. Loan rates come from data group `bie_kt100h`: the "
@@ -398,7 +423,11 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "inflation computed from CPI. Changes are in percentage points (pp): weekly compares "
             "with a week earlier, yearly with 52 weeks earlier. **Real rate ≈ rate − yearly "
             "inflation**: a simple difference, not the Fisher equation; shown for loan rates "
-            "only and left empty for months whose CPI is not published yet."
+            "only and left empty for months whose CPI is not published yet. The TRY deposit "
+            "rate comes from data group `bie_mt100h`: the weighted average rate on new TRY "
+            "deposits that week (all maturities). **Spread = commercial loan rate − TRY deposit "
+            "rate**: a rough lending margin; there is no single rate for all loans, so the "
+            "largest book, commercial loans, is used."
         ),
     },
     "inflation_note": {

@@ -22,7 +22,7 @@ dashboard, in nominal and inflation-adjusted terms.
     Where it covers the same item as EVDS, the two agree within **about 0.3%**.
   - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
     counts back to **2017**.
-  - 56 series in total, all defined in one YAML file.
+  - 58 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -32,7 +32,11 @@ dashboard, in nominal and inflation-adjusted terms.
     same axis.
   - Every MPC meeting is marked on the charts, holds included: the meeting calendar comes
     from the central bank's own press releases, and each decision is read from the rate.
-  - The table shows an approximate real rate (rate minus inflation).
+  - The table shows an approximate real rate (rate minus inflation), and the deposit rate
+    sits next to the loan rates with the loan-deposit spread.
+- **Dollarization without the exchange-rate illusion:** FX deposits are also shown in US
+  dollars, so a weaker lira inflating their TRY value is not mistaken for new dollar
+  deposits.
 - **Automatic, and loud when it breaks:**
   - GitHub Actions fetches every Tuesday and Friday.
   - If a source stops publishing, a freshness check turns the run red instead of passing

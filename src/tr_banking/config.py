@@ -47,6 +47,9 @@ Category = Literal[
     "reserve_requirements",
     "securities",
     "government_bonds",
+    # deposit rate and the USD/TRY rate (EVDS)
+    "deposit_rate",
+    "usd_try",
 ]
 
 

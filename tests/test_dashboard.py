@@ -27,6 +27,8 @@ SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
 CPI_SPEC = CONFIG.deflator
 RATE_SPECS = [spec for spec in CONFIG.series if spec.module == "rates"]
 FUNDING_CODE = "TP.APIFON4"  # the CBRT funding cost, the other "policy" series
+DEPOSIT_RATE_CODE = "TP.TRY.MT06"
+USD_SPEC = next(spec for spec in CONFIG.series if spec.category == "usd_try")
 ALL_BDDK_SPECS = CONFIG.for_source("bddk")
 BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
 BANKING_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "banking"]
@@ -96,11 +98,13 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         parse_evds_response(fixture(name), [CPI_SPEC.code])
         for name in ("evds_cpi_2023.json", "evds_cpi_2024.json")
     )
-    loan_codes = [spec.code for spec in RATE_SPECS if spec.category != "policy"]
+    loan_codes = [
+        spec.code for spec in RATE_SPECS if spec.category not in ("policy", "deposit_rate")
+    ]
     # Same window as the policy rate: since 2018 the two policy-category series agree.
     with SqliteRepository(path) as repo:
         repo.init_schema()
-        for spec in [*SPECS, CPI_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
+        for spec in [*SPECS, CPI_SPEC, USD_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
             repo.upsert_series(spec)
         repo.upsert_observations("bkm", bkm_rows())
         evds = fixture("evds_hpbitablo6_2024.json")
@@ -115,6 +119,10 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         repo.upsert_observations("evds", parse_evds_response(policy, [CONFIG.policy_rate.code]))
         funding = fixture("evds_funding_cost_2024_2025.json")
         repo.upsert_observations("evds", parse_evds_response(funding, [FUNDING_CODE]))
+        deposit = fixture("evds_deposit_rate_2024.json")
+        repo.upsert_observations("evds", parse_evds_response(deposit, [DEPOSIT_RATE_CODE]))
+        usd = fixture("evds_usd_try_2024_2025.json")
+        repo.upsert_observations("evds", parse_evds_response(usd, [USD_SPEC.code]))
         bddk = fixture("bddk_konut_2024.json")
         for spec in ALL_BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
@@ -380,7 +388,9 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
     app = run_dashboard("rates")
 
     charts = [json.loads(chart.proto.spec) for chart in app.get("vega_lite_chart")]
-    assert len(charts) == len(RATE_SPECS)
+    # One chart per rate, then the loan-deposit spread (the fixtures share their weeks).
+    assert len(charts) == len(RATE_SPECS) + 1
+    charts = charts[: len(RATE_SPECS)]
     for spec in charts:
         text = json.dumps(spec, ensure_ascii=False)
         assert "Yıllık enflasyon (TÜFE)" in text  # the reference line
@@ -571,7 +581,11 @@ def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: P
     rate_charts = [json.loads(chart.proto.spec) for chart in rates.get("vega_lite_chart")]
     by_name = dict(zip([s.name_tr for s in SPECS], map(chart_color, credit_charts), strict=True))
     rate_by_name = dict(
-        zip([s.name_tr for s in RATE_SPECS], map(chart_color, rate_charts), strict=True)
+        zip(
+            [s.name_tr for s in RATE_SPECS],
+            map(chart_color, rate_charts[: len(RATE_SPECS)]),
+            strict=True,
+        )
     )
     assert by_name["Konut kredileri"] == rate_by_name["Konut kredisi faizi"] == "#eb6834"
     assert by_name["İhtiyaç kredileri"] == rate_by_name["İhtiyaç kredisi faizi"] == "#4a3aa7"

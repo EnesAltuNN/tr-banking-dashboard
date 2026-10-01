@@ -181,6 +181,24 @@ funding (AOFM), on business days (verified 2026-10-01).
 - This is why the dashboard does **not** splice a pre-2018 policy rate from another source:
   the two measures are different things and are shown as two series.
 
+**Deposit rate** (verified 2026-10-01): `TP.TRY.MT06` in data group `bie_mt100h`, *Mevduat
+Faiz Oranları (Akım)*, "Toplam (TL Mevduat, Akım, %)": the weighted average rate on new TRY
+deposits that week, all maturities, weekly (Friday) from 2002-01-04. It is the deposit side
+of `bie_kt100h`. 43.56% on 2026-09-18.
+- The same group has 1, 3, 6, 12 and 12+ month maturities (`MT01`-`MT05`), USD and EUR
+  deposits, and savings (`TAS`) and commercial (`TIC`) splits from 2012-07-06; not used.
+- **Spread** (`app/metrics.py: rate_spread`) = `TP.KTF18` commercial loan rate − deposit rate:
+  6.2 pp on 2026-09-18, between −17.8 and +15.9 pp since 2014. There is no single rate for
+  all loans; commercial loans are the largest book.
+- `alerts: false`: the weekly flow rate flagged 3.8% of weeks.
+
+**USD/TRY** (verified 2026-10-01): `TP.DK.USD.A.YTL` in data group `bie_dkdovytl`, *Döviz
+Kurları*, the CBRT indicative USD buying rate (Döviz Alış), business days from 1950
+(weekend dates come back null). Module `macro`, no tab. It turns FX deposits into USD
+(`app/metrics.py: in_usd`, the latest rate within 6 days up to each Friday): about 259
+billion USD on 2026-09-18, up from 231 a year earlier, while the TRY value rose 32%.
+Euro and gold are converted at the dollar rate too, so the USD figure is approximate.
+
 **MPC calendar and decision markers** (verified 2026-09-29):
 - The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from
   the first meeting inside the series (2018-10-25). Past dates come from the CBRT's decision
@@ -305,7 +323,11 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
   - Own funds / loans: 21.5%. Net FX position / own funds: 0.1% (legal limit ±20%).
   - Non-deposit funding / deposits: (due to the CBRT + repo + due to foreign banks +
     securities issued) / deposits: 39.9%. Reserve requirements / deposits: 13.4%.
-  - Government bonds in securities: the three bond rows / `3.0.1`: 58.8%.
+  - Government bonds in securities: the three bond rows / `3.0.1`: 58.8%. **It starts on
+    2022-09-16**: that week the three bond rows nearly doubled (e.g. `3.0.18` 366 -> 620
+    billion TRY) while `3.0.1` moved from 2,088 to 2,113, a definition break rather than
+    purchases. The share was about 33% before and 59% after; the bond rows themselves keep
+    the break (they are detail series, hidden by default).
 - **TLS:** `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV
   SSL CA 2018" is missing.
   - Browsers download the missing intermediate themselves; Python on Linux does not.

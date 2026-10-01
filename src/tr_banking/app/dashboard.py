@@ -43,8 +43,10 @@ from tr_banking.app.metrics import (
     category_id,
     deflate,
     display_unit,
+    in_usd,
     period_changes,
     policy_decisions,
+    rate_spread,
     real_rates,
     spec_id,
     spec_observations,
@@ -119,6 +121,8 @@ CATEGORY_HUES = {
     "reserve_requirements": "orange",
     "securities": "green",
     "government_bonds": "red",
+    "deposit_rate": "yellow",
+    "usd_try": "green",
 }
 # Banking series a click away in the filter bar rather than charted by default: bank groups,
 # the single funding items and the bond rows (their totals and ratios are shown).
@@ -438,6 +442,7 @@ def render_rates_view(
         lang,
         theme,
     )
+    render_spread_chart(series, observations, in_range, lang, theme)
     with st.expander(text("notes", lang)):
         st.caption(text("rates_note", lang))
 
@@ -507,6 +512,7 @@ def render_banking_view(
     headline = [ratio for ratio in ratios if ratio.key in HEADLINE_RATIOS]
     render_ratio_charts(headline, lang, theme)
     render_group_shares(ratios, lang, theme)
+    render_fx_in_usd(series, observations, lang, theme)
 
     st.markdown(f"**{text('amounts', lang)}**")
     sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(DETAIL_CATEGORIES), "id"]]
@@ -591,6 +597,71 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
     show_table(styled, ratio_col)
+
+
+def render_spread_chart(
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    in_range: Callable[[pd.DataFrame], pd.DataFrame],
+    lang: Lang,
+    theme: str,
+) -> None:
+    """Commercial loan rate minus the TRY deposit rate, in pp (a rough lending margin)."""
+    loan_id, deposit_id = category_id(series, "commercial"), category_id(series, "deposit_rate")
+    if loan_id is None or deposit_id is None:
+        return
+    spread = in_range(
+        rate_spread(
+            observations[observations["series_id"] == loan_id],
+            observations[observations["series_id"] == deposit_id],
+        )
+    )
+    if spread.empty:
+        return
+    color = series_color("deposit_rate", theme)
+    with st.columns(CHARTS_PER_ROW)[0].container(border=True):
+        chart_title(text("rate_spread", lang), color)
+        st.altair_chart(line_chart(spread, text("pp", lang), color, lang, axis_format=",.0f"))
+        st.caption(text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang]))
+
+
+def render_fx_in_usd(
+    series: pd.DataFrame, observations: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """FX deposits at the USD/TRY rate of their week, next to the rate itself.
+
+    Separates real dollarization from the TRY value of FX deposits rising with the rate.
+    """
+    usd_id, fx_id = category_id(series, "usd_try"), category_id(series, "fx_deposits")
+    if usd_id is None or fx_id is None:
+        return
+    usd_rows = observations[observations["series_id"] == usd_id]
+    fx_usd = in_usd(observations[observations["series_id"] == fx_id], usd_rows)
+    if fx_usd.empty:
+        return
+    charts = (
+        (
+            "fx_deposits_usd",
+            fx_usd.assign(value=fx_usd["value"] * 1e-3),
+            "billion_usd",
+            "fx_deposits",
+            ",.0f",
+        ),
+        ("usd_try_rate", usd_rows, "try_per_usd", "usd_try", ",.1f"),
+    )
+    for column, (title, data, unit, category, axis_format) in zip(
+        st.columns(CHARTS_PER_ROW), charts, strict=False
+    ):
+        color = series_color(category, theme)
+        with column.container(border=True):
+            chart_title(text(title, lang), color)
+            st.altair_chart(
+                line_chart(data, text(unit, lang), color, lang, axis_format=axis_format)
+            )
+            source = SOURCE_LABELS["evds"][lang]
+            if title == "fx_deposits_usd":
+                source = f"{SOURCE_LABELS['bddk'][lang]}, {source}"
+            st.caption(text("chart_source", lang).format(source=source))
 
 
 def render_group_shares(ratios: list[Ratio], lang: Lang, theme: str) -> None:

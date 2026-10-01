@@ -92,6 +92,19 @@ series:
     max_age_days: 45
     deflator: true
 
+  # USD/TRY, CBRT indicative buying rate (Döviz Alış), data group bie_dkdovytl, business days
+  # from 1950, verified 2026-10-01. BDDK values FX items at the CBRT buying rate, so this one
+  # turns FX deposits into USD. Holidays can last 9 days, hence max_age_days 14.
+  - source: evds
+    code: TP.DK.USD.A.YTL
+    name_tr: ABD doları kuru (TCMB döviz alış)
+    name_en: USD/TRY (CBRT buying rate)
+    unit: TRY
+    frequency: daily
+    module: macro
+    max_age_days: 14
+    category: usd_try
+
   # Loan interest rates. Data group bie_kt100h "Kredi Faiz Oranlari (Akim)", verified 2026-09-27:
   # weighted average rates banks apply to new TRY loans that week (flow data), weekly (Friday),
   # percent, 2002-01-04 onward (TP.KTF18 from 2012-07-27). Both personal and commercial rates
@@ -136,6 +149,19 @@ series:
     frequency: weekly
     module: rates
     category: commercial
+
+  # TL deposit rate, all maturities: data group bie_mt100h "Mevduat Faiz Oranlari (Akim)",
+  # "Toplam (TL Mevduat, Akim, %)", weekly (Friday) from 2002-01-04, verified 2026-10-01: the
+  # weighted average rate on new TL deposits that week, the deposit side of the loan rates.
+  - source: evds
+    code: TP.TRY.MT06
+    name_tr: TL mevduat faizi
+    name_en: TRY deposit rate
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_rate
+    alerts: false
 
   # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
   # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
