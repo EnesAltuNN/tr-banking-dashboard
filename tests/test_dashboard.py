@@ -25,6 +25,7 @@ CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
 SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
 CPI_SPEC = CONFIG.deflator
 RATE_SPECS = [spec for spec in CONFIG.series if spec.module == "rates"]
+FUNDING_CODE = "TP.APIFON4"  # the CBRT funding cost, the other "policy" series
 ALL_BDDK_SPECS = CONFIG.for_source("bddk")
 BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
 BANKING_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "banking"]
@@ -95,7 +96,8 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         parse_evds_response(fixture(name), [CPI_SPEC.code])
         for name in ("evds_cpi_2023.json", "evds_cpi_2024.json")
     )
-    loan_codes = [spec.code for spec in RATE_SPECS if not spec.policy_rate]
+    loan_codes = [spec.code for spec in RATE_SPECS if spec.category != "policy"]
+    # Same window as the policy rate: since 2018 the two policy-category series agree.
     with SqliteRepository(path) as repo:
         repo.init_schema()
         for spec in [*SPECS, CPI_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
@@ -111,6 +113,8 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         )
         policy = fixture("evds_policy_rate_2024_2025.json")
         repo.upsert_observations("evds", parse_evds_response(policy, [CONFIG.policy_rate.code]))
+        funding = fixture("evds_funding_cost_2024_2025.json")
+        repo.upsert_observations("evds", parse_evds_response(funding, [FUNDING_CODE]))
         bddk = fixture("bddk_konut_2024.json")
         for spec in ALL_BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
@@ -353,6 +357,9 @@ def test_rates_tab_shows_levels_pp_changes_and_real_rates(use_db: Callable, tmp_
     policy = rows.loc["TCMB politika faizi (1 hafta vadeli repo)"]
     assert policy["Son değer (%)"] == 47.5
     assert policy["Reel faiz ≈ (puan)"] == "–"  # real rate only for loan rates
+    funding = rows.loc["TCMB ağırlıklı ortalama fonlama maliyeti"]
+    assert funding["Son değer (%)"] == 47.5  # the same 10 January 2025 value as the policy rate
+    assert funding["Reel faiz ≈ (puan)"] == "–"
     assert "Fisher denklemi değildir" in page_text(app)
 
 
@@ -380,8 +387,14 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
         assert "PPK kararı" in text  # the 26 Dec 2024 cut is in the date range
         assert '"title": "Karar"' in text  # the tooltip names hike, cut or hold
         assert '"resolve"' not in text  # no independent (dual) y-axis
+    # The policy rate is a step function; the funding cost, the other "policy" series, is not.
+    policy_chart = next(
+        chart
+        for chart in charts
+        if CONFIG.policy_rate.name_tr in json.dumps(chart, ensure_ascii=False)
+    )
     policy_marks = [
-        layer["mark"] for layer in charts[-1]["layer"] if isinstance(layer["mark"], dict)
+        layer["mark"] for layer in policy_chart["layer"] if isinstance(layer["mark"], dict)
     ]
     assert {"type": "line", "interpolate": "step-after"}.items() <= policy_marks[0].items()
 

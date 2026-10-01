@@ -396,7 +396,8 @@ def render_rates_view(
     selected_ids, start, end = filters
     selected = observations[observations["series_id"].isin(selected_ids)]
 
-    loan_ids = [int(series_id) for series_id in series["id"] if series_id != policy_id]
+    # A real rate is for loans: the policy rate and the funding cost are policy rates.
+    loan_ids = [int(row.id) for row in series.itertuples() if row.category != "policy"]
     summary = summarize_rates(selected, inflation, as_of=end, real_rate_ids=loan_ids)
     render_rates_table(summary, series, lang, theme)
 

@@ -151,6 +151,21 @@ series:
     max_age_days: 14
     policy_rate: true
 
+  # Weighted average cost of CBRT funding (AOFM). Data group bie_apifon, business days,
+  # verified 2026-10-01: values from 2014-01-02, so it covers the years the one-week repo
+  # series does not. It is the better measure for 2016-2018, when the CBRT funded banks
+  # mostly through other facilities: in 2017 this ran at 8.28-12.75% while the one-week repo
+  # stayed at 8%. Since 2018 the two agree (both 37.00% on 2026-09-30).
+  - source: evds
+    code: TP.APIFON4
+    name_tr: TCMB ağırlıklı ortalama fonlama maliyeti
+    name_en: CBRT weighted average cost of funding
+    unit: "%"
+    frequency: daily
+    module: rates
+    category: policy
+    max_age_days: 14
+
 # ---------------------------------------------------------------------------------------------
 # BDDK weekly bulletin (https://www.bddk.org.tr/BultenHaftalik), table 1 "Krediler".
 # Verified on 2026-09-24 from the bulletin page (row ids, bank groups) and its JSON endpoint.

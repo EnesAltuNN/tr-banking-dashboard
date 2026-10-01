@@ -56,13 +56,15 @@ https://tr-banking-dashboard.streamlit.app/.
 ## Status (2026-09-29)
 
 - **Live:** 25 series, with Loans, Interest rates and Cards tabs, plus the redesign.
-- **Local, 8 commits not pushed:** the Banking sector tab (13 BDDK series), the translated
-  widget fix, `scripts/screenshots.py`, unusual-change alerts, the weekly AI summary
-  (migration 0004), the MPC calendar, the slimmed CLAUDE.md and the pinned table column.
-- **Uncommitted:** the filters left the sidebar; `filter_bar` draws one row at the top of the
-  open tab: three buttons that open their picker and show its choice, plus the date field
-  itself. pytest and ruff green, checked at 1440 px and 390 px. The README image still shows
-  the old sidebar: retake it.
+- **Not pushed:** the Banking sector tab (13 BDDK series), the translated widget fix,
+  `scripts/screenshots.py`, unusual-change alerts, the weekly AI summary (migration 0004),
+  the MPC calendar, the slimmed CLAUDE.md and the pinned table column.
+- **Local, newest first:** the filter row (the sidebar is gone; three buttons that carry
+  their choice plus the date field) and the CBRT funding cost `TP.APIFON4` (Backlog 18: it
+  starts 2014-01-02, so the Rates tab is no longer empty before 2018-09; the BIS series was
+  rejected, it lags two months). The README image still shows the old sidebar: retake it.
+- **The funding cost has no history until** `uv run tr-banking backfill --start 2014-01-03
+  --source evds` runs; a plain fetch only brings the last 8 weeks.
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
   2. `git push`.
@@ -86,8 +88,6 @@ https://tr-banking-dashboard.streamlit.app/.
 4. Remove the Windows scheduled task (see Calendar).
 7. Module 3: bank rates and campaigns from bank sites. Postponed; decide the approach first.
 11. Revision history: upserts overwrite. Add a vintage table only if revisions matter.
-18. Policy rate before 2018-09-14: the BIS series `TP.BISPOLFAIZ.TUR` or a YAML of
-    decisions. Decide first.
 19. BKM seasonality: a seasonally adjusted view, or a yearly-%-only default.
 
 ## Commands

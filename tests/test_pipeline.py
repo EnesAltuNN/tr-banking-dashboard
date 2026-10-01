@@ -26,6 +26,7 @@ EVDS_FIXTURES = [
     "evds_loan_rates_2024.json",  # 4 loan rates x 5 weeks
     "evds_cpi_2024.json",  # 12 CPI months
     "evds_policy_rate_2024_2025.json",  # 19 business days + 1 holiday (null)
+    "evds_funding_cost_2024_2025.json",  # the same window for the funding cost
 ]
 BDDK_BYTES = (FIXTURES / "bddk_konut_2024.json").read_bytes()
 BKM_PAGE = (FIXTURES / "bkm_2026_07.html").read_bytes()
@@ -36,7 +37,7 @@ CPI_SPEC = CONFIG.deflator
 BDDK_SPECS = CONFIG.for_source("bddk")
 BKM_SPECS = CONFIG.for_source("bkm")
 BKM_ROWS = len(BKM_SPECS)  # only June is "published" in bkm_transport
-EVDS_ROWS = 6 * 3 + 4 * 5 + 12 + 19
+EVDS_ROWS = 6 * 3 + 4 * 5 + 12 + 19 + 19  # credit, loan rates, CPI, policy, funding cost
 START, END = date(2024, 6, 14), date(2024, 7, 12)
 
 
@@ -275,7 +276,7 @@ def test_weekly_and_monthly_series_are_requested_separately(
     [daily_url] = [url for url in urls if "TP.PY.P02.1H" in url]
     [weekly_url] = [url for url in urls if "HPBITABLO6" in url]
     assert "series=TP.TUKFIY2025.GENEL&" in monthly_url
-    assert "series=TP.PY.P02.1H&" in daily_url
+    assert "series=TP.PY.P02.1H-TP.APIFON4&" in daily_url  # both daily rates, one request
     assert "TP.KTF10" in weekly_url  # loan credit and loan rates are both weekly
     assert "startDate=01-04-2024" in monthly_url  # month-aligned, 3 months before July
     assert "startDate=14-06-2024" in weekly_url

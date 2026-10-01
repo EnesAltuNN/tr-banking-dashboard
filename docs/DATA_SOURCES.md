@@ -6,7 +6,7 @@ Detailed, verified facts about each source; read this before touching a source c
 |---|---|---|---|---|
 | [TCMB EVDS3](#tcmb-evds3-verified-2026-09-24) | 6 weekly loan series | thousand TRY | 2024-06-28 | official API, free key |
 | [TCMB EVDS3, CPI](#consumer-price-index-verified-2026-09-27) | 1 monthly price index (deflator) | index, 2025=100 | 2005-01 | official API, free key |
-| [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, daily policy rate | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
+| [TCMB EVDS3, rates](#interest-rates-verified-2026-09-27) | 4 weekly loan rates, the daily policy rate and the daily funding cost | % | 2014-01-03 (policy rate 2018-09-14) | official API, free key |
 | [BDDK weekly bulletin](#bddk-weekly-bulletin-verified-2026-09-24) | 7 weekly loan series; 13 deposit, NPL and bank-group series | million TRY | 2014-01-03 | public website, no API |
 | [BKM](#bkm-card-statistics-verified-2026-09-27) | 4 monthly card spending series, 2 card counts | million TRY, cards | 2017-01 | public website (HTML), no API |
 
@@ -168,6 +168,18 @@ data.
   rate. In 2017 it was about 12% while the one-week repo rate stayed at 8%. So even where a
   one-week repo value exists, it does not show that period's actual funding cost. The
   series used here has no values before 2018-09-14 anyway.
+
+**Funding cost:** `TP.APIFON4` in data group `bie_apifon`, the CBRT's weighted average cost of
+funding (AOFM), on business days (verified 2026-10-01).
+- It runs from **2014-01-02**, so it covers the years the one-week repo series does not, and
+  it is what the 2016-2018 note above calls for: in 2017 it ranged 8.28-12.75% while the
+  one-week repo rate stayed at 8%.
+- Since 2018 the two agree: both were 37.00% on 2026-09-30, and both 50.00% -> 47.50% over the
+  test fixture's window (`evds_funding_cost_2024_2025.json`, recorded 2026-10-01).
+- It is charted as a plain line, not a step: unlike a policy rate it moves between meetings.
+  It shares the `policy` category and so gets no real-rate column, which is for loan rates.
+- This is why the dashboard does **not** splice a pre-2018 policy rate from another source:
+  the two measures are different things and are shown as two series.
 
 **MPC calendar and decision markers** (verified 2026-09-29):
 - The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from

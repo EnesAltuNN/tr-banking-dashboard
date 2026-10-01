@@ -37,6 +37,7 @@ def test_project_series_yaml_loads() -> None:
         "TP.KTF12",
         "TP.KTF18",
         "TP.PY.P02.1H",
+        "TP.APIFON4",
     ]
     assert {spec.module for spec in config.series} == {
         "credit",
