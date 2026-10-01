@@ -246,7 +246,7 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "mode_real": {"tr": "Reel (enflasyondan arındırılmış)", "en": "Real (inflation-adjusted)"},
     "mode_nominal_short": {"tr": "Nominal", "en": "Nominal"},
     "mode_real_short": {"tr": "Reel", "en": "Real"},
-    "series_count": {"tr": "{count} seri", "en": "{count} series"},
+    "series_all": {"tr": "tümü", "en": "all"},
     "real_unit": {"tr": "{unit}, {month} fiyatlarıyla", "en": "{unit}, {month} prices"},
     "real_note": {
         "tr": (

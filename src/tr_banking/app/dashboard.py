@@ -863,12 +863,6 @@ def render_value_mode(bar: DeltaGenerator, lang: Lang, key: str = "value_mode") 
     )
 
 
-def range_label(picked: object, lang: Lang) -> str:
-    """The date button: both dates, or only the first while the user is still choosing."""
-    days = picked if isinstance(picked, tuple) else (picked,)
-    return " – ".join(format_date(day, lang) for day in days)
-
-
 def render_filters(
     bar: DeltaGenerator,
     series: pd.DataFrame,
@@ -886,7 +880,9 @@ def render_filters(
     start = translated_start(name, lang, list(labels) if default_ids is None else default_ids)
     chosen = st.session_state.get(f"{name}_{lang}", start)
     count = sum(1 for series_id in chosen if series_id in labels)
-    with bar.popover(text("series_count", lang).format(count=count), icon=SERIES_ICON):
+    # The button says what is on screen: all of them, or how many of how many.
+    picked_label = text("series_all", lang) if count == len(labels) else f"{count}/{len(labels)}"
+    with bar.popover(f"{text('series', lang)}: {picked_label}", icon=SERIES_ICON):
         selected_ids = st.multiselect(
             text("series", lang),
             options=list(labels),
@@ -897,18 +893,18 @@ def render_filters(
             width=SERIES_FILTER_WIDTH,
         )
     st.session_state[f"{name}__value"] = selected_ids
-    with bar.popover(range_label(st.session_state.get(f"{key}_range", (first, last)), lang)):
-        picked = st.date_input(
-            text("date_range", lang),
-            value=(first, last),
-            min_value=first,
-            max_value=last,
-            format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
-            key=f"{key}_range",
-            label_visibility="collapsed",
-            # A date range needs both dates side by side; "content" is not a legal width here.
-            width=DATE_FILTER_WIDTH,
-        )
+    # Not in a popover: the field already shows the range and opens the calendar on a click.
+    picked = bar.date_input(
+        text("date_range", lang),
+        value=(first, last),
+        min_value=first,
+        max_value=last,
+        format="DD.MM.YYYY" if lang == "tr" else "YYYY-MM-DD",
+        key=f"{key}_range",
+        label_visibility="collapsed",
+        # A date range needs both dates side by side; "content" is not a legal width here.
+        width=DATE_FILTER_WIDTH,
+    )
 
     if not selected_ids:
         st.info(text("select_series", lang))
