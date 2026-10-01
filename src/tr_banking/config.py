@@ -37,6 +37,16 @@ Category = Literal[
     "state_banks",
     "private_banks",
     "foreign_banks",
+    # capital, funding and securities (BDDK tables 297, 293, 291)
+    "equity",
+    "fx_position",
+    "cbrt_funding",
+    "repo_funding",
+    "foreign_bank_funding",
+    "issued_securities",
+    "reserve_requirements",
+    "securities",
+    "government_bonds",
 ]
 
 
@@ -57,11 +67,13 @@ class SeriesSpec(BaseModel):
     # max_age_days replaces the per-frequency freshness limit, e.g. for publication lags;
     # deflator marks the price index used for real (inflation-adjusted) values;
     # policy_rate marks the central bank rate whose changes are marked on the rate charts;
-    # category groups series across sources and modules (colors, KPI tiles).
+    # category groups series across sources and modules (colors, KPI tiles);
+    # alerts: false keeps a series out of the unusual-change alerts (too noisy, see CONVENTIONS).
     max_age_days: int | None = Field(default=None, ge=1)
     deflator: bool = False
     policy_rate: bool = False
     category: Category | None = None
+    alerts: bool = True
 
 
 class SeriesConfig(BaseModel):

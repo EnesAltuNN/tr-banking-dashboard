@@ -274,9 +274,26 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
 | `2.0.5:10001:TRY:3` | Takipteki 8 | NPL: commercial and other loans | 506,664 |
 | `1.0.1:{10005,10007,10006}:TRY:3` | Krediler 1 | Total loans of state / domestic private / foreign banks | 13,209,240 / 8,030,389 / 6,998,060 |
 | `4.0.1:{10005,10007,10006}:TRY:3` | Mevduat 1 | Total deposits of the same groups | 15,275,970 / 9,033,830 / 8,243,471 |
+| `2.0.1:{10005,10007,10006}:TRY:3` | Takipteki 1 | NPL of the same groups | 324,873 / 294,555 / 257,071 |
+| `4.0.1:{10005,10007,10006}:TRY:2` | Mevduat 1, YP | FX deposits of the same groups | 5,524,920 / 3,606,521 / 3,453,558 |
+| `9.0.18:10001:TRY:3` | YP Pozisyonu 8 | Regulatory capital (Yasal Özkaynak) | 6,056,344 |
+| `9.0.17:10001:TRY:3` | YP Pozisyonu 7 | Net FX position, on + off balance sheet | 6,854 |
+| `5.0.8:10001:TRY:3` | Diğer Bilanço 8 | Due to the CBRT | 878,758 |
+| `5.0.16:10001:TRY:3` | Diğer Bilanço 13 | Funds from repo transactions | 3,334,973 |
+| `5.0.11:10001:TRY:3` | Diğer Bilanço 12 | Due to foreign banks | 6,600,424 |
+| `5.0.12:10001:TRY:3` | Diğer Bilanço 14 | Securities issued (net) | 2,158,790 |
+| `5.0.4:10001:TRY:3` | Diğer Bilanço 4 | Reserve requirements | 4,365,021 |
+| `3.0.1:10001:TRY:3` | Menkul 1 | Total securities | 8,045,613 |
+| `3.0.{15,18,21}:10001:TRY:3` | Menkul 3, 6, 9 | Government bonds at FV through P&L / through OCI / amortised cost | 353,636 / 2,722,927 / 1,650,340 |
 
 - **State + domestic private + foreign = sector, exactly**, for loans and deposits (checked on
   2026-09-18). Participation and development banks belong to these ownership groups.
+- **New rows checked on 2026-10-01** against the live endpoint: all start on 2014-01-03, and
+  the three groups' NPL and FX deposits add up to the sector rows.
+- **Table 297 (FX position) has only a TOPLAM column**: column 1 returns 0, use column 3.
+- **"Due to the CBRT" (`5.0.8`) leaves weeks out before 2018-09-28**: it sends a few weeks,
+  all 0 (2015-05-29 to 2017-10-13), and nothing for the rest. The non-deposit funding sum
+  counts those weeks as 0; from 2018-09-28 the row is complete.
 - **Ratios are computed for display, never stored** (`app/metrics.py: ratio_pct`):
   - NPL ratio = NPL / (loans + NPL): 3.01% on 2026-09-18. BDDK's loan table holds performing
     loans only, so the denominator adds the NPL back, as BDDK's own reports do. Consumer and
@@ -284,6 +301,11 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
   - FX share of deposits = `4.0.1` column 2 / column 3: 38.7%.
   - Loan-to-deposit ratio = `1.0.1` / `4.0.1`: 86.7%.
   - Bank-group shares of loans and deposits: group / sector total.
+  - NPL ratio and FX share of deposits per bank group, as above with the group's rows.
+  - Own funds / loans: 21.5%. Net FX position / own funds: 0.1% (legal limit ±20%).
+  - Non-deposit funding / deposits: (due to the CBRT + repo + due to foreign banks +
+    securities issued) / deposits: 39.9%. Reserve requirements / deposits: 13.4%.
+  - Government bonds in securities: the three bond rows / `3.0.1`: 58.8%.
 - **TLS:** `bddk.org.tr` sends only its leaf certificate; the intermediate "GlobalSign RSA OV
   SSL CA 2018" is missing.
   - Browsers download the missing intermediate themselves; Python on Linux does not.

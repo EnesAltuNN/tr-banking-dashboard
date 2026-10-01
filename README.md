@@ -22,7 +22,7 @@ dashboard, in nominal and inflation-adjusted terms.
     Where it covers the same item as EVDS, the two agree within **about 0.3%**.
   - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
     counts back to **2017**.
-  - 38 series in total, all defined in one YAML file.
+  - 56 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -46,8 +46,10 @@ dashboard, in nominal and inflation-adjusted terms.
 - **Bilingual dashboard:**
   - Four tabs (loans, interest rates, cards, banking sector), each opening with KPI tiles and
     sparklines; the filters are a row of buttons at the top of the tab.
-  - The banking-sector tab computes the NPL ratio, the FX share of deposits, the
-    loan-to-deposit ratio and bank-group shares on the fly from BDDK's tables.
+  - The banking-sector tab computes 22 ratios on the fly from six BDDK tables: NPL ratios
+    and FX share of deposits (also per bank group), loan-to-deposit, own funds / loans, net FX
+    position / own funds, non-deposit funding, reserve requirements, the government bond
+    share of securities, and bank-group shares.
   - Alerts flag a weekly change far outside the series' own past year (a robust score on
     the median and MAD; the threshold was calibrated on 12 years of history).
   - TR/EN switch, with Turkish number formats (`18.445,2`, `-1,1%`).

@@ -37,6 +37,7 @@ from tr_banking.app.metrics import (
     MONETARY_UNITS,
     YEAR,
     Ratio,
+    alert_series,
     annual_inflation,
     banking_ratios,
     category_id,
@@ -109,7 +110,26 @@ CATEGORY_HUES = {
     "state_banks": "orange",
     "private_banks": "violet",
     "foreign_banks": "aqua",
+    "fx_position": "yellow",
+    "cbrt_funding": "red",
+    "repo_funding": "violet",
+    "foreign_bank_funding": "aqua",
+    "issued_securities": "magenta",
+    "reserve_requirements": "orange",
+    "securities": "green",
+    "government_bonds": "red",
 }
+# Banking series a click away in the filter bar rather than charted by default: bank groups,
+# the single funding items and the bond rows (their totals and ratios are shown).
+DETAIL_CATEGORIES = (
+    *BANK_GROUPS,
+    "fx_position",
+    "cbrt_funding",
+    "repo_funding",
+    "foreign_bank_funding",
+    "issued_securities",
+    "government_bonds",
+)
 CROSSHAIR_COLOR = "#898781"
 # Yearly inflation is a reference, not a series of its own: a muted grey, dashed line.
 INFLATION_COLORS = {"light": "#6f6d66", "dark": "#a3a19a"}
@@ -263,7 +283,7 @@ def render_info_line(fetched_at: datetime | None, loaded_at: datetime, lang: Lan
 
 def render_alerts(series: pd.DataFrame, observations: pd.DataFrame, lang: Lang) -> None:
     """Weekly series whose latest change is far outside their own past year (all tabs)."""
-    weekly = series[(series["frequency"] == "weekly") & (series["module"] != "macro")]
+    weekly = alert_series(series)
     rows = observations[observations["series_id"].isin(weekly["id"])]
     points = weekly.loc[weekly["unit"] == "%", "id"]
     alerts = unusual_changes(rows, points_ids=points)
@@ -487,8 +507,7 @@ def render_banking_view(
     render_ratio_charts(headline, lang, theme)
 
     st.markdown(f"**{text('amounts', lang)}**")
-    # Bank-group amounts are a click away in the filter bar; sector series show by default.
-    sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(BANK_GROUPS), "id"]]
+    sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(DETAIL_CATEGORIES), "id"]]
     filters = render_filters(bar, banking, observations_of_tab, lang, "banking", sector_ids)
     if filters is None:
         return
@@ -508,7 +527,14 @@ def render_banking_view(
         st.caption(text("banking_note", lang))
 
 
-HEADLINE_RATIOS = ("ratio_npl", "ratio_fx_share", "ratio_loan_deposit", "ratio_loans_state_banks")
+HEADLINE_RATIOS = (
+    "ratio_npl",
+    "ratio_fx_share",
+    "ratio_loan_deposit",
+    "ratio_loans_state_banks",
+    "ratio_equity_loans",
+    "ratio_wholesale_funding",
+)
 
 
 def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:

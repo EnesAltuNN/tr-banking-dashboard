@@ -308,11 +308,20 @@ BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
 
 
 def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
-    """Adds each series' config-only `category` (not stored in the database)."""
-    categories = {(spec.source, spec.code): spec.category for spec in config.series}
+    """Adds the config-only `category` and `alerts` flag of each series (not stored)."""
+    specs = {(spec.source, spec.code): spec for spec in config.series}
+    found = [specs.get((row.source, row.code)) for row in series.itertuples()]
     return series.assign(
-        category=[categories.get((row.source, row.code)) for row in series.itertuples()]
+        category=[spec.category if spec else None for spec in found],
+        alerts=[spec.alerts if spec else True for spec in found],
     )
+
+
+def alert_series(series: pd.DataFrame) -> pd.DataFrame:
+    """The series checked for unusual weekly changes: weekly, not macro, alerts not off."""
+    return series[
+        (series["frequency"] == "weekly") & (series["module"] != "macro") & series["alerts"]
+    ]
 
 
 def spec_id(series: pd.DataFrame, spec: SeriesSpec | None) -> int | None:
@@ -351,7 +360,7 @@ class Ratio(NamedTuple):
 
 
 def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Ratio]:
-    """NPL ratios, FX share of deposits, loan-to-deposit ratio and bank-group shares.
+    """NPL, deposit, capital, funding and securities ratios, overall and per bank group.
 
     Loan totals come from BDDK's loan table (module "credit"), so every ratio compares BDDK
     with BDDK. A ratio whose inputs are not loaded is left out.
@@ -365,15 +374,36 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
         found = observations[observations["series_id"] == series_id]
         return found if not found.empty else None
 
-    def group(category: str, row: str) -> int | None:
+    def group(category: str, row: str, column: str = "3") -> int | None:
+        keys = banking["code"].map(bddk_key)
         matches = banking[
             (banking["category"] == category)
-            & (banking["code"].map(lambda code: bddk_key(code).row) == row)
+            & (keys.map(lambda key: key.row) == row)
+            & (keys.map(lambda key: key.column) == column)
         ]
         return int(matches["id"].iloc[0]) if not matches.empty else None
 
+    def total(*categories: str, zero_if_missing: tuple[str, ...] = ()) -> pd.DataFrame | None:
+        """Sum of every series in these categories, on the weeks all of them have.
+
+        A series in `zero_if_missing` counts as 0 in weeks it leaves out: BDDK omits most
+        weeks of "Due to the CBRT" before 2018-09-28, and the weeks it does send are 0.
+        """
+        chosen = banking[banking["category"].isin(categories)]
+        found = observations[observations["series_id"].isin(chosen["id"])]
+        if chosen.empty or found.empty:
+            return None
+        wide = found.pivot_table(index="date", columns="series_id", values="value")
+        optional = chosen.loc[chosen["category"].isin(zero_if_missing), "id"]
+        wide[wide.columns.intersection(optional)] = wide[
+            wide.columns.intersection(optional)
+        ].fillna(0)
+        complete = wide.reindex(columns=chosen["id"]).dropna()
+        return complete.sum(axis=1).rename("value").reset_index() if not complete.empty else None
+
     loans = rows(category_id(bddk_loans, "total"))
     deposits = rows(category_id(banking, "deposits"))
+    equity = rows(category_id(banking, "equity"))
     definitions: list[tuple[str, str | None, pd.DataFrame | None, pd.DataFrame | None, bool]] = [
         ("ratio_npl", "npl", rows(category_id(banking, "npl")), loans, True),
         (
@@ -390,14 +420,75 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
             rows(category_id(bddk_loans, "commercial")),
             True,
         ),
+    ]
+    definitions += [
+        (
+            f"ratio_npl_{bank_group}",
+            bank_group,
+            rows(group(bank_group, "2.0.1")),
+            rows(group(bank_group, "1.0.1")),
+            True,
+        )
+        for bank_group in BANK_GROUPS
+    ]
+    definitions.append(
         (
             "ratio_fx_share",
             "fx_deposits",
             rows(category_id(banking, "fx_deposits")),
             deposits,
             False,
-        ),
+        )
+    )
+    definitions += [
+        (
+            f"ratio_fx_share_{bank_group}",
+            bank_group,
+            rows(group(bank_group, "4.0.1", column="2")),
+            rows(group(bank_group, "4.0.1")),
+            False,
+        )
+        for bank_group in BANK_GROUPS
+    ]
+    definitions += [
         ("ratio_loan_deposit", None, loans, deposits, False),
+        # Capital: own funds against loans, and the net FX position (legal limit: +/-20%).
+        ("ratio_equity_loans", "equity", equity, loans, False),
+        (
+            "ratio_fx_position_equity",
+            "fx_position",
+            rows(category_id(banking, "fx_position")),
+            equity,
+            False,
+        ),
+        # Funding beyond deposits: the CBRT, repo, foreign banks and bonds the banks issued.
+        (
+            "ratio_wholesale_funding",
+            "foreign_bank_funding",
+            total(
+                "cbrt_funding",
+                "repo_funding",
+                "foreign_bank_funding",
+                "issued_securities",
+                zero_if_missing=("cbrt_funding",),
+            ),
+            deposits,
+            False,
+        ),
+        (
+            "ratio_reserves_deposits",
+            "reserve_requirements",
+            rows(category_id(banking, "reserve_requirements")),
+            deposits,
+            False,
+        ),
+        (
+            "ratio_bonds_securities",
+            "government_bonds",
+            total("government_bonds"),
+            rows(category_id(banking, "securities")),
+            False,
+        ),
     ]
     for bank_group in BANK_GROUPS:
         definitions.append(

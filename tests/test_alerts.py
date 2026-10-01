@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tr_banking.app.metrics import unusual_changes, weekly_changes
+from tr_banking.app.metrics import alert_series, unusual_changes, weekly_changes
 
 FRIDAYS = pd.date_range("2025-01-03", periods=60, freq="W-FRI")
 
@@ -65,3 +65,16 @@ def test_weekly_changes_skip_gaps() -> None:
     )
 
     assert weekly_changes(values, in_points=False).tolist() == pytest.approx([10.0])
+
+
+def test_only_weekly_series_with_alerts_on_are_checked() -> None:
+    series = pd.DataFrame(
+        {
+            "id": [1, 2, 3, 4],
+            "frequency": ["weekly", "weekly", "monthly", "weekly"],
+            "module": ["banking", "banking", "cards", "macro"],
+            "alerts": [True, False, True, True],
+        }
+    )
+
+    assert alert_series(series)["id"].tolist() == [1]

@@ -16,6 +16,7 @@ from tr_banking.app.i18n import text
 from tr_banking.app.metrics import (
     MONETARY_UNITS,
     YEAR,
+    alert_series,
     annual_inflation,
     banking_ratios,
     category_id,
@@ -90,7 +91,7 @@ def build_brief(
     weekly_rows = observations[observations["series_id"].isin(weekly["id"])]
     return {
         "data_week": weekly_rows["date"].max().date().isoformat(),
-        "unusual_changes": _unusual(weekly, weekly_rows),
+        "unusual_changes": _unusual(alert_series(weekly), weekly_rows),
         "loans": _loans(series, observations, price_index),
         "interest_rates": _rates(
             series, observations, inflation, spec_id(series, config.policy_rate)

@@ -173,27 +173,77 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "tr": "Mevduattaki pay: yabancı bankalar",
         "en": "Share of deposits: foreign banks",
     },
+    "ratio_npl_state_banks": {
+        "tr": "Takipteki oranı: kamu bankaları",
+        "en": "NPL ratio: state banks",
+    },
+    "ratio_npl_private_banks": {
+        "tr": "Takipteki oranı: yerli özel bankalar",
+        "en": "NPL ratio: domestic private banks",
+    },
+    "ratio_npl_foreign_banks": {
+        "tr": "Takipteki oranı: yabancı bankalar",
+        "en": "NPL ratio: foreign banks",
+    },
+    "ratio_fx_share_state_banks": {
+        "tr": "Mevduatta döviz payı: kamu bankaları",
+        "en": "FX share of deposits: state banks",
+    },
+    "ratio_fx_share_private_banks": {
+        "tr": "Mevduatta döviz payı: yerli özel bankalar",
+        "en": "FX share of deposits: domestic private banks",
+    },
+    "ratio_fx_share_foreign_banks": {
+        "tr": "Mevduatta döviz payı: yabancı bankalar",
+        "en": "FX share of deposits: foreign banks",
+    },
+    "ratio_equity_loans": {"tr": "Yasal özkaynak / krediler", "en": "Own funds / loans"},
+    "ratio_fx_position_equity": {
+        "tr": "Döviz net genel pozisyonu / özkaynak",
+        "en": "Net FX position / own funds",
+    },
+    "ratio_wholesale_funding": {
+        "tr": "Mevduat dışı fonlama / mevduat",
+        "en": "Non-deposit funding / deposits",
+    },
+    "ratio_reserves_deposits": {
+        "tr": "Zorunlu karşılıklar / mevduat",
+        "en": "Reserve requirements / deposits",
+    },
+    "ratio_bonds_securities": {
+        "tr": "Menkul değerlerde devlet tahvili payı",
+        "en": "Government bonds in securities",
+    },
     "week_of": {"tr": "{week} haftası", "en": "week ending {week}"},
     "banking_note": {
         "tr": (
-            "Kaynak: BDDK haftalık bülteni, *Mevduat*, *Takipteki Alacaklar* ve *Krediler* "
+            "Kaynak: BDDK haftalık bülteni, *Mevduat*, *Takipteki Alacaklar*, *Krediler*, "
+            "*Yabancı Para Pozisyonu*, *Diğer Bilanço Kalemleri* ve *Menkul Değerler* "
             "tabloları, haftalık cuma değerleri, TL + YP, 03.01.2014'ten itibaren. Mevduat "
             "katılım fonlarını içerir; döviz mevduatı YP sütununun TL karşılığıdır. **Takipteki "
             "alacak oranı = takipteki / (krediler + takipteki)**: BDDK'nın kredi tablosu yalnız "
             "donmamış kredileri içerir. Kredi/mevduat oranı ve banka grubu payları BDDK sektör "
             "toplamlarına göre hesaplanır; kamu + yerli özel + yabancı bankalar sektör toplamını "
             "tam olarak verir (katılım ve kalkınma bankaları bu gruplara dağılmıştır). Oranların "
-            "değişimi yüzde puan (puan) cinsindendir."
+            "değişimi yüzde puan (puan) cinsindendir. **Mevduat dışı fonlama** = TCMB'ye borçlar + "
+            "repo + yurt dışı bankalara borçlar + ihraç edilen menkul kıymetler. Döviz net genel "
+            "pozisyonunun yasal sınırı özkaynağın ±%20'sidir. Devlet tahvili payı, menkul "
+            "değerler tablosundaki üç devlet tahvili satırının toplamıdır."
         ),
         "en": (
             "Source: BDDK weekly bulletin, tables *Mevduat* (deposits), *Takipteki Alacaklar* "
-            "(non-performing loans) and *Krediler* (loans), weekly Friday values, TRY + FX, from "
+            "(non-performing loans), *Krediler* (loans), *Yabancı Para Pozisyonu* (FX "
+            "position), *Diğer Bilanço Kalemleri* (other balance sheet items) and *Menkul "
+            "Değerler* (securities), weekly Friday values, TRY + FX, from "
             "2014-01-03. Deposits include participation funds; FX deposits are the FX column at "
             "its TRY value. **NPL ratio = NPL / (loans + NPL)**: BDDK's loan table holds "
             "performing loans only. The loan-to-deposit ratio and the bank-group shares use "
             "BDDK's sector totals; state + domestic private + foreign banks add up to the sector "
             "exactly (participation and development banks are spread over these groups). "
-            "Changes of ratios are in percentage points (pp)."
+            "Changes of ratios are in percentage points (pp). **Non-deposit funding** = due to the "
+            "CBRT + repo + due to foreign banks + securities issued. The legal limit of the net "
+            "FX position is ±20% of own funds. The bond share sums the three government bond "
+            "rows of the securities table."
         ),
     },
     "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},

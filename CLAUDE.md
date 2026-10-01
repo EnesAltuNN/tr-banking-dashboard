@@ -76,7 +76,14 @@ https://tr-banking-dashboard.streamlit.app/.
 - **README screenshot:** the user takes it:
   `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`.
   After the push, check that the Mermaid diagram renders on GitHub.
-- **Next:** ask the user which item comes next. Show the plan first.
+- **"Sektör v2" (the user chose all items, 2026-10-01):**
+  - Step 1 is done and not committed: 17 BDDK series (per-group NPL and FX deposits, own
+    funds, net FX position, funding items, securities), 22 ratios, and the `alerts: false`
+    flag. The BDDK backfill above loads them.
+  - Next, step 2: a 100% stacked area chart of bank-group shares, and a change table
+    (1w, 4w, 13w, YTD, 52w); also group the long ratio table.
+  - Step 3: EVDS deposit rates (spread against loan rates) and USD/TRY (FX deposits in USD).
+    Verify the codes through the metadata endpoints.
 - **Open questions:**
   - Module 3: calculator JSON endpoints or Playwright? See the research in DATA_SOURCES.
   - Real rate column: the latest week is empty until CPI is out. Ask before changing it.

@@ -12,6 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 from tr_banking import db as db_module
 from tr_banking import settings as settings_module
+from tr_banking.app.dashboard import DETAIL_CATEGORIES, HEADLINE_RATIOS
 from tr_banking.config import load_series_config
 from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
@@ -29,7 +30,6 @@ FUNDING_CODE = "TP.APIFON4"  # the CBRT funding cost, the other "policy" series
 ALL_BDDK_SPECS = CONFIG.for_source("bddk")
 BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
 BANKING_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "banking"]
-BANK_GROUPS = {"state_banks", "private_banks", "foreign_banks"}
 BKM_SPECS = CONFIG.for_source("bkm")
 # The real July 2026 BKM page, stored for three months at these fractions of its values.
 BKM_MONTHS = {"2023-07-31": 0.5, "2024-06-30": 0.9, "2024-07-31": 1.0}
@@ -635,14 +635,16 @@ def test_banking_tab_shows_kpis_ratios_and_sector_series(use_db: Callable, tmp_p
     ]
     assert kpis["Takipteki alacak oranı"][0] == "50,00%"
     ratios = app.dataframe[0].value.set_index("Oran")["Son değer (%)"]
-    assert len(ratios) == 11
+    assert len(ratios) == 22
     assert ratios["Takipteki alacak oranı"] == pytest.approx(50.0)
     assert ratios["Kredilerdeki pay: kamu bankaları"] == pytest.approx(100.0)
-    # Sector series are shown by default; bank-group amounts are one click away.
+    # Four government-bond-sized parts over one total: the sum works (3 bond rows / 1).
+    assert ratios["Menkul değerlerde devlet tahvili payı"] == pytest.approx(300.0)
+    # Sector series are shown by default; bank groups and single items are one click away.
     amounts = app.dataframe[1].value
-    sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in BANK_GROUPS]
+    sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in DETAIL_CATEGORIES]
     assert amounts["Seri"].tolist() == sector
-    assert len(app.get("vega_lite_chart")) == 4 + len(sector)
+    assert len(app.get("vega_lite_chart")) == len(HEADLINE_RATIOS) + len(sector)
     assert "takipteki / (krediler + takipteki)" in page_text(app)
 
 

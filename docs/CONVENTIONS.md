@@ -114,7 +114,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   used for real values) and `policy_rate: true` (its changes are the decision markers), at
   most one series each; `category` for colors, KPI tiles and ratios (the full list is in
   `config.py`; banking uses deposits, fx_deposits, npl, npl_consumer, npl_commercial,
-  state_banks, private_banks, foreign_banks and others).
+  state_banks, private_banks, foreign_banks, equity, fx_position, the funding items,
+  reserve_requirements, securities, government_bonds and others). `alerts: false` keeps a
+  noisy series out of the alerts.
 - Values are stored exactly as published. Display scaling (thousand TRY -> billion TRY) lives in
   `app/metrics.py`.
 - `config/mpc_meetings.yaml` (config only, like `series.yaml`): CBRT MPC meeting dates,
@@ -221,6 +223,9 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - Alerts: `render_alerts` runs above the tabs on every weekly series except `macro`. The
     threshold (`ALERT_THRESHOLD = 5`) was calibrated on the 2014-2026 history: about 1.5% of
     weeks per series. Recalibrate with the history, not by guess, if series are added.
+    A series that flags far more often gets `alerts: false` in `series.yaml` (on 2026-10-01:
+    the bank groups' NPL, own funds and the net FX position, 4.5-7.5% of weeks).
+    `metrics.alert_series` picks the checked series for the dashboard and the AI summary.
   - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
     is often empty as formatted text (e.g. the real-rate column).
   - Every table is drawn by `show_table`: no inner scroll and a pinned first column, so the
