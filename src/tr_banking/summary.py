@@ -22,6 +22,8 @@ from tr_banking.app.metrics import (
     category_id,
     deflate,
     display_unit,
+    in_usd,
+    rate_spread,
     real_rates,
     spec_id,
     spec_observations,
@@ -47,9 +49,10 @@ BKM). Write only about these facts:
 - Every number you mention must appear in the JSON (rounding is fine). Do not compute new \
 numbers, and do not add causes, forecasts, opinions or advice.
 - Mention the entries of "unusual_changes" first, if there are any.
-- Then cover, in this order: loans (nominal and real growth), interest rates and inflation, \
-the banking sector ratios, card spending. Pick the few most informative facts; do not list \
-everything.
+- Then cover, in this order: loans (nominal and real growth), interest rates, the \
+loan-deposit spread and inflation, the banking sector (FX deposits in US dollars show \
+dollarization without the exchange-rate effect), card spending. Pick the few most \
+informative facts; do not list everything.
 - Changes of rates and ratios are in percentage points ("puan" in Turkish, "pp" in English); \
 changes of amounts are in %.
 - Name the period the data covers (the data week, and the month for card spending and CPI).
@@ -96,6 +99,7 @@ def build_brief(
         "interest_rates": _rates(
             series, observations, inflation, spec_id(series, config.policy_rate)
         ),
+        "loan_deposit_spread": _spread(series, observations),
         "inflation": _inflation(inflation),
         "banking_sector": _banking(series, observations),
         "card_spending": _cards(series, observations),
@@ -190,6 +194,25 @@ def _rates(
     return items
 
 
+def _spread(series: pd.DataFrame, observations: pd.DataFrame) -> dict[str, Any] | None:
+    """Commercial loan rate minus the TRY deposit rate, in pp."""
+    rates = series[series["module"] == "rates"]
+    loan_id, deposit_id = category_id(rates, "commercial"), category_id(rates, "deposit_rate")
+    if loan_id is None or deposit_id is None:
+        return None
+    spread = rate_spread(_rows(observations, loan_id), _rows(observations, deposit_id))
+    if spread.empty:
+        return None
+    values = spread.set_index("date")["value"]
+    week = values.index.max()
+    return {
+        "definition": "commercial loan rate minus TRY deposit rate (new business, weekly)",
+        "week": week.date().isoformat(),
+        "value_pp": number(values[week]),
+        "yearly_change_pp": number(values[week] - value_near(values, week - YEAR)),
+    }
+
+
 def _inflation(inflation: pd.DataFrame) -> dict[str, Any] | None:
     if inflation.empty:
         return None
@@ -229,7 +252,30 @@ def _banking(series: pd.DataFrame, observations: pd.DataFrame) -> dict[str, Any]
                 "yearly_change_pp": number(last.yoy_pp),
             }
         )
-    return {"total_deposits": deposits, "ratios": ratios}
+    return {
+        "total_deposits": deposits,
+        "fx_deposits_in_usd": _fx_in_usd(series, observations),
+        "ratios": ratios,
+    }
+
+
+def _fx_in_usd(series: pd.DataFrame, observations: pd.DataFrame) -> dict[str, Any] | None:
+    """FX deposits at the USD/TRY rate of their week: dollarization without the rate effect."""
+    usd_id, fx_id = category_id(series, "usd_try"), category_id(series, "fx_deposits")
+    if usd_id is None or fx_id is None:
+        return None
+    usd = in_usd(_rows(observations, fx_id), _rows(observations, usd_id))
+    if usd.empty:
+        return None
+    values = usd.set_index("date")["value"] * 1e-3  # million -> billion USD
+    week = values.index.max()
+    return {
+        "note": "TRY value / CBRT USD buying rate; euro and gold at the dollar rate, approximate",
+        "week": week.date().isoformat(),
+        "value": number(values[week], 1),
+        "unit": "billion USD",
+        "yearly_change_pct": number((values[week] / value_near(values, week - YEAR) - 1) * 100),
+    }
 
 
 def _cards(series: pd.DataFrame, observations: pd.DataFrame) -> list[dict[str, Any]]:

@@ -48,7 +48,6 @@ https://tr-banking-dashboard.streamlit.app/.
 
 | Date | Event | What to do |
 |---|---|---|
-| 2026-10-02 Fri 04:00 | Scheduled fetch | The 09-29 run was green on schedule. Check `gh run list --workflow fetch.yml`; the Windows task is no longer needed (Backlog 4). |
 | 2026-10-19 | `ubuntu-latest` moves to Ubuntu 26 | Check the next CI and fetch runs. |
 | 2026-11-15 | BDDK TLS certificate renewed | On a certificate error, update the bundled intermediate (DATA_SOURCES). |
 | 2026-12-18 | CBRT publishes "2027 Para Politikası" | Add the rest of the 2027 MPC dates to `config/mpc_meetings.yaml`. |
@@ -72,15 +71,14 @@ https://tr-banking-dashboard.streamlit.app/.
   6. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
      check the Mermaid diagram on GitHub.
-- **Next:** ask the user. Ideas: the spread and USD deposits in the AI brief; deposit-rate
-  maturities.
+- **Next:** ask the user. Ideas: deposit-rate maturities; BKM seasonality (Backlog 19).
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 
 ## Backlog (open items)
 
 3. Check that the Supabase free-tier project does not pause.
-4. Remove the Windows scheduled task (see Calendar).
+4. Remove the Windows scheduled task: both scheduled runs (09-29, 10-02) were green.
 7. Module 3: bank rates and campaigns from bank sites. Postponed; decide the approach first.
 11. Revision history: upserts overwrite. Add a vintage table only if revisions matter.
 19. BKM seasonality: a seasonally adjusted view, or a yearly-%-only default.

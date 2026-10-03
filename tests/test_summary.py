@@ -75,6 +75,13 @@ def test_brief_holds_the_numbers_of_every_module(tmp_path: Path) -> None:
     rates = {item["series"]: item for item in brief["interest_rates"]}
     assert rates["General purpose loan rate"]["rate_pct"] == pytest.approx(77.9)
     assert "real_rate_pp" not in rates["CBRT policy rate (one-week repo)"]
+    # Spread: commercial loan rate minus the TRY deposit rate (56.16% on 2024-07-12).
+    spread = brief["loan_deposit_spread"]
+    assert spread["week"] == "2024-07-12"
+    commercial = rates["Commercial loan rate"]["rate_pct"]
+    assert spread["value_pp"] == pytest.approx(commercial - 56.16, abs=0.01)
+    # The USD fixture (Dec 2024) shares no week with the BDDK fixture: nothing to convert.
+    assert brief["banking_sector"]["fx_deposits_in_usd"] is None
     assert brief["inflation"]["month"] == "2024-12"
     assert brief["inflation"]["value_pct"] == pytest.approx(44.38, abs=0.01)
     ratios = {item["ratio"]: item for item in brief["banking_sector"]["ratios"]}
