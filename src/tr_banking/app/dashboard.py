@@ -39,6 +39,7 @@ from tr_banking.app.metrics import (
     Ratio,
     alert_series,
     annual_inflation,
+    annualized,
     banking_ratios,
     category_id,
     deflate,
@@ -125,6 +126,12 @@ CATEGORY_HUES = {
     "deposit_rate": "yellow",
     "deposit_term": "yellow",
     "usd_try": "green",
+    "capital_adequacy": "blue",
+    "roe": "violet",
+    "roa": "magenta",
+    "net_interest_margin": "aqua",
+    "npl_coverage": "red",
+    "demand_deposits": "orange",
 }
 # Banking series a click away in the filter bar rather than charted by default: bank groups,
 # the single funding items and the bond rows (their totals and ratios are shown).
@@ -518,7 +525,11 @@ def render_banking_view(
 
     Gets every series, not only module "banking": the ratios need BDDK's loan totals too.
     """
-    banking = series[series["module"] == "banking"]
+    in_module = series[series["module"] == "banking"]
+    # Weekly BDDK series drive the tiles, filters and tables; the monthly bulletin's ratios
+    # have a section of their own.
+    banking = in_module[in_module["frequency"] == "weekly"]
+    monthly = in_module[in_module["frequency"] == "monthly"]
     observations_of_tab = observations[observations["series_id"].isin(banking["id"])]
     if observations_of_tab.empty:
         st.info(text("banking_unavailable", lang))
@@ -534,6 +545,7 @@ def render_banking_view(
     render_ratio_charts(headline, lang, theme)
     render_group_shares(ratios, lang, theme)
     render_fx_in_usd(series, observations, lang, theme)
+    render_monthly_ratios(monthly, observations, lang, theme)
 
     st.markdown(f"**{text('amounts', lang)}**")
     sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(DETAIL_CATEGORIES), "id"]]
@@ -747,6 +759,57 @@ def render_fx_in_usd(
             if title == "fx_deposits_usd":
                 source = f"{SOURCE_LABELS['bddk'][lang]}, {source}"
             st.caption(text("chart_source", lang).format(source=source))
+
+
+def render_monthly_ratios(
+    monthly: pd.DataFrame, observations: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """BDDK's own monthly sector ratios: a table and one chart each, profitability annualized."""
+    shown = []
+    for spec in monthly.itertuples():
+        values = observations.loc[observations["series_id"] == spec.id, ["date", "value"]]
+        if values.empty:
+            continue
+        shown.append((spec, annualized(values) if spec.year_to_date else values))
+    if not shown:
+        return
+    st.markdown(f"**{text('monthly_ratios', lang)}**")
+    frames = [values.assign(series_id=index) for index, (_, values) in enumerate(shown)]
+    summary = summarize_rates(pd.concat(frames, ignore_index=True), pd.DataFrame())
+    ratio_col, month_col = text("col_ratio", lang), text("col_month", lang)
+    last_col, yoy_col = f"{text('col_last', lang)} (%)", text("col_yoy_pp", lang)
+    frame = pd.DataFrame(
+        {
+            ratio_col: [getattr(shown[i][0], f"name_{lang}") for i in summary["series_id"]],
+            month_col: summary["last_date"].dt.date,
+            last_col: summary["last_value"],
+            yoy_col: summary["yoy_pp"],
+        }
+    )
+    styled = (
+        frame.style.format(
+            lambda value: format_number(value, lang, RATE_DECIMALS), subset=[last_col]
+        )
+        .format(
+            lambda value: format_signed(value, lang, RATE_DECIMALS),
+            subset=[yoy_col],
+            na_rep=MISSING,
+        )
+        .format(lambda day: format_month(day, lang), subset=[month_col])
+        .map(delta_style(theme, RATE_DECIMALS), subset=[yoy_col])
+    )
+    show_table(styled, ratio_col)
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk_monthly"][lang])
+    for row_start in range(0, len(shown), CHARTS_PER_ROW):
+        row = shown[row_start : row_start + CHARTS_PER_ROW]
+        for column, (spec, values) in zip(st.columns(CHARTS_PER_ROW), row, strict=False):
+            color = series_color(spec.category, theme)
+            with column.container(border=True):
+                chart_title(getattr(spec, f"name_{lang}"), color)
+                chart = line_chart(values, "%", color, lang, monthly=True, axis_format=",.1f")
+                st.altair_chart(chart)
+                st.caption(source)
+    st.caption(text("monthly_ratios_note", lang))
 
 
 def render_group_shares(ratios: list[Ratio], lang: Lang, theme: str) -> None:

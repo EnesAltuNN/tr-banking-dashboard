@@ -376,13 +376,20 @@ BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
 
 
 def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
-    """Adds the config-only `category` and `alerts` flag of each series (not stored)."""
+    """Adds the config-only `category`, `alerts` and `year_to_date` of each series."""
     specs = {(spec.source, spec.code): spec for spec in config.series}
     found = [specs.get((row.source, row.code)) for row in series.itertuples()]
     return series.assign(
         category=[spec.category if spec else None for spec in found],
         alerts=[spec.alerts if spec else True for spec in found],
+        year_to_date=[spec.year_to_date if spec else False for spec in found],
     )
+
+
+def annualized(values: pd.DataFrame) -> pd.DataFrame:
+    """Year-to-date ratios (they add up from January) as yearly rates: value * 12 / month."""
+    months = values["date"].dt.month
+    return values.assign(value=values["value"] * 12 / months)
 
 
 def alert_series(series: pd.DataFrame) -> pd.DataFrame:
@@ -439,7 +446,8 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
     with BDDK. A ratio whose inputs are not loaded is left out.
     """
     bddk_loans = series[(series["source"] == "bddk") & (series["module"] == "credit")]
-    banking = series[series["module"] == "banking"]
+    # Weekly bulletin rows only: their codes are row:group:currency:column (bddk_key).
+    banking = series[(series["source"] == "bddk") & (series["module"] == "banking")]
 
     def rows(series_id: int | None) -> pd.DataFrame | None:
         if series_id is None:

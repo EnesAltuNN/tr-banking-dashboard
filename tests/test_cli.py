@@ -99,7 +99,7 @@ def test_known_failure_returns_exit_code_1(
 def test_all_sources_by_default(fake_run: FakeRun) -> None:
     cli.main(["fetch"])
 
-    assert fake_run.sources == [("evds", "bddk", "bkm")]
+    assert fake_run.sources == [("evds", "bddk", "bddk_monthly", "bkm")]
 
 
 def test_source_option_limits_the_update(fake_run: FakeRun) -> None:
@@ -177,7 +177,9 @@ SPECS = load_series_config(PROJECT_ROOT / "config" / "series.yaml").series
 KEY = "fake-evds-key-must-not-leak"
 
 
-def seed(db_path: Path, day: date, sources: tuple[str, ...] = ("evds", "bddk", "bkm")) -> None:
+def seed(
+    db_path: Path, day: date, sources: tuple[str, ...] = ("evds", "bddk", "bddk_monthly", "bkm")
+) -> None:
     with SqliteRepository(db_path) as repo:
         repo.init_schema()
         for spec in SPECS:

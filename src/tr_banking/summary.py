@@ -18,6 +18,7 @@ from tr_banking.app.metrics import (
     YEAR,
     alert_series,
     annual_inflation,
+    annualized,
     banking_ratios,
     category_id,
     deflate,
@@ -255,8 +256,30 @@ def _banking(series: pd.DataFrame, observations: pd.DataFrame) -> dict[str, Any]
     return {
         "total_deposits": deposits,
         "fx_deposits_in_usd": _fx_in_usd(series, observations),
+        "monthly_ratios_bddk": _monthly_ratios(banking, observations),
         "ratios": ratios,
     }
+
+
+def _monthly_ratios(banking: pd.DataFrame, observations: pd.DataFrame) -> list[dict[str, Any]]:
+    """BDDK's monthly sector ratios; profitability annualized (value * 12 / month)."""
+    items = []
+    for spec in banking[banking["frequency"] == "monthly"].itertuples():
+        values = _rows(observations, spec.id)[["date", "value"]]
+        if values.empty:
+            continue
+        if spec.year_to_date:
+            values = annualized(values)
+        last = summarize_rates(values.assign(series_id=0), pd.DataFrame()).iloc[0]
+        items.append(
+            {
+                "ratio": spec.name_en,
+                "month": last.last_date.strftime("%Y-%m"),
+                "value_pct": number(last.last_value),
+                "yearly_change_pp": number(last.yoy_pp),
+            }
+        )
+    return items
 
 
 def _fx_in_usd(series: pd.DataFrame, observations: pd.DataFrame) -> dict[str, Any] | None:

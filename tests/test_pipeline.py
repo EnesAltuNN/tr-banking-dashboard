@@ -15,6 +15,7 @@ from tr_banking.pipeline import UpdateError, fetch_window_start, load_source, ru
 from tr_banking.security import files_containing_secrets, secret_values
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import BddkClient
+from tr_banking.sources.bddk_monthly import BddkMonthlyClient
 from tr_banking.sources.bkm import BkmClient
 from tr_banking.sources.common import month_end
 from tr_banking.sources.evds import EvdsClient, EvdsResponseError
@@ -39,6 +40,9 @@ CPI_SPEC = CONFIG.deflator
 BDDK_SPECS = CONFIG.for_source("bddk")
 BKM_SPECS = CONFIG.for_source("bkm")
 BKM_ROWS = len(BKM_SPECS)  # only June is "published" in bkm_transport
+MONTHLY_ROWS = len(CONFIG.for_source("bddk_monthly"))  # one month in monthly_transport
+MONTHLY_REPORT = (FIXTURES / "bddk_monthly_ratios_2026_08.json").read_bytes()
+MONTHLY_NOT_PUBLISHED = {"success": False, "error": "2026 yılının en son 8 ayına ait veri var!"}
 # credit, loan rates, CPI, policy, funding cost, deposit rate, USD/TRY
 EVDS_ROWS = 6 * 3 + 4 * 5 + 12 + 19 + 19 + 6 * 5 + 19
 START, END = date(2024, 6, 14), date(2024, 7, 12)
@@ -166,6 +170,23 @@ def settings_for(tmp_path: Path, api_key: str | None = "fake") -> Settings:
     )
 
 
+def monthly_client(tmp_path: Path) -> BddkMonthlyClient:
+    """June answers with the real August 2026 ratios table; other months are not published."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        published = b"ay=6&" in request.content
+        if published:
+            return httpx.Response(200, content=MONTHLY_REPORT)
+        return httpx.Response(200, json=MONTHLY_NOT_PUBLISHED)
+
+    return BddkMonthlyClient(
+        tmp_path,
+        base_url="https://bddk.test/monthly",
+        request_interval=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+
 def use_clients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, bddk_status: int = 200) -> None:
     """Replace real clients with mocked ones; keep the real missing-key check for EVDS."""
     real_open_client = pipeline.open_client
@@ -176,6 +197,8 @@ def use_clients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, bddk_status: in
             return evds_client(tmp_path)
         if source == "bkm":
             return bkm_client(tmp_path)
+        if source == "bddk_monthly":
+            return monthly_client(tmp_path)
         return bddk_client(tmp_path, bddk_status)
 
     monkeypatch.setattr(pipeline, "open_client", fake_open_client)
@@ -194,7 +217,12 @@ def test_run_update_loads_all_sources(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
     written = run_update(settings, START, END)
 
-    assert written == {"evds": EVDS_ROWS, "bddk": 3 * len(BDDK_SPECS), "bkm": BKM_ROWS}
+    assert written == {
+        "evds": EVDS_ROWS,
+        "bddk": 3 * len(BDDK_SPECS),
+        "bddk_monthly": MONTHLY_ROWS,
+        "bkm": BKM_ROWS,
+    }
     assert stored_rows_per_source(settings.db_path) == written
 
 
@@ -207,7 +235,11 @@ def test_failing_source_does_not_block_others(
     with pytest.raises(UpdateError, match="update failed for: bddk$"):
         run_update(settings, START, END)
 
-    assert stored_rows_per_source(settings.db_path) == {"evds": EVDS_ROWS, "bkm": BKM_ROWS}
+    assert stored_rows_per_source(settings.db_path) == {
+        "evds": EVDS_ROWS,
+        "bddk_monthly": MONTHLY_ROWS,
+        "bkm": BKM_ROWS,
+    }
     assert "bddk update failed: BDDK returned HTTP 404" in caplog.text
 
 
@@ -223,6 +255,7 @@ def test_missing_api_key_only_fails_evds(
     assert "EVDS_API_KEY is not set" in caplog.text
     assert stored_rows_per_source(settings.db_path) == {
         "bddk": 3 * len(BDDK_SPECS),
+        "bddk_monthly": MONTHLY_ROWS,
         "bkm": BKM_ROWS,
     }
 

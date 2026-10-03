@@ -60,19 +60,21 @@ https://tr-banking-dashboard.streamlit.app/.
   noisy series), AI summary (migration 0004), MPC calendar, slim CLAUDE.md, pinned table
   column, filter row (no sidebar), funding cost `TP.APIFON4`, TRY deposit rate and spread,
   USD/TRY with FX deposits in USD, the spread and USD deposits in the AI brief, the cards
-  tab's 12-month-total view. The bond share starts 2022-09-16 (BDDK break).
+  tab's 12-month-total view, deposit rates by maturity, the BDDK monthly bulletin (source
+  `bddk_monthly`: capital adequacy, ROE, ROA, margin, NPL coverage, demand deposits). The
+  bond share starts 2022-09-16 (BDDK break).
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
   2. `git push`; on an ImportError, reboot the Streamlit app.
-  3. `uv run tr-banking backfill --start 2014-01-03 --source bddk`, then the same with
-     `--source evds` (funding cost, deposit rate and USD history; a fetch brings 8 weeks).
+  3. `uv run tr-banking backfill --start 2014-01-03` once more for every source (new
+     BDDK, EVDS and BDDK monthly history; about 6 minutes). A fetch brings 8 weeks only.
   4. Add the GitHub secret `ANTHROPIC_API_KEY`; the first `summarize` needs a go-ahead
      (`--dry-run` first).
   5. Remove the Windows scheduled task (the cloud fetch runs green).
   6. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
      check the Mermaid diagram on GitHub.
-- **Next:** BDDK monthly bulletin research (capital adequacy, ROE), then BKM extra rows.
+- **Next:** BKM extra rows (POS/ATM), per-group monthly ratios (taraf 10008-10010).
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 
@@ -87,7 +89,7 @@ https://tr-banking-dashboard.streamlit.app/.
 
 ```powershell
 uv run pytest; uv run ruff check .; uv run ruff format .
-uv run tr-banking fetch [--source evds|bddk|bkm]      # latest 8 weeks
+uv run tr-banking fetch [--source evds|bddk|bddk_monthly|bkm]  # latest 8 weeks
 uv run tr-banking backfill --start 2014-01-03 [--source ...]
 uv run tr-banking db migrate [--check] | db check | check-freshness | scan-raw | clean-raw
 uv run tr-banking summarize [--dry-run] [--force]     # Claude API, costs money

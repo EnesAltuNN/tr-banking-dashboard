@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from tr_banking.app.metrics import (
+    annualized,
     display_unit,
     in_usd,
     pct_change,
@@ -181,3 +182,15 @@ def test_rolling_12m_leaves_no_total_across_a_missing_month() -> None:
     flows = pd.DataFrame({"series_id": 1, "date": months, "value": 1.0})
 
     assert rolling_12m(flows, flow_ids=[1]).empty
+
+
+def test_annualized_scales_year_to_date_ratios_by_the_month() -> None:
+    # BDDK return on equity 2026: July 14.59 (7 months), August 16.54 (8 months).
+    ytd = pd.DataFrame(
+        {"date": pd.to_datetime(["2026-07-31", "2026-08-31"]), "value": [14.59, 16.54]}
+    )
+
+    yearly = annualized(ytd)["value"].tolist()
+
+    assert yearly == pytest.approx([14.59 * 12 / 7, 16.54 * 12 / 8])
+    assert yearly[0] == pytest.approx(25.0, abs=0.1)  # the two months now compare

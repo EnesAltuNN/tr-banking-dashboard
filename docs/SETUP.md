@@ -40,7 +40,8 @@ cp .env.example .env          # then put your EVDS key in .env
 ```
 
 - **EVDS key:** [DATA_SOURCES.md](DATA_SOURCES.md#tcmb-evds3-verified-2026-09-24) explains how
-  to get one. BDDK and BKM need no key, so `--source bddk` and `--source bkm` work without it.
+  to get one. BDDK and BKM need no key, so `--source bddk`, `--source bddk_monthly` and
+  `--source bkm` work without it.
 - **Where data goes:** by default to a local SQLite file, `data/tr_banking.db`. Setting
   `DATABASE_URL` switches every command, including the dashboard, to Postgres; see
   [Cloud database](#cloud-database-supabase).
@@ -54,7 +55,7 @@ uv run tr-banking backfill --start 2014-01-03
 
 # Fetch the latest 8 weeks from all sources (safe to run repeatedly)
 uv run tr-banking fetch
-uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk | bkm
+uv run tr-banking fetch --weeks 4 --source bddk   # one source only: evds | bddk | bddk_monthly | bkm
 
 # Open the dashboard
 uv run streamlit run src/tr_banking/app/dashboard.py

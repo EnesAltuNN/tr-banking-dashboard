@@ -17,6 +17,8 @@ from tr_banking.config import load_series_config
 from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import parse_bddk_response
+from tr_banking.sources.bddk_monthly import parse_report
+from tr_banking.sources.bddk_monthly import parse_series_code as monthly_key
 from tr_banking.sources.bkm import parse_bkm_page, parse_series_code, sum_cells
 from tr_banking.sources.evds import parse_evds_response
 
@@ -35,6 +37,7 @@ ALL_BDDK_SPECS = CONFIG.for_source("bddk")
 BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
 BANKING_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "banking"]
 BKM_SPECS = CONFIG.for_source("bkm")
+MONTHLY_SPECS = CONFIG.for_source("bddk_monthly")
 # The real July 2026 BKM page, stored for three months at these fractions of its values.
 BKM_MONTHS = {"2023-07-31": 0.5, "2024-06-30": 0.9, "2024-07-31": 1.0}
 TR_COLUMNS = ["Seri", "Tarih", "Son değer (milyar TL)", "Haftalık %", "Yıllık %"]
@@ -108,7 +111,8 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
     # Same window as the policy rate: since 2018 the two policy-category series agree.
     with SqliteRepository(path) as repo:
         repo.init_schema()
-        for spec in [*SPECS, CPI_SPEC, USD_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]:
+        all_specs = [*SPECS, CPI_SPEC, USD_SPEC, *RATE_SPECS, *ALL_BDDK_SPECS, *BKM_SPECS]
+        for spec in [*all_specs, *MONTHLY_SPECS]:
             repo.upsert_series(spec)
         repo.upsert_observations("bkm", bkm_rows())
         evds = fixture("evds_hpbitablo6_2024.json")
@@ -130,6 +134,15 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         bddk = fixture("bddk_konut_2024.json")
         for spec in ALL_BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
+        # BDDK's monthly ratios table of August 2026, the real response.
+        report = parse_report(fixture("bddk_monthly_ratios_2026_08.json"), "15")
+        monthly_rows = [
+            (spec.code, date(2026, 8, 31), report[monthly_key(spec.code)[1]])
+            for spec in MONTHLY_SPECS
+        ]
+        repo.upsert_observations(
+            "bddk_monthly", pd.DataFrame(monthly_rows, columns=["code", "date", "value"])
+        )
     return path
 
 
@@ -676,16 +689,22 @@ def test_banking_tab_shows_kpis_ratios_and_sector_series(use_db: Callable, tmp_p
     # Four government-bond-sized parts over one total: the sum works (3 bond rows / 1).
     assert ratios["Menkul değerlerde devlet tahvili payı"] == pytest.approx(300.0)
     # Sector series are shown by default; bank groups and single items are one click away.
-    amounts = app.dataframe[1].value
+    amounts = app.dataframe[2].value
     sector = [spec.name_tr for spec in BANKING_SPECS if spec.category not in DETAIL_CATEGORIES]
     assert amounts["Seri"].tolist() == sector
-    # Headline ratios, two stacked bank-group share charts, then one chart per series.
-    assert len(app.get("vega_lite_chart")) == len(HEADLINE_RATIOS) + 2 + len(sector)
+    # Headline ratios, two share charts, the monthly ratios, then one chart per series. The
+    # USD chart needs a USD rate in the BDDK fixture's weeks, which the fixtures do not have.
+    charts = len(HEADLINE_RATIOS) + 2 + len(MONTHLY_SPECS) + len(sector)
+    assert len(app.get("vega_lite_chart")) == charts
+    monthly = app.dataframe[1].value.set_index("Oran")["Son değer (%)"]
+    assert monthly["Sermaye yeterlilik oranı"] == pytest.approx(16.601448)
+    # Return on equity adds up from January: August's 16.54 is 24.8 a year.
+    assert monthly["Özkaynak kârlılığı (yıllık)"] == pytest.approx(16.54 * 12 / 8, abs=0.01)
     ratio_table = app.dataframe[0].value.set_index("Oran")
     assert ratio_table.loc["Takipteki alacak oranı", "Konu"] == "Aktif kalitesi"
     assert ratio_table.loc["Kredilerdeki pay: kamu bankaları", "Konu"] == "Banka grupları"
     # The period table covers the same series as the amounts table.
-    periods = app.dataframe[2].value
+    periods = app.dataframe[3].value
     assert periods["Seri"].tolist() == sector
     assert list(periods.columns)[1:] == [
         "1 hafta",

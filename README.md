@@ -20,9 +20,11 @@ dashboard, in nominal and inflation-adjusted terms.
   - The [BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) (the banking
     regulator): weekly loans, deposits, non-performing loans and bank groups back to **2014**.
     Where it covers the same item as EVDS, the two agree within **about 0.3%**.
+  - The [BDDK monthly bulletin](https://www.bddk.org.tr/BultenAylik): the regulator's own
+    capital adequacy, profitability and margin ratios back to **2014**.
   - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
     counts back to **2017**.
-  - 63 series in total, all defined in one YAML file.
+  - 69 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -74,6 +76,7 @@ dashboard, in nominal and inflation-adjusted terms.
 flowchart LR
     EVDS["TCMB EVDS3 API"] --> GHA
     BDDK["BDDK weekly bulletin"] --> GHA
+    BDDKM["BDDK monthly bulletin"] --> GHA
     BKM["BKM monthly card statistics"] --> GHA
     GHA["GitHub Actions<br/>Tue + Fri 04:00 UTC<br/>role: fetch_writer"] -->|"upsert"| DB[("Supabase Postgres<br/>RLS on every table")]
     GHA <-->|"facts in, text out"| CLAUDE["Claude API<br/>weekly summary"]

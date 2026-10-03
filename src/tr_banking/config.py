@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Allowed values live here, not as SQL CHECK constraints, so a new source or module
 # only needs a code change, never a schema migration.
-Source = Literal["evds", "bddk", "bkm", "bank_site"]
+Source = Literal["evds", "bddk", "bddk_monthly", "bkm", "bank_site"]
 Frequency = Literal["daily", "weekly", "monthly"]
 Module = Literal["credit", "cards", "rates", "banking", "macro"]
 # What a series measures, independent of its source. The dashboard gives each category one
@@ -47,6 +47,13 @@ Category = Literal[
     "reserve_requirements",
     "securities",
     "government_bonds",
+    # BDDK monthly bulletin ratios
+    "capital_adequacy",
+    "roe",
+    "roa",
+    "net_interest_margin",
+    "npl_coverage",
+    "demand_deposits",
     # deposit rate and the USD/TRY rate (EVDS)
     "deposit_rate",
     "deposit_term",
@@ -75,6 +82,9 @@ class SeriesSpec(BaseModel):
     # alerts: false keeps a series out of the unusual-change alerts (too noisy, see CONVENTIONS).
     max_age_days: int | None = Field(default=None, ge=1)
     deflator: bool = False
+    # year_to_date: BDDK's profitability ratios add up from January (December = the year);
+    # the dashboard annualizes them as value * 12 / month so every month compares.
+    year_to_date: bool = False
     policy_rate: bool = False
     category: Category | None = None
     alerts: bool = True

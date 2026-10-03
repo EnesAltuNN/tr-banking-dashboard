@@ -341,6 +341,47 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
     certificate error. Download the new intermediate from the leaf's "CA Issuers" URL and
     replace the bundled file.
 
+## BDDK monthly bulletin (verified 2026-10-03)
+
+[Aylık Bülten](https://www.bddk.org.tr/BultenAylik): 17 tables (balance sheet, profit and
+loss, loans, deposits by type and maturity, liquidity, capital adequacy, FX position,
+ratios, ...), month-end values from 2003-01. Client: `sources/bddk_monthly.py`, source
+`bddk_monthly`.
+
+- **No official API.** The page loads each table from
+  `POST /BultenAylik/tr/Home/BasitRaporGetir` with `tabloNo`, `yil`, `ay`, `paraBirimi=TL`
+  and `taraf` (`10001` sector; also `10003` participation, `10004` development and
+  investment, `10008`-`10010` deposit banks by ownership). It answers JSON
+  `{"success", "Json": {"data": {"rows": [{"cell": [group, no, label, _, value]}]}}}`.
+  No cookie or token is needed. Same host as the weekly bulletin, so the same bundled TLS
+  intermediate.
+- **Unpublished months** answer `success: false` with "2026 yılının en son 8 ayına ait veri
+  bulunmaktadır!"; months before 2003 with "... 2003 yılı, 1. aydan başlamaktadır." Both
+  are skipped. August 2026 was out on 2026-10-03: about a month after the month ends
+  (`max_age_days: 75`, lookback 3 months).
+- **Rows are found by label, not number.** Table 15 *Rasyolar* had 31 rows until 2017 and 32
+  since; the capital adequacy ratio moved from row 29 to row 30. The labels have stayed the
+  same (checked 2014-01, 2017-06, 2020-12, 2023-06, 2026-08). Series code
+  `<table>:<label>`; a renamed row fails the fetch.
+- **Six series from table 15**, sector, module `banking`:
+
+| Label | Series | 2026-08 |
+|---|---|---|
+| Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%) | Capital adequacy ratio | 16.60 |
+| Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%) | Return on equity (year to date) | 16.54 (24.8 a year) |
+| Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%) | Return on assets (year to date) | 1.31 (1.97 a year) |
+| Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%) | Net interest margin (year to date) | 3.28 (4.92 a year) |
+| Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%) | NPL coverage ratio | 76.35 |
+| Vadesiz Mevduat / Toplam Mevduat (%) | Demand deposits share | 36.26 |
+
+- **Profitability ratios add up from January** (January 2014 ROE 0.73%, December the full
+  year). They are stored as published, flagged `year_to_date: true` and annualized for
+  display as `value * 12 / month` (`app/metrics.py: annualized`). July 2026 (14.59, 25.0 a
+  year) and August (16.54, 24.8) then agree. The net interest margin runs smoothly across
+  year ends (December 2024 3.5, January 2025 3.4); return on equity is noisier in January,
+  which holds one month only (December 2024 30.5, January 2025 19.3).
+- A backfill from 2014 is 152 requests, 1 s apart: about 2.5 minutes.
+
 ## BKM card statistics (verified 2026-09-27)
 
 Module 2 (`module: cards`, the dashboard's *Cards* tab). Client: `sources/bkm.py`.

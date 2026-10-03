@@ -29,6 +29,7 @@ from tr_banking.sources import OBSERVATION_COLUMNS
 from tr_banking.sources.common import (
     SourceApiError,
     month_end,
+    months_between,
     request_with_retries,
     save_raw_response,
 )
@@ -188,12 +189,6 @@ class BkmClient:
         )
         save_raw_response(self._raw_dir, response.content, f"{year}{month:02d}", suffix=".html")
         return parse_bkm_page(response.content.decode("utf-8"))
-
-
-def months_between(start: date, end: date) -> list[tuple[int, int]]:
-    """(year, month) from start's month to end's month, inclusive; empty if start > end."""
-    first, last = start.year * 12 + start.month - 1, end.year * 12 + end.month - 1
-    return [(index // 12, index % 12 + 1) for index in range(first, last + 1)]
 
 
 def parse_bkm_page(html: str) -> list[Grid] | None:
