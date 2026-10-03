@@ -281,6 +281,26 @@ def in_usd(amounts: pd.DataFrame, usd_try: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"date": merged["date"], "value": merged["value"] / merged["rate"]})
 
 
+def rolling_12m(observations: pd.DataFrame, flow_ids: Iterable[int]) -> pd.DataFrame:
+    """Monthly flows as the sum of the 12 months ending in each month; other series unchanged.
+
+    A 12-month total holds every season once, so December and the summer stop standing out.
+    A month missing from the window leaves no total (it would understate the year).
+    """
+    flows = set(flow_ids)
+    parts = [observations[~observations["series_id"].isin(flows)]]
+    for series_id, group in observations[observations["series_id"].isin(flows)].groupby(
+        "series_id"
+    ):
+        values = group.set_index("date")["value"].sort_index()
+        months = pd.date_range(values.index.min(), values.index.max(), freq="ME")
+        totals = values.reindex(months).rolling(12, min_periods=12).sum().dropna()
+        parts.append(
+            pd.DataFrame({"series_id": series_id, "date": totals.index, "value": totals.values})
+        )
+    return pd.concat(parts, ignore_index=True)
+
+
 # Lookbacks of the period-change table, in weeks; "ytd" compares with the last value of the
 # previous year (the last Friday of December is within LOOKBACK_TOLERANCE of 31 December).
 PERIOD_WEEKS = {"w1": 1, "w4": 4, "w13": 13, "w52": 52}

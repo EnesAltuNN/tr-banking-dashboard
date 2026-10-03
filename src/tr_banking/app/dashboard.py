@@ -48,6 +48,7 @@ from tr_banking.app.metrics import (
     policy_decisions,
     rate_spread,
     real_rates,
+    rolling_12m,
     spec_id,
     spec_observations,
     summarize,
@@ -142,6 +143,7 @@ RATE_DECIMALS = 2  # EVDS publishes rates with two decimals, e.g. 41.96
 DATE_FILTER_WIDTH = 290  # px: fits two dd.mm.yyyy dates, and a phone screen
 SERIES_FILTER_WIDTH = 340  # px: the series names fit, and so does the button's panel on a phone
 SOURCE_ICON, MODE_ICON, SERIES_ICON = ":material/database:", ":material/tune:", ":material/list:"
+PERIOD_ICON = ":material/calendar_month:"
 # Up / down text colors, >= 4.5:1 on each theme's background. The sign (+/-) is always shown
 # too, so the direction never depends on color alone.
 DELTA_COLORS = {
@@ -461,6 +463,15 @@ def render_cards_view(
         return
     bar = filter_bar()
     real = render_value_mode(bar, lang, key="cards_value_mode") == "real"
+    period = translated_radio(
+        bar,
+        "cards_period",
+        text("period_view", lang),
+        ["monthly", "rolling12"],
+        lambda option: text(f"period_{option}", lang),
+        lang,
+        PERIOD_ICON,
+    )
     render_kpis(card_tiles(series, observations, lang), theme)
 
     filters = render_filters(bar, series, observations, lang, key="cards")
@@ -474,6 +485,11 @@ def render_cards_view(
     month = None
     if real:
         selected, month = deflate_money(selected, series, price_index, lang)
+    if period == "rolling12":
+        # After deflating: each month's real flow, then the 12-month total of those.
+        flow_ids = series.loc[series["unit"].isin(MONETARY_UNITS), "id"]
+        selected = rolling_12m(selected, flow_ids)
+        st.caption(text("rolling_note", lang))
     # Monthly flows are deflated by their own month's CPI, so monthly % stays meaningful.
     summary = summarize(selected, as_of=end, frequency="monthly")
     render_summary_table(summary, series, lang, theme, month, monthly=True)

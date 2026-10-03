@@ -345,6 +345,21 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "en": "Pick an end date for the range.",
     },
     "value_mode": {"tr": "Değerler", "en": "Values"},
+    "period_view": {"tr": "Dönem", "en": "Period"},
+    "period_monthly": {"tr": "Aylık", "en": "Monthly"},
+    "period_rolling12": {"tr": "Son 12 ay toplamı", "en": "12-month total"},
+    "rolling_note": {
+        "tr": (
+            "TL tutarları **son 12 ay toplamıdır**: her ay, o ayla biten 12 ayın toplamı. Her "
+            "mevsim bir kez yer aldığı için aralık ve yaz zirveleri düzleşir. Kart sayıları "
+            "toplanmaz, ayın değeri gösterilir."
+        ),
+        "en": (
+            "TRY amounts are **12-month totals**: each month shows the sum of the 12 months "
+            "ending with it. Every season counts once, so the December and summer peaks flatten "
+            "out. Card counts are not summed; they show the month's value."
+        ),
+    },
     "mode_nominal": {"tr": "Nominal", "en": "Nominal"},
     "mode_real": {"tr": "Reel (enflasyondan arındırılmış)", "en": "Real (inflation-adjusted)"},
     "mode_nominal_short": {"tr": "Nominal", "en": "Nominal"},

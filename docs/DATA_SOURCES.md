@@ -395,6 +395,9 @@ Series codes (the label mapping lives in `sources/bkm.py`):
   and stay unchanged.
 - Amounts are nominal flows and are not seasonally adjusted: December and the summer
   (tourism) months stand out, so compare yearly % rather than monthly % across seasons.
+  The cards tab's "12-month total" view (`app/metrics.py: rolling_12m`) sums the TRY
+  amounts over the 12 months ending in each month, which holds every season once; card
+  counts are stocks and are not summed. A month missing from the window leaves no total.
 
 ## Bank websites (module 3, postponed)
 

@@ -464,6 +464,22 @@ def test_cards_tab_shows_monthly_changes_and_units(use_db: Callable, tmp_path: P
     assert len(app.get("vega_lite_chart")) == len(BKM_SPECS)
 
 
+def test_cards_12_month_total_needs_12_months_and_keeps_card_counts(
+    use_db: Callable, tmp_path: Path
+) -> None:
+    # The fixture holds three months (2023-07, 2024-06, 2024-07): no full 12-month window, so
+    # the TRY amounts drop out; card counts are not summed and stay.
+    use_db(populated_db(tmp_path / "test.db"))
+    app = run_dashboard("cards")
+
+    app.radio(key="cards_period_tr").set_value("rolling12").run()
+
+    assert not app.exception
+    shown = app.dataframe[0].value["Seri"].tolist()
+    assert shown == [spec.name_tr for spec in BKM_SPECS if spec.unit == "cards"]
+    assert "son 12 ay toplamıdır" in page_text(app)
+
+
 def test_cards_real_view_deflates_amounts_but_not_card_counts(
     use_db: Callable, tmp_path: Path
 ) -> None:

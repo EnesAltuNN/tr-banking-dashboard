@@ -188,6 +188,7 @@ Done:
   private, foreign), with the ratios built from them.
 - ✔ **Alerts:** unusual weekly changes flagged above the tabs.
 - ✔ **Weekly AI summary:** facts from Python, text from Claude, shown above the tabs.
+- ✔ **Card seasonality:** a 12-month-total view that flattens the December and summer peaks.
 
 Planned, in order:
 1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
@@ -195,8 +196,8 @@ Planned, in order:
    not comparable rates in their HTML; it needs a decision on browser automation first.
 
 Other ideas:
-- the policy rate before September 2018, where the EVDS series is empty;
-- a seasonally adjusted view of card spending.
+- a vintage table that keeps revised values, if revisions turn out to matter;
+- the deposit rate by maturity (1, 3, 6, 12 months).
 
 ## Documentation
 

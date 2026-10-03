@@ -10,6 +10,7 @@ from tr_banking.app.metrics import (
     pct_change,
     period_changes,
     rate_spread,
+    rolling_12m,
     summarize,
 )
 
@@ -158,3 +159,25 @@ def test_in_usd_skips_dates_without_a_recent_rate() -> None:
     usd = pd.DataFrame({"date": pd.to_datetime(["2026-09-01"]), "value": [42.0]})
 
     assert in_usd(amounts, usd).empty
+
+
+def test_rolling_12m_sums_flows_and_leaves_stocks_alone() -> None:
+    months = pd.date_range("2025-01-31", periods=14, freq="ME")
+    flows = pd.DataFrame({"series_id": 1, "date": months, "value": range(1, 15)})
+    counts = pd.DataFrame({"series_id": 2, "date": months, "value": 7.0})
+
+    result = rolling_12m(pd.concat([flows, counts]), flow_ids=[1])
+
+    totals = result[result["series_id"] == 1].set_index("date")["value"]
+    # The first total needs 12 months: January to December 2025 = 1 + ... + 12.
+    assert totals.index[0] == pd.Timestamp("2025-12-31")
+    assert totals.tolist() == [78.0, 90.0, 102.0]
+    assert (result.loc[result["series_id"] == 2, "value"] == 7.0).all()
+    assert len(result[result["series_id"] == 2]) == 14
+
+
+def test_rolling_12m_leaves_no_total_across_a_missing_month() -> None:
+    months = pd.date_range("2025-01-31", periods=13, freq="ME").delete(5)  # June is missing
+    flows = pd.DataFrame({"series_id": 1, "date": months, "value": 1.0})
+
+    assert rolling_12m(flows, flow_ids=[1]).empty

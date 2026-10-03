@@ -59,7 +59,8 @@ https://tr-banking-dashboard.streamlit.app/.
   shares, period table), translated widgets, screenshots script, alerts (`alerts: false` for
   noisy series), AI summary (migration 0004), MPC calendar, slim CLAUDE.md, pinned table
   column, filter row (no sidebar), funding cost `TP.APIFON4`, TRY deposit rate and spread,
-  USD/TRY with FX deposits in USD. The bond share starts 2022-09-16 (BDDK break).
+  USD/TRY with FX deposits in USD, the spread and USD deposits in the AI brief, the cards
+  tab's 12-month-total view. The bond share starts 2022-09-16 (BDDK break).
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
   2. `git push`; on an ImportError, reboot the Streamlit app.
@@ -71,7 +72,7 @@ https://tr-banking-dashboard.streamlit.app/.
   6. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
      check the Mermaid diagram on GitHub.
-- **Next:** ask the user. Ideas: deposit-rate maturities; BKM seasonality (Backlog 19).
+- **Next:** ask the user. Ideas: deposit-rate maturities; a vintage table (Backlog 11).
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 
@@ -81,7 +82,6 @@ https://tr-banking-dashboard.streamlit.app/.
 4. Remove the Windows scheduled task: both scheduled runs (09-29, 10-02) were green.
 7. Module 3: bank rates and campaigns from bank sites. Postponed; decide the approach first.
 11. Revision history: upserts overwrite. Add a vintage table only if revisions matter.
-19. BKM seasonality: a seasonally adjusted view, or a yearly-%-only default.
 
 ## Commands
 
