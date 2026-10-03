@@ -26,8 +26,10 @@ CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
 SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
 CPI_SPEC = CONFIG.deflator
 RATE_SPECS = [spec for spec in CONFIG.series if spec.module == "rates"]
+# Shown by default: the deposit maturities have their own chart and are one click away.
+MAIN_RATE_SPECS = [spec for spec in RATE_SPECS if spec.category != "deposit_term"]
 FUNDING_CODE = "TP.APIFON4"  # the CBRT funding cost, the other "policy" series
-DEPOSIT_RATE_CODE = "TP.TRY.MT06"
+DEPOSIT_CODES = [s.code for s in CONFIG.series if s.category in ("deposit_rate", "deposit_term")]
 USD_SPEC = next(spec for spec in CONFIG.series if spec.category == "usd_try")
 ALL_BDDK_SPECS = CONFIG.for_source("bddk")
 BDDK_SPECS = [spec for spec in ALL_BDDK_SPECS if spec.module == "credit"]
@@ -99,7 +101,9 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         for name in ("evds_cpi_2023.json", "evds_cpi_2024.json")
     )
     loan_codes = [
-        spec.code for spec in RATE_SPECS if spec.category not in ("policy", "deposit_rate")
+        spec.code
+        for spec in RATE_SPECS
+        if spec.category not in ("policy", "deposit_rate", "deposit_term")
     ]
     # Same window as the policy rate: since 2018 the two policy-category series agree.
     with SqliteRepository(path) as repo:
@@ -120,7 +124,7 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         funding = fixture("evds_funding_cost_2024_2025.json")
         repo.upsert_observations("evds", parse_evds_response(funding, [FUNDING_CODE]))
         deposit = fixture("evds_deposit_rate_2024.json")
-        repo.upsert_observations("evds", parse_evds_response(deposit, [DEPOSIT_RATE_CODE]))
+        repo.upsert_observations("evds", parse_evds_response(deposit, DEPOSIT_CODES))
         usd = fixture("evds_usd_try_2024_2025.json")
         repo.upsert_observations("evds", parse_evds_response(usd, [USD_SPEC.code]))
         bddk = fixture("bddk_konut_2024.json")
@@ -354,7 +358,7 @@ def test_rates_tab_shows_levels_pp_changes_and_real_rates(use_db: Callable, tmp_
     assert [tab.label for tab in app.tabs] == ["Krediler", "Faizler", "Kartlar", "Sektör"]
     table = app.dataframe[0].value
     assert list(table.columns) == TR_RATE_COLUMNS
-    assert table["Seri"].tolist() == [spec.name_tr for spec in RATE_SPECS]
+    assert table["Seri"].tolist() == [spec.name_tr for spec in MAIN_RATE_SPECS]
     rows = table.set_index("Seri")
     personal = rows.loc["İhtiyaç kredisi faizi"]
     assert personal["Tarih"] == date(2024, 7, 12)
@@ -388,9 +392,10 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
     app = run_dashboard("rates")
 
     charts = [json.loads(chart.proto.spec) for chart in app.get("vega_lite_chart")]
-    # One chart per rate, then the loan-deposit spread (the fixtures share their weeks).
-    assert len(charts) == len(RATE_SPECS) + 1
-    charts = charts[: len(RATE_SPECS)]
+    # One chart per rate, then the spread and the deposit maturities.
+    assert len(charts) == len(MAIN_RATE_SPECS) + 2
+    assert '"type": "bar"' in json.dumps(charts[-1])  # maturities: latest week as bars
+    charts = charts[: len(MAIN_RATE_SPECS)]
     for spec in charts:
         text = json.dumps(spec, ensure_ascii=False)
         assert "Yıllık enflasyon (TÜFE)" in text  # the reference line
@@ -598,8 +603,8 @@ def test_each_category_keeps_its_color_across_tabs(use_db: Callable, tmp_path: P
     by_name = dict(zip([s.name_tr for s in SPECS], map(chart_color, credit_charts), strict=True))
     rate_by_name = dict(
         zip(
-            [s.name_tr for s in RATE_SPECS],
-            map(chart_color, rate_charts[: len(RATE_SPECS)]),
+            [s.name_tr for s in MAIN_RATE_SPECS],
+            map(chart_color, rate_charts[: len(MAIN_RATE_SPECS)]),
             strict=True,
         )
     )

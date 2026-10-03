@@ -27,7 +27,7 @@ EVDS_FIXTURES = [
     "evds_cpi_2024.json",  # 12 CPI months
     "evds_policy_rate_2024_2025.json",  # 19 business days + 1 holiday (null)
     "evds_funding_cost_2024_2025.json",  # the same window for the funding cost
-    "evds_deposit_rate_2024.json",  # the TRY deposit rate, the loan rates' 5 weeks
+    "evds_deposit_rate_2024.json",  # TRY deposit rate, total + 5 maturities, the same 5 weeks
     "evds_usd_try_2024_2025.json",  # USD/TRY, the policy rate's window: 19 values, 7 nulls
 ]
 BDDK_BYTES = (FIXTURES / "bddk_konut_2024.json").read_bytes()
@@ -40,7 +40,7 @@ BDDK_SPECS = CONFIG.for_source("bddk")
 BKM_SPECS = CONFIG.for_source("bkm")
 BKM_ROWS = len(BKM_SPECS)  # only June is "published" in bkm_transport
 # credit, loan rates, CPI, policy, funding cost, deposit rate, USD/TRY
-EVDS_ROWS = 6 * 3 + 4 * 5 + 12 + 19 + 19 + 5 + 19
+EVDS_ROWS = 6 * 3 + 4 * 5 + 12 + 19 + 19 + 6 * 5 + 19
 START, END = date(2024, 6, 14), date(2024, 7, 12)
 
 

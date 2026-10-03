@@ -185,8 +185,11 @@ funding (AOFM), on business days (verified 2026-10-01).
 Faiz Oranları (Akım)*, "Toplam (TL Mevduat, Akım, %)": the weighted average rate on new TRY
 deposits that week, all maturities, weekly (Friday) from 2002-01-04. It is the deposit side
 of `bie_kt100h`. 43.56% on 2026-09-18.
-- The same group has 1, 3, 6, 12 and 12+ month maturities (`MT01`-`MT05`), USD and EUR
-  deposits, and savings (`TAS`) and commercial (`TIC`) splits from 2012-07-06; not used.
+- The maturities `TP.TRY.MT01`-`MT05` (up to 1, 3, 6, 12 months, and 1 year and longer) are
+  loaded too (category `deposit_term`, `alerts: false`) and drawn as one chart: the latest
+  week as bars, 52 weeks earlier as ticks. On 2026-09-25 short maturities paid about 43%
+  and 1 year and longer 31%. The same group also has USD and EUR deposits, and savings
+  (`TAS`) and commercial (`TIC`) splits from 2012-07-06; not used.
 - **Spread** (`app/metrics.py: rate_spread`) = `TP.KTF18` commercial loan rate − deposit rate:
   6.2 pp on 2026-09-18, between −17.8 and +15.9 pp since 2014. There is no single rate for
   all loans; commercial loans are the largest book.

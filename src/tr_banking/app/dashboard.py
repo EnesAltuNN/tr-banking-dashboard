@@ -123,6 +123,7 @@ CATEGORY_HUES = {
     "securities": "green",
     "government_bonds": "red",
     "deposit_rate": "yellow",
+    "deposit_term": "yellow",
     "usd_try": "green",
 }
 # Banking series a click away in the filter bar rather than charted by default: bank groups,
@@ -417,7 +418,9 @@ def render_rates_view(
     bar = filter_bar()
     render_kpis(rate_tiles(series, observations, inflation, policy_id, lang), theme)
 
-    filters = render_filters(bar, series, observations, lang, key="rates")
+    # The maturities have their own chart below; as time series they are a click away.
+    main_ids = [int(i) for i in series.loc[series["category"] != "deposit_term", "id"]]
+    filters = render_filters(bar, series, observations, lang, key="rates", default_ids=main_ids)
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -444,7 +447,9 @@ def render_rates_view(
         lang,
         theme,
     )
-    render_spread_chart(series, observations, in_range, lang, theme)
+    spread_column, terms_column = st.columns(CHARTS_PER_ROW)
+    render_spread_chart(spread_column, series, observations, in_range, lang, theme)
+    render_deposit_terms(terms_column, series, observations, end, lang, theme)
     with st.expander(text("notes", lang)):
         st.caption(text("rates_note", lang))
 
@@ -616,6 +621,7 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
 
 
 def render_spread_chart(
+    column: DeltaGenerator,
     series: pd.DataFrame,
     observations: pd.DataFrame,
     in_range: Callable[[pd.DataFrame], pd.DataFrame],
@@ -635,10 +641,73 @@ def render_spread_chart(
     if spread.empty:
         return
     color = series_color("deposit_rate", theme)
-    with st.columns(CHARTS_PER_ROW)[0].container(border=True):
+    with column.container(border=True):
         chart_title(text("rate_spread", lang), color)
         st.altair_chart(line_chart(spread, text("pp", lang), color, lang, axis_format=",.0f"))
         st.caption(text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang]))
+
+
+def render_deposit_terms(
+    column: DeltaGenerator,
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    as_of: date,
+    lang: Lang,
+    theme: str,
+) -> None:
+    """TRY deposit rate per maturity: the latest week as bars, 52 weeks earlier as ticks."""
+    terms = series[series["category"] == "deposit_term"]
+    rows = observations[observations["series_id"].isin(terms["id"])]
+    if rows.empty:
+        return
+    summary = summarize_rates(rows, pd.DataFrame(), as_of=as_of).merge(
+        terms, left_on="series_id", right_on="id"
+    )
+    # "TL mevduat faizi: 1 aya kadar" -> "1 aya kadar": the title already names the rate.
+    labels = summary[f"name_{lang}"].str.split(": ").str[-1]
+    order = [name.split(": ")[-1] for name in terms[f"name_{lang}"]]
+    now_label, year_label = text("term_now", lang), text("term_year_ago", lang)
+    data = pd.concat(
+        [
+            pd.DataFrame({"term": labels, "kind": now_label, "value": summary["last_value"]}),
+            pd.DataFrame(
+                {
+                    "term": labels,
+                    "kind": year_label,
+                    "value": summary["last_value"] - summary["yoy_pp"],
+                }
+            ),
+        ],
+        ignore_index=True,
+    ).dropna()
+    color = series_color("deposit_term", theme)
+    y = alt.Y("term:N", title=None, sort=order)
+    x = alt.X("value:Q", title="%", axis=alt.Axis(format=",.0f"))
+    legend = alt.Color(
+        "kind:N",
+        scale=alt.Scale(domain=[now_label, year_label], range=[color, CROSSHAIR_COLOR]),
+        legend=alt.Legend(orient="bottom", title=None),
+    )
+    tooltip = [
+        alt.Tooltip("term:N", title=text("col_term", lang)),
+        alt.Tooltip("kind:N", title=text("col_date", lang)),
+        alt.Tooltip("value:Q", title="%", format=",.2f"),
+    ]
+    base = alt.Chart(data).encode(y=y, x=x, color=legend, tooltip=tooltip)
+    chart = alt.layer(
+        base.transform_filter(alt.datum.kind == now_label).mark_bar(height=14),
+        base.transform_filter(alt.datum.kind == year_label).mark_tick(thickness=3, size=22),
+    ).properties(height=CHART_HEIGHT)
+    if lang == "tr":
+        chart = chart.configure(locale=VEGA_LOCALE_TR)
+    week = format_date(summary["last_date"].max(), lang, long=True)
+    with column.container(border=True):
+        chart_title(text("deposit_terms", lang), color)
+        st.altair_chart(chart)
+        st.caption(
+            f"{text('week_of', lang).format(week=week)} · "
+            + text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang])
+        )
 
 
 def render_fx_in_usd(

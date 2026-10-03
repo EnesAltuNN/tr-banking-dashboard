@@ -163,6 +163,59 @@ series:
     category: deposit_rate
     alerts: false
 
+  # TL deposit rate by maturity, same data group (bie_mt100h), weekly from 2002-01-04,
+  # verified 2026-10-03: "1 Aya Kadar Vadeli" .. "1 Yil ve Daha Uzun Vadeli (TL Mevduat,
+  # Akim, %)". Shown together as one maturity chart, not as six time series.
+  - source: evds
+    code: TP.TRY.MT01
+    name_tr: "TL mevduat faizi: 1 aya kadar"
+    name_en: "TRY deposit rate: up to 1 month"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT02
+    name_tr: "TL mevduat faizi: 3 aya kadar"
+    name_en: "TRY deposit rate: up to 3 months"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT03
+    name_tr: "TL mevduat faizi: 6 aya kadar"
+    name_en: "TRY deposit rate: up to 6 months"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT04
+    name_tr: "TL mevduat faizi: 1 yıla kadar"
+    name_en: "TRY deposit rate: up to 1 year"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT05
+    name_tr: "TL mevduat faizi: 1 yıl ve üzeri"
+    name_en: "TRY deposit rate: 1 year and longer"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
   # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
   # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
   # MPC (PPK) decisions. No value on holidays, and long holidays last up to 9 days, hence 14 days.

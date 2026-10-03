@@ -38,6 +38,11 @@ def test_project_series_yaml_loads() -> None:
         "TP.KTF12",
         "TP.KTF18",
         "TP.TRY.MT06",
+        "TP.TRY.MT01",
+        "TP.TRY.MT02",
+        "TP.TRY.MT03",
+        "TP.TRY.MT04",
+        "TP.TRY.MT05",
         "TP.PY.P02.1H",
         "TP.APIFON4",
     ]
@@ -201,4 +206,9 @@ def test_noisy_series_are_kept_out_of_the_alerts() -> None:
         "9.0.17:10001:TRY:3",
         "9.0.18:10001:TRY:3",
         "TP.TRY.MT06",
+        "TP.TRY.MT01",
+        "TP.TRY.MT02",
+        "TP.TRY.MT03",
+        "TP.TRY.MT04",
+        "TP.TRY.MT05",
     }

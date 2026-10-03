@@ -72,7 +72,7 @@ https://tr-banking-dashboard.streamlit.app/.
   6. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
      check the Mermaid diagram on GitHub.
-- **Next:** ask the user. Ideas: deposit-rate maturities; a vintage table (Backlog 11).
+- **Next:** BDDK monthly bulletin research (capital adequacy, ROE), then BKM extra rows.
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 
