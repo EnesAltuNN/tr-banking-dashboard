@@ -58,7 +58,7 @@ https://tr-banking-dashboard.streamlit.app/.
 - **Local, not pushed (all tested), since the live 25 series:** Banking tab (BDDK weekly
   and the monthly bulletin `bddk_monthly`), AI summary (migration 0004), alerts, MPC
   calendar, filter row, funding cost, deposit rates (total, maturities, spread), USD/TRY,
-  cards 12-month view, POS/ATM, bank-group capital and ROE. 79 series. The bond share
+  cards 12-month view, POS/ATM, bank-group capital and ROE, CSV downloads. 79 series. The bond share
   starts 2022-09-16 (BDDK break).
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
@@ -71,7 +71,7 @@ https://tr-banking-dashboard.streamlit.app/.
   6. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
      check the Mermaid diagram on GitHub.
-- **Next:** CSV downloads for the tables; KKM balance if EVDS has it.
+- **Next:** KKM balance if EVDS has it.
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 

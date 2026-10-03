@@ -851,3 +851,22 @@ def test_no_summary_box_without_a_summary(use_db: Callable, tmp_path: Path) -> N
     app = run_dashboard()
 
     assert "Haftanın özeti" not in page_text(app)
+
+
+def test_table_csv_opens_in_turkish_and_english_excel() -> None:
+    from tr_banking.app.dashboard import table_csv
+
+    frame = pd.DataFrame({"Seri": ["İhtiyaç"], "Son değer": [1234.5]})
+
+    turkish = table_csv(frame, "tr")
+    assert turkish.startswith(b"\xef\xbb\xbf")  # BOM: Excel reads UTF-8
+    assert turkish.decode("utf-8-sig").splitlines() == ["Seri;Son değer", "İhtiyaç;1234,5"]
+    assert table_csv(frame, "en").decode("utf-8-sig").splitlines()[1] == "İhtiyaç,1234.5"
+
+
+def test_every_table_has_a_csv_download(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard("rates")
+
+    assert len(app.get("download_button")) == len(app.dataframe) == 1

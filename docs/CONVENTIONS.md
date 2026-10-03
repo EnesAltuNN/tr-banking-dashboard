@@ -226,6 +226,10 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
     A series that flags far more often gets `alerts: false` in `series.yaml` (on 2026-10-01:
     the bank groups' NPL, own funds and the net FX position, 4.5-7.5% of weeks).
     `metrics.alert_series` picks the checked series for the dashboard and the AI summary.
+  - Every table goes through `show_table(styled, first_col, lang, name)`: pinned first
+    column, no inner scroll, and a "CSV indir" button (`table_csv`: `;` and a decimal comma
+    for Turkish Excel, `,` and `.` for English, UTF-8 with BOM). `name` makes the file name
+    and the button key, so it must be unique on a page.
   - `st.dataframe` draws empty cells as "None" whatever the Styler says: pass a column that
     is often empty as formatted text (e.g. the real-rate column).
   - Every table is drawn by `show_table`: no inner scroll and a pinned first column, so the

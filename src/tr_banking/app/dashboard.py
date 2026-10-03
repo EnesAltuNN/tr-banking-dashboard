@@ -633,7 +633,7 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
         .format(lambda day: format_date(day, lang), subset=[date_col])
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    show_table(styled, ratio_col)
+    show_table(styled, ratio_col, lang, "ratios")
 
 
 def render_spread_chart(
@@ -855,7 +855,7 @@ def render_monthly_ratios(
         .format(lambda day: format_month(day, lang), subset=[month_col])
         .map(delta_style(theme, RATE_DECIMALS), subset=[yoy_col])
     )
-    show_table(styled, ratio_col)
+    show_table(styled, ratio_col, lang, "monthly-ratios")
     source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk_monthly"][lang])
     for row_start in range(0, len(shown), CHARTS_PER_ROW):
         row = shown[row_start : row_start + CHARTS_PER_ROW]
@@ -938,7 +938,7 @@ def render_period_table(
     styled = frame.style.format(
         lambda value: format_pct(value, lang), subset=pct_cols, na_rep=MISSING
     ).map(delta_style(theme), subset=pct_cols)
-    show_table(styled, series_col)
+    show_table(styled, series_col, lang, "period-changes")
 
 
 def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:
@@ -1355,15 +1355,32 @@ def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, 
 # --- tables ---
 
 
-def show_table(styled: Styler, first_col: str) -> None:
+def show_table(styled: Styler, first_col: str, lang: Lang, name: str) -> None:
     """Every table looks the same: no inner scroll (they are short) and a pinned first
-    column, so the name stays in view when a wide table scrolls sideways on a phone."""
+    column, so the name stays in view when a wide table scrolls sideways on a phone. A
+    small button below downloads the numbers as CSV."""
     st.dataframe(
         styled,
         hide_index=True,
         height="content",
         column_config={first_col: st.column_config.Column(pinned=True)},
     )
+    st.download_button(
+        text("download_csv", lang),
+        data=table_csv(styled.data, lang),
+        file_name=f"tr-banking-{name}.csv",
+        mime="text/csv",
+        icon=":material/download:",
+        type="tertiary",
+        key=f"csv_{name}",
+    )
+
+
+def table_csv(frame: pd.DataFrame, lang: Lang) -> bytes:
+    """The table's raw numbers as CSV that Excel opens right: Turkish Excel expects ";" and
+    a decimal comma; the BOM makes it read UTF-8 (ş, ğ, ı)."""
+    separator, decimal = (";", ",") if lang == "tr" else (",", ".")
+    return frame.to_csv(index=False, sep=separator, decimal=decimal).encode("utf-8-sig")
 
 
 def render_summary_table(
@@ -1416,7 +1433,7 @@ def render_summary_table(
         .format(lambda day: format_period(day, lang), subset=[date_col])
         .map(delta_style(theme), subset=pct_cols)
     )
-    show_table(styled, series_col)
+    show_table(styled, series_col, lang, "summary")
 
 
 def delta_style(theme: str, decimals: int = 1) -> Callable[[float], str]:
@@ -1461,7 +1478,7 @@ def render_rates_table(summary: pd.DataFrame, series: pd.DataFrame, lang: Lang, 
         # A real rate is a level, not a change: it keeps its sign but gets no up/down color.
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    show_table(styled, series_col)
+    show_table(styled, series_col, lang, "rates")
 
 
 # --- charts ---

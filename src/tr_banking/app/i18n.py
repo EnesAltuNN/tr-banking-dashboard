@@ -138,6 +138,7 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "tab_banking": {"tr": "Sektör", "en": "Banking sector"},
     "banking_unavailable": {"tr": "Henüz sektör verisi yok.", "en": "No banking sector data yet."},
     "ratios": {"tr": "Oranlar", "en": "Ratios"},
+    "download_csv": {"tr": "CSV indir", "en": "Download CSV"},
     "monthly_ratios": {
         "tr": "Aylık göstergeler (BDDK aylık bülteni)",
         "en": "Monthly indicators (BDDK monthly bulletin)",
