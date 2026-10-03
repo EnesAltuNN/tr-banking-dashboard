@@ -104,6 +104,12 @@ def remove_old_files(
     return old
 
 
+def months_between(start: date, end: date) -> list[tuple[int, int]]:
+    """(year, month) from start's month to end's month, inclusive; empty if start > end."""
+    first, last = start.year * 12 + start.month - 1, end.year * 12 + end.month - 1
+    return [(index // 12, index % 12 + 1) for index in range(first, last + 1)]
+
+
 def month_end(year: int, month: int) -> date:
     """Monthly values are stored at the period end, e.g. 2026-07 -> 2026-07-31."""
     return date(year, month, calendar.monthrange(year, month)[1])

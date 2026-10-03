@@ -38,6 +38,11 @@ def test_project_series_yaml_loads() -> None:
         "TP.KTF12",
         "TP.KTF18",
         "TP.TRY.MT06",
+        "TP.TRY.MT01",
+        "TP.TRY.MT02",
+        "TP.TRY.MT03",
+        "TP.TRY.MT04",
+        "TP.TRY.MT05",
         "TP.PY.P02.1H",
         "TP.APIFON4",
     ]
@@ -53,9 +58,9 @@ def test_project_series_yaml_loads() -> None:
 def test_project_bkm_series_have_valid_codes() -> None:
     specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").for_source("bkm")
 
-    assert len(specs) == 6
+    assert len(specs) == 8
     assert all(bkm_cells(spec.code) for spec in specs)  # raises on an invalid code
-    assert {spec.unit for spec in specs} == {"million TRY", "cards"}
+    assert {spec.unit for spec in specs} == {"million TRY", "cards", "terminals"}
     assert {(spec.frequency, spec.module, spec.max_age_days) for spec in specs} == {
         ("monthly", "cards", 100)
     }
@@ -201,4 +206,9 @@ def test_noisy_series_are_kept_out_of_the_alerts() -> None:
         "9.0.17:10001:TRY:3",
         "9.0.18:10001:TRY:3",
         "TP.TRY.MT06",
+        "TP.TRY.MT01",
+        "TP.TRY.MT02",
+        "TP.TRY.MT03",
+        "TP.TRY.MT04",
+        "TP.TRY.MT05",
     }

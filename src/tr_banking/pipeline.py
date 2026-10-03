@@ -11,6 +11,7 @@ from tr_banking.db import Repository, open_repository
 from tr_banking.settings import Settings
 from tr_banking.sources import ObservationClient
 from tr_banking.sources.bddk import BddkClient
+from tr_banking.sources.bddk_monthly import BddkMonthlyClient
 from tr_banking.sources.bkm import BkmClient
 from tr_banking.sources.common import SourceApiError
 from tr_banking.sources.evds import EvdsClient
@@ -18,12 +19,12 @@ from tr_banking.sources.evds import EvdsClient
 logger = logging.getLogger(__name__)
 
 # Sources with a client today; config.Source also lists the planned ones.
-IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bkm")
+IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bddk_monthly", "bkm")
 # Monthly data is published late and sometimes revised, so every fetch re-reads at least the
 # last N months before today's month, whatever `--weeks` says. TÜİK's CPI (in EVDS) comes about
-# three days after the month ends, BKM about two months after. A new monthly source must be
-# added here (fetch_window_start fails otherwise).
-MONTHLY_LOOKBACK_MONTHS: dict[Source, int] = {"evds": 3, "bkm": 6}
+# three days after the month ends, BDDK's monthly bulletin about a month after, BKM about
+# two. A new monthly source must be added here (fetch_window_start fails otherwise).
+MONTHLY_LOOKBACK_MONTHS: dict[Source, int] = {"evds": 3, "bddk_monthly": 3, "bkm": 6}
 
 
 class UpdateError(RuntimeError):
@@ -82,13 +83,17 @@ def month_index(day: date) -> int:
     return day.year * 12 + day.month - 1
 
 
-def open_client(source: Source, settings: Settings) -> EvdsClient | BddkClient | BkmClient:
+def open_client(
+    source: Source, settings: Settings
+) -> EvdsClient | BddkClient | BddkMonthlyClient | BkmClient:
     if source == "evds":
         if settings.evds_api_key is None:
             raise ValueError("EVDS_API_KEY is not set (add it to .env or the environment)")
         return EvdsClient(settings.evds_api_key, settings.evds_base_url, settings.raw_dir)
     if source == "bddk":
         return BddkClient(settings.raw_dir)
+    if source == "bddk_monthly":
+        return BddkMonthlyClient(settings.raw_dir)
     if source == "bkm":
         return BkmClient(settings.raw_dir)
     raise ValueError(f"source {source!r} has no client yet")

@@ -39,6 +39,7 @@ from tr_banking.app.metrics import (
     Ratio,
     alert_series,
     annual_inflation,
+    annualized,
     banking_ratios,
     category_id,
     deflate,
@@ -48,6 +49,7 @@ from tr_banking.app.metrics import (
     policy_decisions,
     rate_spread,
     real_rates,
+    rolling_12m,
     spec_id,
     spec_observations,
     summarize,
@@ -122,7 +124,16 @@ CATEGORY_HUES = {
     "securities": "green",
     "government_bonds": "red",
     "deposit_rate": "yellow",
+    "deposit_term": "yellow",
     "usd_try": "green",
+    "pos": "violet",
+    "atm": "aqua",
+    "capital_adequacy": "blue",
+    "roe": "violet",
+    "roa": "magenta",
+    "net_interest_margin": "aqua",
+    "npl_coverage": "red",
+    "demand_deposits": "orange",
 }
 # Banking series a click away in the filter bar rather than charted by default: bank groups,
 # the single funding items and the bond rows (their totals and ratios are shown).
@@ -142,6 +153,7 @@ RATE_DECIMALS = 2  # EVDS publishes rates with two decimals, e.g. 41.96
 DATE_FILTER_WIDTH = 290  # px: fits two dd.mm.yyyy dates, and a phone screen
 SERIES_FILTER_WIDTH = 340  # px: the series names fit, and so does the button's panel on a phone
 SOURCE_ICON, MODE_ICON, SERIES_ICON = ":material/database:", ":material/tune:", ":material/list:"
+PERIOD_ICON = ":material/calendar_month:"
 # Up / down text colors, >= 4.5:1 on each theme's background. The sign (+/-) is always shown
 # too, so the direction never depends on color alone.
 DELTA_COLORS = {
@@ -415,7 +427,9 @@ def render_rates_view(
     bar = filter_bar()
     render_kpis(rate_tiles(series, observations, inflation, policy_id, lang), theme)
 
-    filters = render_filters(bar, series, observations, lang, key="rates")
+    # The maturities have their own chart below; as time series they are a click away.
+    main_ids = [int(i) for i in series.loc[series["category"] != "deposit_term", "id"]]
+    filters = render_filters(bar, series, observations, lang, key="rates", default_ids=main_ids)
     if filters is None:
         return
     selected_ids, start, end = filters
@@ -442,7 +456,9 @@ def render_rates_view(
         lang,
         theme,
     )
-    render_spread_chart(series, observations, in_range, lang, theme)
+    spread_column, terms_column = st.columns(CHARTS_PER_ROW)
+    render_spread_chart(spread_column, series, observations, in_range, lang, theme)
+    render_deposit_terms(terms_column, series, observations, end, lang, theme)
     with st.expander(text("notes", lang)):
         st.caption(text("rates_note", lang))
 
@@ -461,6 +477,15 @@ def render_cards_view(
         return
     bar = filter_bar()
     real = render_value_mode(bar, lang, key="cards_value_mode") == "real"
+    period = translated_radio(
+        bar,
+        "cards_period",
+        text("period_view", lang),
+        ["monthly", "rolling12"],
+        lambda option: text(f"period_{option}", lang),
+        lang,
+        PERIOD_ICON,
+    )
     render_kpis(card_tiles(series, observations, lang), theme)
 
     filters = render_filters(bar, series, observations, lang, key="cards")
@@ -474,6 +499,11 @@ def render_cards_view(
     month = None
     if real:
         selected, month = deflate_money(selected, series, price_index, lang)
+    if period == "rolling12":
+        # After deflating: each month's real flow, then the 12-month total of those.
+        flow_ids = series.loc[series["unit"].isin(MONETARY_UNITS), "id"]
+        selected = rolling_12m(selected, flow_ids)
+        st.caption(text("rolling_note", lang))
     # Monthly flows are deflated by their own month's CPI, so monthly % stays meaningful.
     summary = summarize(selected, as_of=end, frequency="monthly")
     render_summary_table(summary, series, lang, theme, month, monthly=True)
@@ -497,7 +527,11 @@ def render_banking_view(
 
     Gets every series, not only module "banking": the ratios need BDDK's loan totals too.
     """
-    banking = series[series["module"] == "banking"]
+    in_module = series[series["module"] == "banking"]
+    # Weekly BDDK series drive the tiles, filters and tables; the monthly bulletin's ratios
+    # have a section of their own.
+    banking = in_module[in_module["frequency"] == "weekly"]
+    monthly = in_module[in_module["frequency"] == "monthly"]
     observations_of_tab = observations[observations["series_id"].isin(banking["id"])]
     if observations_of_tab.empty:
         st.info(text("banking_unavailable", lang))
@@ -513,6 +547,7 @@ def render_banking_view(
     render_ratio_charts(headline, lang, theme)
     render_group_shares(ratios, lang, theme)
     render_fx_in_usd(series, observations, lang, theme)
+    render_monthly_ratios(monthly, observations, lang, theme)
 
     st.markdown(f"**{text('amounts', lang)}**")
     sector_ids = [int(i) for i in banking.loc[~banking["category"].isin(DETAIL_CATEGORIES), "id"]]
@@ -600,6 +635,7 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
 
 
 def render_spread_chart(
+    column: DeltaGenerator,
     series: pd.DataFrame,
     observations: pd.DataFrame,
     in_range: Callable[[pd.DataFrame], pd.DataFrame],
@@ -619,10 +655,73 @@ def render_spread_chart(
     if spread.empty:
         return
     color = series_color("deposit_rate", theme)
-    with st.columns(CHARTS_PER_ROW)[0].container(border=True):
+    with column.container(border=True):
         chart_title(text("rate_spread", lang), color)
         st.altair_chart(line_chart(spread, text("pp", lang), color, lang, axis_format=",.0f"))
         st.caption(text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang]))
+
+
+def render_deposit_terms(
+    column: DeltaGenerator,
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    as_of: date,
+    lang: Lang,
+    theme: str,
+) -> None:
+    """TRY deposit rate per maturity: the latest week as bars, 52 weeks earlier as ticks."""
+    terms = series[series["category"] == "deposit_term"]
+    rows = observations[observations["series_id"].isin(terms["id"])]
+    if rows.empty:
+        return
+    summary = summarize_rates(rows, pd.DataFrame(), as_of=as_of).merge(
+        terms, left_on="series_id", right_on="id"
+    )
+    # "TL mevduat faizi: 1 aya kadar" -> "1 aya kadar": the title already names the rate.
+    labels = summary[f"name_{lang}"].str.split(": ").str[-1]
+    order = [name.split(": ")[-1] for name in terms[f"name_{lang}"]]
+    now_label, year_label = text("term_now", lang), text("term_year_ago", lang)
+    data = pd.concat(
+        [
+            pd.DataFrame({"term": labels, "kind": now_label, "value": summary["last_value"]}),
+            pd.DataFrame(
+                {
+                    "term": labels,
+                    "kind": year_label,
+                    "value": summary["last_value"] - summary["yoy_pp"],
+                }
+            ),
+        ],
+        ignore_index=True,
+    ).dropna()
+    color = series_color("deposit_term", theme)
+    y = alt.Y("term:N", title=None, sort=order)
+    x = alt.X("value:Q", title="%", axis=alt.Axis(format=",.0f"))
+    legend = alt.Color(
+        "kind:N",
+        scale=alt.Scale(domain=[now_label, year_label], range=[color, CROSSHAIR_COLOR]),
+        legend=alt.Legend(orient="bottom", title=None),
+    )
+    tooltip = [
+        alt.Tooltip("term:N", title=text("col_term", lang)),
+        alt.Tooltip("kind:N", title=text("col_date", lang)),
+        alt.Tooltip("value:Q", title="%", format=",.2f"),
+    ]
+    base = alt.Chart(data).encode(y=y, x=x, color=legend, tooltip=tooltip)
+    chart = alt.layer(
+        base.transform_filter(alt.datum.kind == now_label).mark_bar(height=14),
+        base.transform_filter(alt.datum.kind == year_label).mark_tick(thickness=3, size=22),
+    ).properties(height=CHART_HEIGHT)
+    if lang == "tr":
+        chart = chart.configure(locale=VEGA_LOCALE_TR)
+    week = format_date(summary["last_date"].max(), lang, long=True)
+    with column.container(border=True):
+        chart_title(text("deposit_terms", lang), color)
+        st.altair_chart(chart)
+        st.caption(
+            f"{text('week_of', lang).format(week=week)} · "
+            + text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang])
+        )
 
 
 def render_fx_in_usd(
@@ -662,6 +761,57 @@ def render_fx_in_usd(
             if title == "fx_deposits_usd":
                 source = f"{SOURCE_LABELS['bddk'][lang]}, {source}"
             st.caption(text("chart_source", lang).format(source=source))
+
+
+def render_monthly_ratios(
+    monthly: pd.DataFrame, observations: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """BDDK's own monthly sector ratios: a table and one chart each, profitability annualized."""
+    shown = []
+    for spec in monthly.itertuples():
+        values = observations.loc[observations["series_id"] == spec.id, ["date", "value"]]
+        if values.empty:
+            continue
+        shown.append((spec, annualized(values) if spec.year_to_date else values))
+    if not shown:
+        return
+    st.markdown(f"**{text('monthly_ratios', lang)}**")
+    frames = [values.assign(series_id=index) for index, (_, values) in enumerate(shown)]
+    summary = summarize_rates(pd.concat(frames, ignore_index=True), pd.DataFrame())
+    ratio_col, month_col = text("col_ratio", lang), text("col_month", lang)
+    last_col, yoy_col = f"{text('col_last', lang)} (%)", text("col_yoy_pp", lang)
+    frame = pd.DataFrame(
+        {
+            ratio_col: [getattr(shown[i][0], f"name_{lang}") for i in summary["series_id"]],
+            month_col: summary["last_date"].dt.date,
+            last_col: summary["last_value"],
+            yoy_col: summary["yoy_pp"],
+        }
+    )
+    styled = (
+        frame.style.format(
+            lambda value: format_number(value, lang, RATE_DECIMALS), subset=[last_col]
+        )
+        .format(
+            lambda value: format_signed(value, lang, RATE_DECIMALS),
+            subset=[yoy_col],
+            na_rep=MISSING,
+        )
+        .format(lambda day: format_month(day, lang), subset=[month_col])
+        .map(delta_style(theme, RATE_DECIMALS), subset=[yoy_col])
+    )
+    show_table(styled, ratio_col)
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk_monthly"][lang])
+    for row_start in range(0, len(shown), CHARTS_PER_ROW):
+        row = shown[row_start : row_start + CHARTS_PER_ROW]
+        for column, (spec, values) in zip(st.columns(CHARTS_PER_ROW), row, strict=False):
+            color = series_color(spec.category, theme)
+            with column.container(border=True):
+                chart_title(getattr(spec, f"name_{lang}"), color)
+                chart = line_chart(values, "%", color, lang, monthly=True, axis_format=",.1f")
+                st.altair_chart(chart)
+                st.caption(source)
+    st.caption(text("monthly_ratios_note", lang))
 
 
 def render_group_shares(ratios: list[Ratio], lang: Lang, theme: str) -> None:

@@ -185,8 +185,11 @@ funding (AOFM), on business days (verified 2026-10-01).
 Faiz Oranları (Akım)*, "Toplam (TL Mevduat, Akım, %)": the weighted average rate on new TRY
 deposits that week, all maturities, weekly (Friday) from 2002-01-04. It is the deposit side
 of `bie_kt100h`. 43.56% on 2026-09-18.
-- The same group has 1, 3, 6, 12 and 12+ month maturities (`MT01`-`MT05`), USD and EUR
-  deposits, and savings (`TAS`) and commercial (`TIC`) splits from 2012-07-06; not used.
+- The maturities `TP.TRY.MT01`-`MT05` (up to 1, 3, 6, 12 months, and 1 year and longer) are
+  loaded too (category `deposit_term`, `alerts: false`) and drawn as one chart: the latest
+  week as bars, 52 weeks earlier as ticks. On 2026-09-25 short maturities paid about 43%
+  and 1 year and longer 31%. The same group also has USD and EUR deposits, and savings
+  (`TAS`) and commercial (`TIC`) splits from 2012-07-06; not used.
 - **Spread** (`app/metrics.py: rate_spread`) = `TP.KTF18` commercial loan rate − deposit rate:
   6.2 pp on 2026-09-18, between −17.8 and +15.9 pp since 2014. There is no single rate for
   all loans; commercial loans are the largest book.
@@ -338,6 +341,47 @@ is where the row ids below come from. The row prefix follows the table: `1.` loa
     certificate error. Download the new intermediate from the leaf's "CA Issuers" URL and
     replace the bundled file.
 
+## BDDK monthly bulletin (verified 2026-10-03)
+
+[Aylık Bülten](https://www.bddk.org.tr/BultenAylik): 17 tables (balance sheet, profit and
+loss, loans, deposits by type and maturity, liquidity, capital adequacy, FX position,
+ratios, ...), month-end values from 2003-01. Client: `sources/bddk_monthly.py`, source
+`bddk_monthly`.
+
+- **No official API.** The page loads each table from
+  `POST /BultenAylik/tr/Home/BasitRaporGetir` with `tabloNo`, `yil`, `ay`, `paraBirimi=TL`
+  and `taraf` (`10001` sector; also `10003` participation, `10004` development and
+  investment, `10008`-`10010` deposit banks by ownership). It answers JSON
+  `{"success", "Json": {"data": {"rows": [{"cell": [group, no, label, _, value]}]}}}`.
+  No cookie or token is needed. Same host as the weekly bulletin, so the same bundled TLS
+  intermediate.
+- **Unpublished months** answer `success: false` with "2026 yılının en son 8 ayına ait veri
+  bulunmaktadır!"; months before 2003 with "... 2003 yılı, 1. aydan başlamaktadır." Both
+  are skipped. August 2026 was out on 2026-10-03: about a month after the month ends
+  (`max_age_days: 75`, lookback 3 months).
+- **Rows are found by label, not number.** Table 15 *Rasyolar* had 31 rows until 2017 and 32
+  since; the capital adequacy ratio moved from row 29 to row 30. The labels have stayed the
+  same (checked 2014-01, 2017-06, 2020-12, 2023-06, 2026-08). Series code
+  `<table>:<label>`; a renamed row fails the fetch.
+- **Six series from table 15**, sector, module `banking`:
+
+| Label | Series | 2026-08 |
+|---|---|---|
+| Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%) | Capital adequacy ratio | 16.60 |
+| Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%) | Return on equity (year to date) | 16.54 (24.8 a year) |
+| Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%) | Return on assets (year to date) | 1.31 (1.97 a year) |
+| Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%) | Net interest margin (year to date) | 3.28 (4.92 a year) |
+| Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%) | NPL coverage ratio | 76.35 |
+| Vadesiz Mevduat / Toplam Mevduat (%) | Demand deposits share | 36.26 |
+
+- **Profitability ratios add up from January** (January 2014 ROE 0.73%, December the full
+  year). They are stored as published, flagged `year_to_date: true` and annualized for
+  display as `value * 12 / month` (`app/metrics.py: annualized`). July 2026 (14.59, 25.0 a
+  year) and August (16.54, 24.8) then agree. The net interest margin runs smoothly across
+  year ends (December 2024 3.5, January 2025 3.4); return on equity is noisier in January,
+  which holds one month only (December 2024 30.5, January 2025 19.3).
+- A backfill from 2014 is 152 requests, 1 s apart: about 2.5 minutes.
+
 ## BKM card statistics (verified 2026-09-27)
 
 Module 2 (`module: cards`, the dashboard's *Cards* tab). Client: `sources/bkm.py`.
@@ -368,6 +412,10 @@ mixing units.
 Series codes (the label mapping lives in `sources/bkm.py`):
 - `cards:<card>`: *KART SAYILARI*, card = `credit` (Toplam Kredi Kartı) or `debit` (Toplam Banka
   Kartı).
+- `terminals:<pos|atm>`: *POS SAYILARI* / *ATM SAYILARI*, row "POS Sayısı" / "ATM Sayısı"
+  (added 2026-10-03; on every page since 2017-01: 1,703,599 POS and 48,530 ATMs in
+  January 2017, 2,020,116 and 56,814 in July 2026). Unit `terminals`, shown in thousands;
+  stocks like the card counts, so the 12-month view never sums them.
 - `txn:<card>:<usage>:<measure>:<kind>`: *İŞLEM ADET VE TUTARLARI*.
   - card: `credit` (Kredi Kartı) or `debit` (Banka Kartı). `credit+debit` sums both rows.
   - usage: `domestic` (Yerli Kartların Yurt İçi Kullanımı), `abroad` (Yerli Kartların
@@ -395,6 +443,9 @@ Series codes (the label mapping lives in `sources/bkm.py`):
   and stay unchanged.
 - Amounts are nominal flows and are not seasonally adjusted: December and the summer
   (tourism) months stand out, so compare yearly % rather than monthly % across seasons.
+  The cards tab's "12-month total" view (`app/metrics.py: rolling_12m`) sums the TRY
+  amounts over the 12 months ending in each month, which holds every season once; card
+  counts are stocks and are not summed. A month missing from the window leaves no total.
 
 ## Bank websites (module 3, postponed)
 

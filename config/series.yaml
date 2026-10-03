@@ -163,6 +163,59 @@ series:
     category: deposit_rate
     alerts: false
 
+  # TL deposit rate by maturity, same data group (bie_mt100h), weekly from 2002-01-04,
+  # verified 2026-10-03: "1 Aya Kadar Vadeli" .. "1 Yil ve Daha Uzun Vadeli (TL Mevduat,
+  # Akim, %)". Shown together as one maturity chart, not as six time series.
+  - source: evds
+    code: TP.TRY.MT01
+    name_tr: "TL mevduat faizi: 1 aya kadar"
+    name_en: "TRY deposit rate: up to 1 month"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT02
+    name_tr: "TL mevduat faizi: 3 aya kadar"
+    name_en: "TRY deposit rate: up to 3 months"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT03
+    name_tr: "TL mevduat faizi: 6 aya kadar"
+    name_en: "TRY deposit rate: up to 6 months"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT04
+    name_tr: "TL mevduat faizi: 1 yıla kadar"
+    name_en: "TRY deposit rate: up to 1 year"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
+  - source: evds
+    code: TP.TRY.MT05
+    name_tr: "TL mevduat faizi: 1 yıl ve üzeri"
+    name_en: "TRY deposit rate: 1 year and longer"
+    unit: "%"
+    frequency: weekly
+    module: rates
+    category: deposit_term
+    alerts: false
+
   # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
   # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
   # MPC (PPK) decisions. No value on holidays, and long holidays last up to 9 days, hence 14 days.
@@ -568,6 +621,73 @@ series:
     module: banking
     category: government_bonds
 
+# BDDK monthly bulletin (Aylık Bülten), table 15 "Rasyolar", sector (taraf 10001), month-end
+# values from 2003-01, verified 2026-10-03. Found by row label: the row numbers shift over
+# the years. Profitability ratios add up from January (year_to_date). Published about a
+# month after the month ends, hence max_age_days 75.
+  - source: bddk_monthly
+    code: "15:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)"
+    name_tr: Sermaye yeterlilik oranı
+    name_en: Capital adequacy ratio
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: capital_adequacy
+    max_age_days: 75
+
+  - source: bddk_monthly
+    code: "15:Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)"
+    name_tr: Özkaynak kârlılığı (yıllık)
+    name_en: Return on equity (annualized)
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: roe
+    max_age_days: 75
+    year_to_date: true
+
+  - source: bddk_monthly
+    code: "15:Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%)"
+    name_tr: Aktif kârlılığı (yıllık)
+    name_en: Return on assets (annualized)
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: roa
+    max_age_days: 75
+    year_to_date: true
+
+  - source: bddk_monthly
+    code: "15:Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%)"
+    name_tr: Net faiz marjı (yıllık)
+    name_en: Net interest margin (annualized)
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: net_interest_margin
+    max_age_days: 75
+    year_to_date: true
+
+  - source: bddk_monthly
+    code: "15:Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%)"
+    name_tr: Takipteki alacak karşılık oranı
+    name_en: NPL coverage ratio
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: npl_coverage
+    max_age_days: 75
+
+  - source: bddk_monthly
+    code: "15:Vadesiz Mevduat / Toplam Mevduat (%)"
+    name_tr: Vadesiz mevduat payı
+    name_en: Demand deposits share
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: demand_deposits
+    max_age_days: 75
+
 # ---------------------------------------------------------------------------------------------
 # BKM monthly card statistics (https://bkm.com.tr/secilen-aya-ait-istatistikler/), module 2.
 # Verified 2026-09-27 on the pages of 2017-01, 2021-03 and 2026-07 (same labels every month).
@@ -641,4 +761,26 @@ series:
     frequency: monthly
     module: cards
     category: debit_card
+    max_age_days: 100
+
+  # POS SAYILARI / ATM SAYILARI tables of the same page, counts at the month's end, verified
+  # 2026-10-03 on the 2017-01 and 2026-07 pages. Stocks, like the card counts: never summed.
+  - source: bkm
+    code: "terminals:pos"
+    name_tr: POS sayısı
+    name_en: Number of POS terminals
+    unit: terminals
+    frequency: monthly
+    module: cards
+    category: pos
+    max_age_days: 100
+
+  - source: bkm
+    code: "terminals:atm"
+    name_tr: ATM sayısı
+    name_en: Number of ATMs
+    unit: terminals
+    frequency: monthly
+    module: cards
+    category: atm
     max_age_days: 100

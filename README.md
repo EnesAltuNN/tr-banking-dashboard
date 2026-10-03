@@ -20,9 +20,11 @@ dashboard, in nominal and inflation-adjusted terms.
   - The [BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) (the banking
     regulator): weekly loans, deposits, non-performing loans and bank groups back to **2014**.
     Where it covers the same item as EVDS, the two agree within **about 0.3%**.
-  - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
-    counts back to **2017**.
-  - 58 series in total, all defined in one YAML file.
+  - The [BDDK monthly bulletin](https://www.bddk.org.tr/BultenAylik): the regulator's own
+    capital adequacy, profitability and margin ratios back to **2014**.
+  - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending, card
+    counts and POS/ATM terminals back to **2017**.
+  - 71 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -74,6 +76,7 @@ dashboard, in nominal and inflation-adjusted terms.
 flowchart LR
     EVDS["TCMB EVDS3 API"] --> GHA
     BDDK["BDDK weekly bulletin"] --> GHA
+    BDDKM["BDDK monthly bulletin"] --> GHA
     BKM["BKM monthly card statistics"] --> GHA
     GHA["GitHub Actions<br/>Tue + Fri 04:00 UTC<br/>role: fetch_writer"] -->|"upsert"| DB[("Supabase Postgres<br/>RLS on every table")]
     GHA <-->|"facts in, text out"| CLAUDE["Claude API<br/>weekly summary"]
@@ -188,6 +191,7 @@ Done:
   private, foreign), with the ratios built from them.
 - ✔ **Alerts:** unusual weekly changes flagged above the tabs.
 - ✔ **Weekly AI summary:** facts from Python, text from Claude, shown above the tabs.
+- ✔ **Card seasonality:** a 12-month-total view that flattens the December and summer peaks.
 
 Planned, in order:
 1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
@@ -195,8 +199,7 @@ Planned, in order:
    not comparable rates in their HTML; it needs a decision on browser automation first.
 
 Other ideas:
-- the policy rate before September 2018, where the EVDS series is empty;
-- a seasonally adjusted view of card spending.
+- a vintage table that keeps revised values, if revisions turn out to matter.
 
 ## Documentation
 

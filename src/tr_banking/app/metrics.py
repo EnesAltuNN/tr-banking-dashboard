@@ -25,6 +25,7 @@ DISPLAY_UNITS = {
     "thousand TRY": (1e-6, "billion TRY"),  # EVDS
     "million TRY": (1e-3, "billion TRY"),  # BDDK, BKM
     "cards": (1e-6, "million cards"),  # BKM card counts
+    "terminals": (1e-3, "thousand terminals"),  # BKM POS and ATM counts
 }
 # Units that are money and can therefore be deflated into real values (card counts cannot).
 MONETARY_UNITS = frozenset({"thousand TRY", "million TRY"})
@@ -281,6 +282,26 @@ def in_usd(amounts: pd.DataFrame, usd_try: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"date": merged["date"], "value": merged["value"] / merged["rate"]})
 
 
+def rolling_12m(observations: pd.DataFrame, flow_ids: Iterable[int]) -> pd.DataFrame:
+    """Monthly flows as the sum of the 12 months ending in each month; other series unchanged.
+
+    A 12-month total holds every season once, so December and the summer stop standing out.
+    A month missing from the window leaves no total (it would understate the year).
+    """
+    flows = set(flow_ids)
+    parts = [observations[~observations["series_id"].isin(flows)]]
+    for series_id, group in observations[observations["series_id"].isin(flows)].groupby(
+        "series_id"
+    ):
+        values = group.set_index("date")["value"].sort_index()
+        months = pd.date_range(values.index.min(), values.index.max(), freq="ME")
+        totals = values.reindex(months).rolling(12, min_periods=12).sum().dropna()
+        parts.append(
+            pd.DataFrame({"series_id": series_id, "date": totals.index, "value": totals.values})
+        )
+    return pd.concat(parts, ignore_index=True)
+
+
 # Lookbacks of the period-change table, in weeks; "ytd" compares with the last value of the
 # previous year (the last Friday of December is within LOOKBACK_TOLERANCE of 31 December).
 PERIOD_WEEKS = {"w1": 1, "w4": 4, "w13": 13, "w52": 52}
@@ -356,13 +377,20 @@ BANK_GROUPS = ("state_banks", "private_banks", "foreign_banks")
 
 
 def with_categories(series: pd.DataFrame, config: SeriesConfig) -> pd.DataFrame:
-    """Adds the config-only `category` and `alerts` flag of each series (not stored)."""
+    """Adds the config-only `category`, `alerts` and `year_to_date` of each series."""
     specs = {(spec.source, spec.code): spec for spec in config.series}
     found = [specs.get((row.source, row.code)) for row in series.itertuples()]
     return series.assign(
         category=[spec.category if spec else None for spec in found],
         alerts=[spec.alerts if spec else True for spec in found],
+        year_to_date=[spec.year_to_date if spec else False for spec in found],
     )
+
+
+def annualized(values: pd.DataFrame) -> pd.DataFrame:
+    """Year-to-date ratios (they add up from January) as yearly rates: value * 12 / month."""
+    months = values["date"].dt.month
+    return values.assign(value=values["value"] * 12 / months)
 
 
 def alert_series(series: pd.DataFrame) -> pd.DataFrame:
@@ -419,7 +447,8 @@ def banking_ratios(series: pd.DataFrame, observations: pd.DataFrame) -> list[Rat
     with BDDK. A ratio whose inputs are not loaded is left out.
     """
     bddk_loans = series[(series["source"] == "bddk") & (series["module"] == "credit")]
-    banking = series[series["module"] == "banking"]
+    # Weekly bulletin rows only: their codes are row:group:currency:column (bddk_key).
+    banking = series[(series["source"] == "bddk") & (series["module"] == "banking")]
 
     def rows(series_id: int | None) -> pd.DataFrame | None:
         if series_id is None:

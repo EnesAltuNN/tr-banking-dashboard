@@ -87,12 +87,14 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "tr": (
             "**Kaynaklar:** [TCMB EVDS](https://evds3.tcmb.gov.tr/) · "
             "[BDDK haftalık bülteni](https://www.bddk.org.tr/BultenHaftalik) · "
+            "[BDDK aylık bülteni](https://www.bddk.org.tr/BultenAylik) · "
             "[BKM aylık istatistikler](https://bkm.com.tr/secilen-aya-ait-istatistikler/) · "
             "Kaynak kod: [GitHub](https://github.com/EnesAltuNN/tr-banking-dashboard)"
         ),
         "en": (
             "**Sources:** [CBRT EVDS](https://evds3.tcmb.gov.tr/) · "
             "[BDDK weekly bulletin](https://www.bddk.org.tr/BultenHaftalik) · "
+            "[BDDK monthly bulletin](https://www.bddk.org.tr/BultenAylik) · "
             "[BKM monthly statistics](https://bkm.com.tr/secilen-aya-ait-istatistikler/) · "
             "Source code: [GitHub](https://github.com/EnesAltuNN/tr-banking-dashboard)"
         ),
@@ -136,6 +138,26 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "tab_banking": {"tr": "Sektör", "en": "Banking sector"},
     "banking_unavailable": {"tr": "Henüz sektör verisi yok.", "en": "No banking sector data yet."},
     "ratios": {"tr": "Oranlar", "en": "Ratios"},
+    "monthly_ratios": {
+        "tr": "Aylık göstergeler (BDDK aylık bülteni)",
+        "en": "Monthly indicators (BDDK monthly bulletin)",
+    },
+    "monthly_ratios_note": {
+        "tr": (
+            "BDDK'nın kendi hesapladığı sektör oranları, ay sonu değerleri. Kârlılık oranları "
+            "(özkaynak ve aktif kârlılığı, net faiz marjı) ocaktan itibaren birikir; aylar "
+            "karşılaştırılabilsin diye yıllıklaştırılır: değer × 12 / ay. Ocak tek bir ayı "
+            "içerdiği için en oynak aydır. Sermaye yeterlilik "
+            "oranı = yasal özkaynak / risk ağırlıklı kalemler."
+        ),
+        "en": (
+            "Sector ratios as BDDK computes them, month-end values. Profitability ratios "
+            "(return on equity and on assets, net interest margin) add up from January; they "
+            "are annualized so months compare: value × 12 / month. January holds a single "
+            "month, so it is the noisiest. Capital adequacy ratio = "
+            "regulatory capital / risk-weighted items."
+        ),
+    },
     "col_topic": {"tr": "Konu", "en": "Topic"},
     "topic_asset_quality": {"tr": "Aktif kalitesi", "en": "Asset quality"},
     "topic_deposits": {"tr": "Mevduat", "en": "Deposits"},
@@ -166,6 +188,10 @@ TEXTS: dict[str, dict[Lang, str]] = {
     },
     "usd_try_rate": {"tr": "ABD doları kuru (TCMB döviz alış)", "en": "USD/TRY (CBRT buying rate)"},
     "billion_usd": {"tr": "milyar USD", "en": "bn USD"},
+    "deposit_terms": {"tr": "TL mevduat faizi, vadeye göre", "en": "TRY deposit rate by maturity"},
+    "term_now": {"tr": "Son hafta", "en": "Latest week"},
+    "term_year_ago": {"tr": "52 hafta önce", "en": "52 weeks earlier"},
+    "col_term": {"tr": "Vade", "en": "Maturity"},
     "try_per_usd": {"tr": "TL", "en": "TRY"},
     "period_changes": {"tr": "Dönem değişimleri (%)", "en": "Changes over periods (%)"},
     "col_1w": {"tr": "1 hafta", "en": "1 week"},
@@ -345,6 +371,21 @@ TEXTS: dict[str, dict[Lang, str]] = {
         "en": "Pick an end date for the range.",
     },
     "value_mode": {"tr": "Değerler", "en": "Values"},
+    "period_view": {"tr": "Dönem", "en": "Period"},
+    "period_monthly": {"tr": "Aylık", "en": "Monthly"},
+    "period_rolling12": {"tr": "Son 12 ay toplamı", "en": "12-month total"},
+    "rolling_note": {
+        "tr": (
+            "TL tutarları **son 12 ay toplamıdır**: her ay, o ayla biten 12 ayın toplamı. Her "
+            "mevsim bir kez yer aldığı için aralık ve yaz zirveleri düzleşir. Kart sayıları "
+            "toplanmaz, ayın değeri gösterilir."
+        ),
+        "en": (
+            "TRY amounts are **12-month totals**: each month shows the sum of the 12 months "
+            "ending with it. Every season counts once, so the December and summer peaks flatten "
+            "out. Card counts are not summed; they show the month's value."
+        ),
+    },
     "mode_nominal": {"tr": "Nominal", "en": "Nominal"},
     "mode_real": {"tr": "Reel (enflasyondan arındırılmış)", "en": "Real (inflation-adjusted)"},
     "mode_nominal_short": {"tr": "Nominal", "en": "Nominal"},
@@ -458,6 +499,7 @@ TEXTS: dict[str, dict[Lang, str]] = {
 SOURCE_LABELS: dict[str, dict[Lang, str]] = {
     "evds": {"tr": "TCMB EVDS", "en": "CBRT EVDS"},
     "bddk": {"tr": "BDDK haftalık bülteni", "en": "BDDK weekly bulletin"},
+    "bddk_monthly": {"tr": "BDDK aylık bülteni", "en": "BDDK monthly bulletin"},
     "bkm": {"tr": "BKM aylık istatistikler", "en": "BKM monthly statistics"},
 }
 
@@ -494,6 +536,7 @@ SOURCE_NOTES: dict[str, dict[Lang, str]] = {
 UNIT_LABELS: dict[str, dict[Lang, str]] = {
     "billion TRY": {"tr": "milyar TL", "en": "billion TRY"},
     "million cards": {"tr": "milyon adet", "en": "million cards"},
+    "thousand terminals": {"tr": "bin adet", "en": "thousand terminals"},
 }
 # Shorter labels for the KPI tiles, where "18,445.2 billion TRY" does not fit a quarter width.
 SHORT_UNIT_LABELS: dict[str, dict[Lang, str]] = {
