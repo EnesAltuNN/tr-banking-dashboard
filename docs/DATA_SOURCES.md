@@ -380,7 +380,13 @@ ratios, ...), month-end values from 2003-01. Client: `sources/bddk_monthly.py`, 
   year) and August (16.54, 24.8) then agree. The net interest margin runs smoothly across
   year ends (December 2024 3.5, January 2025 3.4); return on equity is noisier in January,
   which holds one month only (December 2024 30.5, January 2025 19.3).
-- A backfill from 2014 is 152 requests, 1 s apart: about 2.5 minutes.
+- **Bank groups** (added 2026-10-03): one request takes several `taraf` values (a repeated
+  form field) and returns every group's rows, named in cell 0: `Sektör`, `Mevduat-Kamu`,
+  `Mevduat-Yerli Özel`, `Mevduat-Yabancı`, `Katılım` (the same names in 2014, 2019 and 2026).
+  Series code `15@<taraf>:<label>`; the capital adequacy ratio and return on equity are
+  loaded for the four groups and shown as one comparison chart each. August 2026: capital
+  adequacy 14.1 (state), 17.1 (domestic private), 17.9 (foreign), 17.8 (participation).
+- A backfill from 2014 is 152 requests, 1 s apart (all groups in each): about 2.5 minutes.
 
 ## BKM card statistics (verified 2026-09-27)
 

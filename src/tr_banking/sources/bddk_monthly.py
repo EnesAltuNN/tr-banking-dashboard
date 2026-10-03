@@ -6,8 +6,10 @@ There is no official API. The bulletin page loads its tables from a JSON endpoin
 An unpublished month returns success false with "... en son N ayına ait veri bulunmaktadır!".
 
 Row numbers shift over the years (the ratios table had 31 rows until 2017 and 32 since), so a
-series is found by its row label, which has stayed the same. Series code: "<table>:<label>",
-e.g. "15:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)".
+series is found by its row label, which has stayed the same. Series code: "<table>:<label>" for
+the sector, "<table>@<taraf>:<label>" for a bank group, e.g.
+"15@10009:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)". One request carries every
+group of a table; the response names each group (cell 0).
 """
 
 import logging
@@ -34,6 +36,15 @@ logger = logging.getLogger(__name__)
 
 BDDK_MONTHLY_URL = "https://www.bddk.org.tr/BultenAylik/tr/Home/BasitRaporGetir"
 SECTOR = "10001"
+# taraf -> the group name in the response's first cell, from the page's own list (verified
+# 2014-01, 2019-06, 2026-08). Mevduat-* are deposit banks by ownership.
+GROUP_NAMES = {
+    "10001": "Sektör",
+    "10009": "Mevduat-Kamu",
+    "10008": "Mevduat-Yerli Özel",
+    "10010": "Mevduat-Yabancı",
+    "10003": "Katılım",
+}
 CHUNK_MONTHS = 12
 # What the endpoint says for a month that is not published yet, or before its first month.
 NOT_PUBLISHED_MARKERS = ("en son", "başlamaktadır")
@@ -47,12 +58,17 @@ class BddkMonthlyResponseError(ValueError):
     """The response does not look as expected (missing row, odd layout)."""
 
 
-def parse_series_code(code: str) -> tuple[str, str]:
-    """'15:<row label>' -> ('15', '<row label>')."""
-    table, _, label = code.partition(":")
-    if not table.isdigit() or not label.strip():
-        raise ValueError(f"invalid BDDK monthly series code {code!r}, expected <table>:<label>")
-    return table, label.strip()
+def parse_series_code(code: str) -> tuple[str, str, str]:
+    """'15:<label>' -> ('15', '10001', '<label>'); '15@10009:<label>' -> ('15', '10009', ...)."""
+    head, _, label = code.partition(":")
+    table, _, taraf = head.partition("@")
+    taraf = taraf or SECTOR
+    if not table.isdigit() or not label.strip() or taraf not in GROUP_NAMES:
+        raise ValueError(
+            f"invalid BDDK monthly series code {code!r}, expected <table>[@<taraf>]:<label> "
+            f"with taraf one of {sorted(GROUP_NAMES)}"
+        )
+    return table, taraf, label.strip()
 
 
 class BddkMonthlyClient:
@@ -104,7 +120,7 @@ class BddkMonthlyClient:
         if not codes:
             raise ValueError("at least one series code is required")
         keys = {code: parse_series_code(code) for code in codes}  # validate before requests
-        tables = sorted({table for table, _ in keys.values()})
+        tables = sorted({table for table, _, _ in keys.values()})
         months = months_between(start, end)
         logger.info("BDDK monthly: requesting %d months from %s to %s", len(months), start, end)
 
@@ -115,21 +131,25 @@ class BddkMonthlyClient:
                 if requests:
                     time.sleep(self._request_interval)  # a public website: go slowly
                 requests += 1
-                values = self._fetch(table, year, month)
+                tarafs = sorted(
+                    {taraf for code_table, taraf, _ in keys.values() if code_table == table}
+                )
+                values = self._fetch(table, tarafs, year, month)
                 if values is None:
                     logger.info("BDDK monthly: %d-%02d is not published", year, month)
                     continue
                 published += 1
                 day = month_end(year, month)
-                for code, (code_table, label) in keys.items():
+                for code, (code_table, taraf, label) in keys.items():
                     if code_table != table:
                         continue
-                    if label not in values:
+                    key = (GROUP_NAMES[taraf], label)
+                    if key not in values:
                         raise BddkMonthlyResponseError(
-                            f"row {label!r} is missing from table {table} for {year}-{month:02d}"
+                            f"row {key} is missing from table {table} for {year}-{month:02d}"
                         )
-                    if values[label] is not None:
-                        rows.append((code, day, values[label]))
+                    if values[key] is not None:
+                        rows.append((code, day, values[key]))
             if rows and ((index + 1) % chunk_months == 0 or index + 1 == len(months)):
                 yield pd.DataFrame(rows, columns=OBSERVATION_COLUMNS)
                 rows = []
@@ -138,8 +158,10 @@ class BddkMonthlyClient:
                 f"no BDDK monthly data published between {start} and {end}"
             )
 
-    def _fetch(self, table: str, year: int, month: int) -> dict[str, float | None] | None:
-        form = {"tabloNo": table, "yil": year, "ay": month, "paraBirimi": "TL", "taraf": SECTOR}
+    def _fetch(
+        self, table: str, tarafs: list[str], year: int, month: int
+    ) -> dict[tuple[str, str], float | None] | None:
+        form = {"tabloNo": table, "yil": year, "ay": month, "paraBirimi": "TL", "taraf": tarafs}
         response = request_with_retries(
             self._http,
             "POST",
@@ -158,8 +180,8 @@ class BddkMonthlyClient:
         return parse_report(payload, table)
 
 
-def parse_report(payload: Any, table: str) -> dict[str, float | None] | None:
-    """{row label: value} of a one-value table, or None if the month is not published."""
+def parse_report(payload: Any, table: str) -> dict[tuple[str, str], float | None] | None:
+    """{(group name, row label): value} of a one-value table, or None if not published."""
     if not isinstance(payload, dict):
         raise BddkMonthlyResponseError("BDDK monthly response is not a JSON object")
     if not payload.get("success"):
@@ -171,21 +193,21 @@ def parse_report(payload: Any, table: str) -> dict[str, float | None] | None:
         rows = payload["Json"]["data"]["rows"]
     except (KeyError, TypeError) as exc:
         raise BddkMonthlyResponseError(f"table {table} has no rows") from exc
-    values: dict[str, float | None] = {}
+    values: dict[tuple[str, str], float | None] = {}
     for row in rows:
         cell = row.get("cell") if isinstance(row, dict) else None
         if not isinstance(cell, list) or len(cell) != 5:
             raise BddkMonthlyResponseError(
                 f"table {table}: expected [group, no, label, _, value] cells, got {cell!r}"
             )
-        label, raw = str(cell[2]).strip(), cell[4]
+        key, raw = (str(cell[0]).strip(), str(cell[2]).strip()), cell[4]
         if raw in (None, ""):
-            values[label] = None
+            values[key] = None
             continue
         try:
-            values[label] = float(raw)
+            values[key] = float(raw)
         except (TypeError, ValueError) as exc:
-            raise BddkMonthlyResponseError(f"table {table}: {label!r} is {raw!r}") from exc
+            raise BddkMonthlyResponseError(f"table {table}: {key} is {raw!r}") from exc
     if not values:
         raise BddkMonthlyResponseError(f"table {table} is empty")
     return values

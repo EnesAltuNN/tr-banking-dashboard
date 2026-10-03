@@ -375,6 +375,1286 @@
       "",
       1059.890204
      ]
+    },
+    {
+     "id": "1",
+     "cell": [
+      "Katılım",
+      1,
+      "Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)",
+      "",
+      2.744011
+     ]
+    },
+    {
+     "id": "2",
+     "cell": [
+      "Katılım",
+      2,
+      "Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%)",
+      "",
+      82.270764
+     ]
+    },
+    {
+     "id": "3",
+     "cell": [
+      "Katılım",
+      3,
+      "3 Aya Kadar Vadede Faize Duyarlı Aktifler / 3 Aya Kadar Vadede Faize Duyarlı Pasifler (%)",
+      "",
+      80.022349
+     ]
+    },
+    {
+     "id": "4",
+     "cell": [
+      "Katılım",
+      4,
+      "Yüksek Montanlı (1 Milyon TL ve Üzeri) Mevduat / Toplam Mevduat (%)",
+      "",
+      87.770524
+     ]
+    },
+    {
+     "id": "5",
+     "cell": [
+      "Katılım",
+      5,
+      "(Bilanço Dışı Riskler - Türev Finansal Araçlar) / Toplam Aktifler (%)",
+      "",
+      38.474864
+     ]
+    },
+    {
+     "id": "6",
+     "cell": [
+      "Katılım",
+      6,
+      "Türev Finansal Araçlar / Taahhütler (%)",
+      "",
+      73.108682
+     ]
+    },
+    {
+     "id": "7",
+     "cell": [
+      "Katılım",
+      7,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Aktifler (%)",
+      "",
+      1.813553
+     ]
+    },
+    {
+     "id": "8",
+     "cell": [
+      "Katılım",
+      8,
+      "Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%)",
+      "",
+      1.349493
+     ]
+    },
+    {
+     "id": "9",
+     "cell": [
+      "Katılım",
+      9,
+      "Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)",
+      "",
+      21.197953
+     ]
+    },
+    {
+     "id": "10",
+     "cell": [
+      "Katılım",
+      10,
+      "Toplam Faiz Gelirleri / Faiz Getirili Aktifler Ortalaması (%)",
+      "",
+      13.762119
+     ]
+    },
+    {
+     "id": "11",
+     "cell": [
+      "Katılım",
+      11,
+      "Toplam Faiz Giderleri / Faiz Maliyetli Pasifler Ortalaması (%)",
+      "",
+      13.893229
+     ]
+    },
+    {
+     "id": "12",
+     "cell": [
+      "Katılım",
+      12,
+      "Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%)",
+      "",
+      2.666053
+     ]
+    },
+    {
+     "id": "13",
+     "cell": [
+      "Katılım",
+      13,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Ortalama Toplam Aktifler (%)",
+      "",
+      1.660523
+     ]
+    },
+    {
+     "id": "14",
+     "cell": [
+      "Katılım",
+      14,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Toplam Gelirler (%)",
+      "",
+      11.189123
+     ]
+    },
+    {
+     "id": "15",
+     "cell": [
+      "Katılım",
+      15,
+      "İşletme Giderleri / Ortalama Toplam Aktifler (%)",
+      "",
+      2.03097
+     ]
+    },
+    {
+     "id": "16",
+     "cell": [
+      "Katılım",
+      16,
+      "Faiz Dışı Gelirler / Faiz Dışı Giderler (%)",
+      "",
+      98.668327
+     ]
+    },
+    {
+     "id": "17",
+     "cell": [
+      "Katılım",
+      17,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / İşletme Giderleri (%)",
+      "",
+      81.760132
+     ]
+    },
+    {
+     "id": "18",
+     "cell": [
+      "Katılım",
+      18,
+      "Ortalama Toplam Aktifler / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      210787.473412
+     ]
+    },
+    {
+     "id": "19",
+     "cell": [
+      "Katılım",
+      19,
+      "Toplam Mevduat / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      156575.48465
+     ]
+    },
+    {
+     "id": "20",
+     "cell": [
+      "Katılım",
+      20,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      3822.744319
+     ]
+    },
+    {
+     "id": "21",
+     "cell": [
+      "Katılım",
+      21,
+      "Toplam Mevduat / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      2365052.365386
+     ]
+    },
+    {
+     "id": "22",
+     "cell": [
+      "Katılım",
+      22,
+      "Krediler / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      1782184.868165
+     ]
+    },
+    {
+     "id": "23",
+     "cell": [
+      "Katılım",
+      23,
+      "Toplam Personel Sayısı / Toplam Şube Sayısı (Kişi)",
+      "",
+      15.118307
+     ]
+    },
+    {
+     "id": "24",
+     "cell": [
+      "Katılım",
+      24,
+      "Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      774.944534
+     ]
+    },
+    {
+     "id": "25",
+     "cell": [
+      "Katılım",
+      25,
+      "Alım-Satım Amaçlı Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      645.138026
+     ]
+    },
+    {
+     "id": "26",
+     "cell": [
+      "Katılım",
+      26,
+      "Toplam Nakdi Krediler / Toplam Mevduat (%)",
+      "",
+      75.354985
+     ]
+    },
+    {
+     "id": "27",
+     "cell": [
+      "Katılım",
+      27,
+      "Toplam Nakdi Krediler / Toplam Mevduat (Kalkınma ve Yatırım Bankaları Hariç) (%)",
+      "",
+      75.354985
+     ]
+    },
+    {
+     "id": "28",
+     "cell": [
+      "Katılım",
+      28,
+      "Toplam Menkul Değerler / Toplam Mevduat (%)",
+      "",
+      19.856219
+     ]
+    },
+    {
+     "id": "29",
+     "cell": [
+      "Katılım",
+      29,
+      "Vadesiz Mevduat / Toplam Mevduat (%)",
+      "",
+      37.733717
+     ]
+    },
+    {
+     "id": "30",
+     "cell": [
+      "Katılım",
+      30,
+      "Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)",
+      "",
+      17.844807
+     ]
+    },
+    {
+     "id": "31",
+     "cell": [
+      "Katılım",
+      31,
+      "Risk Ağırlıklı Kalemler Toplamı (Net) / Risk Ağırlıklı Kalemler Toplamı (Brüt) (%)",
+      "",
+      50.73198
+     ]
+    },
+    {
+     "id": "32",
+     "cell": [
+      "Katılım",
+      32,
+      "Yabancı Kaynaklar / Toplam Özkaynaklar (%)",
+      "",
+      1322.485723
+     ]
+    },
+    {
+     "id": "1",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      1,
+      "Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)",
+      "",
+      3.556718
+     ]
+    },
+    {
+     "id": "2",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      2,
+      "Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%)",
+      "",
+      76.692049
+     ]
+    },
+    {
+     "id": "3",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      3,
+      "3 Aya Kadar Vadede Faize Duyarlı Aktifler / 3 Aya Kadar Vadede Faize Duyarlı Pasifler (%)",
+      "",
+      89.186136
+     ]
+    },
+    {
+     "id": "4",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      4,
+      "Yüksek Montanlı (1 Milyon TL ve Üzeri) Mevduat / Toplam Mevduat (%)",
+      "",
+      79.783834
+     ]
+    },
+    {
+     "id": "5",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      5,
+      "(Bilanço Dışı Riskler - Türev Finansal Araçlar) / Toplam Aktifler (%)",
+      "",
+      71.38312
+     ]
+    },
+    {
+     "id": "6",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      6,
+      "Türev Finansal Araçlar / Taahhütler (%)",
+      "",
+      64.0384
+     ]
+    },
+    {
+     "id": "7",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      7,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Aktifler (%)",
+      "",
+      1.186983
+     ]
+    },
+    {
+     "id": "8",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      8,
+      "Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%)",
+      "",
+      0.98771
+     ]
+    },
+    {
+     "id": "9",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      9,
+      "Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)",
+      "",
+      12.294081
+     ]
+    },
+    {
+     "id": "10",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      10,
+      "Toplam Faiz Gelirleri / Faiz Getirili Aktifler Ortalaması (%)",
+      "",
+      14.420613
+     ]
+    },
+    {
+     "id": "11",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      11,
+      "Toplam Faiz Giderleri / Faiz Maliyetli Pasifler Ortalaması (%)",
+      "",
+      16.204406
+     ]
+    },
+    {
+     "id": "12",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      12,
+      "Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%)",
+      "",
+      3.208026
+     ]
+    },
+    {
+     "id": "13",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      13,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Ortalama Toplam Aktifler (%)",
+      "",
+      3.088005
+     ]
+    },
+    {
+     "id": "14",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      14,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Toplam Gelirler (%)",
+      "",
+      18.13782
+     ]
+    },
+    {
+     "id": "15",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      15,
+      "İşletme Giderleri / Ortalama Toplam Aktifler (%)",
+      "",
+      2.612774
+     ]
+    },
+    {
+     "id": "16",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      16,
+      "Faiz Dışı Gelirler / Faiz Dışı Giderler (%)",
+      "",
+      97.309462
+     ]
+    },
+    {
+     "id": "17",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      17,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / İşletme Giderleri (%)",
+      "",
+      118.18875
+     ]
+    },
+    {
+     "id": "18",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      18,
+      "Ortalama Toplam Aktifler / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      218265.206468
+     ]
+    },
+    {
+     "id": "19",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      19,
+      "Toplam Mevduat / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      141138.671122
+     ]
+    },
+    {
+     "id": "20",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      20,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      2590.772839
+     ]
+    },
+    {
+     "id": "21",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      21,
+      "Toplam Mevduat / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      2760836.690903
+     ]
+    },
+    {
+     "id": "22",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      22,
+      "Krediler / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      2418907.042596
+     ]
+    },
+    {
+     "id": "23",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      23,
+      "Toplam Personel Sayısı / Toplam Şube Sayısı (Kişi)",
+      "",
+      19.63027
+     ]
+    },
+    {
+     "id": "24",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      24,
+      "Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      1434.851187
+     ]
+    },
+    {
+     "id": "25",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      25,
+      "Alım-Satım Amaçlı Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      580.100157
+     ]
+    },
+    {
+     "id": "26",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      26,
+      "Toplam Nakdi Krediler / Toplam Mevduat (%)",
+      "",
+      87.614999
+     ]
+    },
+    {
+     "id": "27",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      27,
+      "Toplam Nakdi Krediler / Toplam Mevduat (Kalkınma ve Yatırım Bankaları Hariç) (%)",
+      "",
+      87.614999
+     ]
+    },
+    {
+     "id": "28",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      28,
+      "Toplam Menkul Değerler / Toplam Mevduat (%)",
+      "",
+      22.451813
+     ]
+    },
+    {
+     "id": "29",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      29,
+      "Vadesiz Mevduat / Toplam Mevduat (%)",
+      "",
+      39.536157
+     ]
+    },
+    {
+     "id": "30",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      30,
+      "Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)",
+      "",
+      17.096123
+     ]
+    },
+    {
+     "id": "31",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      31,
+      "Risk Ağırlıklı Kalemler Toplamı (Net) / Risk Ağırlıklı Kalemler Toplamı (Brüt) (%)",
+      "",
+      53.747942
+     ]
+    },
+    {
+     "id": "32",
+     "cell": [
+      "Mevduat-Yerli Özel",
+      32,
+      "Yabancı Kaynaklar / Toplam Özkaynaklar (%)",
+      "",
+      1073.837103
+     ]
+    },
+    {
+     "id": "1",
+     "cell": [
+      "Mevduat-Kamu",
+      1,
+      "Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)",
+      "",
+      2.560796
+     ]
+    },
+    {
+     "id": "2",
+     "cell": [
+      "Mevduat-Kamu",
+      2,
+      "Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%)",
+      "",
+      71.878438
+     ]
+    },
+    {
+     "id": "3",
+     "cell": [
+      "Mevduat-Kamu",
+      3,
+      "3 Aya Kadar Vadede Faize Duyarlı Aktifler / 3 Aya Kadar Vadede Faize Duyarlı Pasifler (%)",
+      "",
+      90.693061
+     ]
+    },
+    {
+     "id": "4",
+     "cell": [
+      "Mevduat-Kamu",
+      4,
+      "Yüksek Montanlı (1 Milyon TL ve Üzeri) Mevduat / Toplam Mevduat (%)",
+      "",
+      86.014025
+     ]
+    },
+    {
+     "id": "5",
+     "cell": [
+      "Mevduat-Kamu",
+      5,
+      "(Bilanço Dışı Riskler - Türev Finansal Araçlar) / Toplam Aktifler (%)",
+      "",
+      48.655072
+     ]
+    },
+    {
+     "id": "6",
+     "cell": [
+      "Mevduat-Kamu",
+      6,
+      "Türev Finansal Araçlar / Taahhütler (%)",
+      "",
+      46.029114
+     ]
+    },
+    {
+     "id": "7",
+     "cell": [
+      "Mevduat-Kamu",
+      7,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Aktifler (%)",
+      "",
+      1.135306
+     ]
+    },
+    {
+     "id": "8",
+     "cell": [
+      "Mevduat-Kamu",
+      8,
+      "Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%)",
+      "",
+      0.827144
+     ]
+    },
+    {
+     "id": "9",
+     "cell": [
+      "Mevduat-Kamu",
+      9,
+      "Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)",
+      "",
+      12.836096
+     ]
+    },
+    {
+     "id": "10",
+     "cell": [
+      "Mevduat-Kamu",
+      10,
+      "Toplam Faiz Gelirleri / Faiz Getirili Aktifler Ortalaması (%)",
+      "",
+      14.663607
+     ]
+    },
+    {
+     "id": "11",
+     "cell": [
+      "Mevduat-Kamu",
+      11,
+      "Toplam Faiz Giderleri / Faiz Maliyetli Pasifler Ortalaması (%)",
+      "",
+      16.268032
+     ]
+    },
+    {
+     "id": "12",
+     "cell": [
+      "Mevduat-Kamu",
+      12,
+      "Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%)",
+      "",
+      2.645475
+     ]
+    },
+    {
+     "id": "13",
+     "cell": [
+      "Mevduat-Kamu",
+      13,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Ortalama Toplam Aktifler (%)",
+      "",
+      1.647438
+     ]
+    },
+    {
+     "id": "14",
+     "cell": [
+      "Mevduat-Kamu",
+      14,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Toplam Gelirler (%)",
+      "",
+      10.288738
+     ]
+    },
+    {
+     "id": "15",
+     "cell": [
+      "Mevduat-Kamu",
+      15,
+      "İşletme Giderleri / Ortalama Toplam Aktifler (%)",
+      "",
+      1.628718
+     ]
+    },
+    {
+     "id": "16",
+     "cell": [
+      "Mevduat-Kamu",
+      16,
+      "Faiz Dışı Gelirler / Faiz Dışı Giderler (%)",
+      "",
+      89.954695
+     ]
+    },
+    {
+     "id": "17",
+     "cell": [
+      "Mevduat-Kamu",
+      17,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / İşletme Giderleri (%)",
+      "",
+      101.149342
+     ]
+    },
+    {
+     "id": "18",
+     "cell": [
+      "Mevduat-Kamu",
+      18,
+      "Ortalama Toplam Aktifler / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      286378.939943
+     ]
+    },
+    {
+     "id": "19",
+     "cell": [
+      "Mevduat-Kamu",
+      19,
+      "Toplam Mevduat / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      197960.354846
+     ]
+    },
+    {
+     "id": "20",
+     "cell": [
+      "Mevduat-Kamu",
+      20,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      3248.540344
+     ]
+    },
+    {
+     "id": "21",
+     "cell": [
+      "Mevduat-Kamu",
+      21,
+      "Toplam Mevduat / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      3468461.535449
+     ]
+    },
+    {
+     "id": "22",
+     "cell": [
+      "Mevduat-Kamu",
+      22,
+      "Krediler / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      2797083.048075
+     ]
+    },
+    {
+     "id": "23",
+     "cell": [
+      "Mevduat-Kamu",
+      23,
+      "Toplam Personel Sayısı / Toplam Şube Sayısı (Kişi)",
+      "",
+      17.663212
+     ]
+    },
+    {
+     "id": "24",
+     "cell": [
+      "Mevduat-Kamu",
+      24,
+      "Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      1437.063252
+     ]
+    },
+    {
+     "id": "25",
+     "cell": [
+      "Mevduat-Kamu",
+      25,
+      "Alım-Satım Amaçlı Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      961.702219
+     ]
+    },
+    {
+     "id": "26",
+     "cell": [
+      "Mevduat-Kamu",
+      26,
+      "Toplam Nakdi Krediler / Toplam Mevduat (%)",
+      "",
+      80.652459
+     ]
+    },
+    {
+     "id": "27",
+     "cell": [
+      "Mevduat-Kamu",
+      27,
+      "Toplam Nakdi Krediler / Toplam Mevduat (Kalkınma ve Yatırım Bankaları Hariç) (%)",
+      "",
+      80.652459
+     ]
+    },
+    {
+     "id": "28",
+     "cell": [
+      "Mevduat-Kamu",
+      28,
+      "Toplam Menkul Değerler / Toplam Mevduat (%)",
+      "",
+      27.988311
+     ]
+    },
+    {
+     "id": "29",
+     "cell": [
+      "Mevduat-Kamu",
+      29,
+      "Vadesiz Mevduat / Toplam Mevduat (%)",
+      "",
+      32.825886
+     ]
+    },
+    {
+     "id": "30",
+     "cell": [
+      "Mevduat-Kamu",
+      30,
+      "Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)",
+      "",
+      14.13309
+     ]
+    },
+    {
+     "id": "31",
+     "cell": [
+      "Mevduat-Kamu",
+      31,
+      "Risk Ağırlıklı Kalemler Toplamı (Net) / Risk Ağırlıklı Kalemler Toplamı (Brüt) (%)",
+      "",
+      49.996912
+     ]
+    },
+    {
+     "id": "32",
+     "cell": [
+      "Mevduat-Kamu",
+      32,
+      "Yabancı Kaynaklar / Toplam Özkaynaklar (%)",
+      "",
+      1395.067427
+     ]
+    },
+    {
+     "id": "1",
+     "cell": [
+      "Mevduat-Yabancı",
+      1,
+      "Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)",
+      "",
+      3.627368
+     ]
+    },
+    {
+     "id": "2",
+     "cell": [
+      "Mevduat-Yabancı",
+      2,
+      "Takipteki Alacaklar Karşılığı / Brüt Takipteki Alacaklar (%)",
+      "",
+      80.019746
+     ]
+    },
+    {
+     "id": "3",
+     "cell": [
+      "Mevduat-Yabancı",
+      3,
+      "3 Aya Kadar Vadede Faize Duyarlı Aktifler / 3 Aya Kadar Vadede Faize Duyarlı Pasifler (%)",
+      "",
+      120.462789
+     ]
+    },
+    {
+     "id": "4",
+     "cell": [
+      "Mevduat-Yabancı",
+      4,
+      "Yüksek Montanlı (1 Milyon TL ve Üzeri) Mevduat / Toplam Mevduat (%)",
+      "",
+      83.427651
+     ]
+    },
+    {
+     "id": "5",
+     "cell": [
+      "Mevduat-Yabancı",
+      5,
+      "(Bilanço Dışı Riskler - Türev Finansal Araçlar) / Toplam Aktifler (%)",
+      "",
+      80.034602
+     ]
+    },
+    {
+     "id": "6",
+     "cell": [
+      "Mevduat-Yabancı",
+      6,
+      "Türev Finansal Araçlar / Taahhütler (%)",
+      "",
+      62.770734
+     ]
+    },
+    {
+     "id": "7",
+     "cell": [
+      "Mevduat-Yabancı",
+      7,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Aktifler (%)",
+      "",
+      2.631463
+     ]
+    },
+    {
+     "id": "8",
+     "cell": [
+      "Mevduat-Yabancı",
+      8,
+      "Dönem Net Kârı (Zararı) / Ortalama Toplam Aktifler (%)",
+      "",
+      2.047045
+     ]
+    },
+    {
+     "id": "9",
+     "cell": [
+      "Mevduat-Yabancı",
+      9,
+      "Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)",
+      "",
+      21.311311
+     ]
+    },
+    {
+     "id": "10",
+     "cell": [
+      "Mevduat-Yabancı",
+      10,
+      "Toplam Faiz Gelirleri / Faiz Getirili Aktifler Ortalaması (%)",
+      "",
+      15.379932
+     ]
+    },
+    {
+     "id": "11",
+     "cell": [
+      "Mevduat-Yabancı",
+      11,
+      "Toplam Faiz Giderleri / Faiz Maliyetli Pasifler Ortalaması (%)",
+      "",
+      15.819937
+     ]
+    },
+    {
+     "id": "12",
+     "cell": [
+      "Mevduat-Yabancı",
+      12,
+      "Net Faiz Geliri (Gideri) / Ortalama Toplam Aktifler (%)",
+      "",
+      4.426946
+     ]
+    },
+    {
+     "id": "13",
+     "cell": [
+      "Mevduat-Yabancı",
+      13,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Ortalama Toplam Aktifler (%)",
+      "",
+      3.185436
+     ]
+    },
+    {
+     "id": "14",
+     "cell": [
+      "Mevduat-Yabancı",
+      14,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / Toplam Gelirler (%)",
+      "",
+      16.952257
+     ]
+    },
+    {
+     "id": "15",
+     "cell": [
+      "Mevduat-Yabancı",
+      15,
+      "İşletme Giderleri / Ortalama Toplam Aktifler (%)",
+      "",
+      2.48733
+     ]
+    },
+    {
+     "id": "16",
+     "cell": [
+      "Mevduat-Yabancı",
+      16,
+      "Faiz Dışı Gelirler / Faiz Dışı Giderler (%)",
+      "",
+      96.762173
+     ]
+    },
+    {
+     "id": "17",
+     "cell": [
+      "Mevduat-Yabancı",
+      17,
+      "Ücret, Komisyon ve Bankacılık Hizmetleri Gelirleri / İşletme Giderleri (%)",
+      "",
+      128.066456
+     ]
+    },
+    {
+     "id": "18",
+     "cell": [
+      "Mevduat-Yabancı",
+      18,
+      "Ortalama Toplam Aktifler / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      198127.483444
+     ]
+    },
+    {
+     "id": "19",
+     "cell": [
+      "Mevduat-Yabancı",
+      19,
+      "Toplam Mevduat / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      123577.548137
+     ]
+    },
+    {
+     "id": "20",
+     "cell": [
+      "Mevduat-Yabancı",
+      20,
+      "Vergi Öncesi Kar (Zarar) / Ortalama Toplam Personel Sayısı (Bin TL)",
+      "",
+      5213.652353
+     ]
+    },
+    {
+     "id": "21",
+     "cell": [
+      "Mevduat-Yabancı",
+      21,
+      "Toplam Mevduat / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      3192094.667168
+     ]
+    },
+    {
+     "id": "22",
+     "cell": [
+      "Mevduat-Yabancı",
+      22,
+      "Krediler / Ortalama Toplam Şube Sayısı (Bin TL)",
+      "",
+      3031284.134386
+     ]
+    },
+    {
+     "id": "23",
+     "cell": [
+      "Mevduat-Yabancı",
+      23,
+      "Toplam Personel Sayısı / Toplam Şube Sayısı (Kişi)",
+      "",
+      25.822188
+     ]
+    },
+    {
+     "id": "24",
+     "cell": [
+      "Mevduat-Yabancı",
+      24,
+      "Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      1384.135402
+     ]
+    },
+    {
+     "id": "25",
+     "cell": [
+      "Mevduat-Yabancı",
+      25,
+      "Alım-Satım Amaçlı Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)",
+      "",
+      1141.421191
+     ]
+    },
+    {
+     "id": "26",
+     "cell": [
+      "Mevduat-Yabancı",
+      26,
+      "Toplam Nakdi Krediler / Toplam Mevduat (%)",
+      "",
+      94.962225
+     ]
+    },
+    {
+     "id": "27",
+     "cell": [
+      "Mevduat-Yabancı",
+      27,
+      "Toplam Nakdi Krediler / Toplam Mevduat (Kalkınma ve Yatırım Bankaları Hariç) (%)",
+      "",
+      94.962225
+     ]
+    },
+    {
+     "id": "28",
+     "cell": [
+      "Mevduat-Yabancı",
+      28,
+      "Toplam Menkul Değerler / Toplam Mevduat (%)",
+      "",
+      18.679299
+     ]
+    },
+    {
+     "id": "29",
+     "cell": [
+      "Mevduat-Yabancı",
+      29,
+      "Vadesiz Mevduat / Toplam Mevduat (%)",
+      "",
+      38.119572
+     ]
+    },
+    {
+     "id": "30",
+     "cell": [
+      "Mevduat-Yabancı",
+      30,
+      "Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)",
+      "",
+      17.878022
+     ]
+    },
+    {
+     "id": "31",
+     "cell": [
+      "Mevduat-Yabancı",
+      31,
+      "Risk Ağırlıklı Kalemler Toplamı (Net) / Risk Ağırlıklı Kalemler Toplamı (Brüt) (%)",
+      "",
+      60.458465
+     ]
+    },
+    {
+     "id": "32",
+     "cell": [
+      "Mevduat-Yabancı",
+      32,
+      "Yabancı Kaynaklar / Toplam Özkaynaklar (%)",
+      "",
+      818.987122
+     ]
     }
    ]
   },
