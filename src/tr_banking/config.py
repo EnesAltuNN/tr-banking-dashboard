@@ -57,6 +57,9 @@ Category = Literal[
     # deposit rate and the USD/TRY rate (EVDS)
     "deposit_rate",
     "deposit_term",
+    # BKM terminals
+    "pos",
+    "atm",
     "usd_try",
 ]
 

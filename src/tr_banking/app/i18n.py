@@ -536,6 +536,7 @@ SOURCE_NOTES: dict[str, dict[Lang, str]] = {
 UNIT_LABELS: dict[str, dict[Lang, str]] = {
     "billion TRY": {"tr": "milyar TL", "en": "billion TRY"},
     "million cards": {"tr": "milyon adet", "en": "million cards"},
+    "thousand terminals": {"tr": "bin adet", "en": "thousand terminals"},
 }
 # Shorter labels for the KPI tiles, where "18,445.2 billion TRY" does not fit a quarter width.
 SHORT_UNIT_LABELS: dict[str, dict[Lang, str]] = {

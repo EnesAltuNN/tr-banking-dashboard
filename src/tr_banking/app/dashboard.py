@@ -126,6 +126,8 @@ CATEGORY_HUES = {
     "deposit_rate": "yellow",
     "deposit_term": "yellow",
     "usd_try": "green",
+    "pos": "violet",
+    "atm": "aqua",
     "capital_adequacy": "blue",
     "roe": "violet",
     "roa": "magenta",

@@ -412,6 +412,10 @@ mixing units.
 Series codes (the label mapping lives in `sources/bkm.py`):
 - `cards:<card>`: *KART SAYILARI*, card = `credit` (Toplam Kredi Kartı) or `debit` (Toplam Banka
   Kartı).
+- `terminals:<pos|atm>`: *POS SAYILARI* / *ATM SAYILARI*, row "POS Sayısı" / "ATM Sayısı"
+  (added 2026-10-03; on every page since 2017-01: 1,703,599 POS and 48,530 ATMs in
+  January 2017, 2,020,116 and 56,814 in July 2026). Unit `terminals`, shown in thousands;
+  stocks like the card counts, so the 12-month view never sums them.
 - `txn:<card>:<usage>:<measure>:<kind>`: *İŞLEM ADET VE TUTARLARI*.
   - card: `credit` (Kredi Kartı) or `debit` (Banka Kartı). `credit+debit` sums both rows.
   - usage: `domestic` (Yerli Kartların Yurt İçi Kullanımı), `abroad` (Yerli Kartların

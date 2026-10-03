@@ -58,9 +58,9 @@ def test_project_series_yaml_loads() -> None:
 def test_project_bkm_series_have_valid_codes() -> None:
     specs = load_series_config(PROJECT_ROOT / "config" / "series.yaml").for_source("bkm")
 
-    assert len(specs) == 6
+    assert len(specs) == 8
     assert all(bkm_cells(spec.code) for spec in specs)  # raises on an invalid code
-    assert {spec.unit for spec in specs} == {"million TRY", "cards"}
+    assert {spec.unit for spec in specs} == {"million TRY", "cards", "terminals"}
     assert {(spec.frequency, spec.module, spec.max_age_days) for spec in specs} == {
         ("monthly", "cards", 100)
     }

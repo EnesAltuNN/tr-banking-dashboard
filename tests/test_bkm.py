@@ -228,3 +228,14 @@ def test_client_yields_chunks_of_twelve_months(tmp_path: Path) -> None:
     # 21 requested months (Jan 2024 to Sep 2025): chunks after month 12 and at the end.
     assert [len(chunk) // len(CODES) for chunk in chunks] == [12, 6]
     assert len(pages.requests) == 21
+
+
+def test_terminal_counts_come_from_their_own_tables() -> None:
+    for page, pos, atm in (
+        ("bkm_2017_01.html", 1_703_599, 48_530),
+        ("bkm_2026_07.html", 2_020_116, 56_814),
+    ):
+        grids = parse_bkm_page((FIXTURES / page).read_text(encoding="utf-8"))
+
+        assert sum_cells(grids, parse_series_code("terminals:pos")) == pos
+        assert sum_cells(grids, parse_series_code("terminals:atm")) == atm

@@ -55,14 +55,10 @@ https://tr-banking-dashboard.streamlit.app/.
 ## Status (2026-10-01)
 
 - **Live:** 25 series; Loans, Interest rates and Cards tabs.
-- **Local, not pushed (all tested):** the Banking tab (30 BDDK series, 22 ratios, group
-  shares, period table), translated widgets, screenshots script, alerts (`alerts: false` for
-  noisy series), AI summary (migration 0004), MPC calendar, slim CLAUDE.md, pinned table
-  column, filter row (no sidebar), funding cost `TP.APIFON4`, TRY deposit rate and spread,
-  USD/TRY with FX deposits in USD, the spread and USD deposits in the AI brief, the cards
-  tab's 12-month-total view, deposit rates by maturity, the BDDK monthly bulletin (source
-  `bddk_monthly`: capital adequacy, ROE, ROA, margin, NPL coverage, demand deposits). The
-  bond share starts 2022-09-16 (BDDK break).
+- **Local, not pushed (all tested), since the live 25 series:** Banking tab (BDDK weekly
+  and the monthly bulletin `bddk_monthly`), AI summary (migration 0004), alerts, MPC
+  calendar, filter row, funding cost, deposit rates (total, maturities, spread), USD/TRY,
+  cards 12-month view, POS/ATM. 71 series. The bond share starts 2022-09-16 (BDDK break).
 - **The user's steps, in order:**
   1. Apply migration 0004 as the owner.
   2. `git push`; on an ImportError, reboot the Streamlit app.
@@ -74,7 +70,8 @@ https://tr-banking-dashboard.streamlit.app/.
   6. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
      check the Mermaid diagram on GitHub.
-- **Next:** BKM extra rows (POS/ATM), per-group monthly ratios (taraf 10008-10010).
+- **Next:** ask the user. Ideas: per-group monthly ratios (taraf 10008-10010); more
+  monthly bulletin tables (12 capital adequacy, 2 profit and loss).
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 

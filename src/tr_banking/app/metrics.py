@@ -25,6 +25,7 @@ DISPLAY_UNITS = {
     "thousand TRY": (1e-6, "billion TRY"),  # EVDS
     "million TRY": (1e-3, "billion TRY"),  # BDDK, BKM
     "cards": (1e-6, "million cards"),  # BKM card counts
+    "terminals": (1e-3, "thousand terminals"),  # BKM POS and ATM counts
 }
 # Units that are money and can therefore be deflated into real values (card counts cannot).
 MONETARY_UNITS = frozenset({"thousand TRY", "million TRY"})

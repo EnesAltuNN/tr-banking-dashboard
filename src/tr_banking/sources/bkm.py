@@ -59,6 +59,8 @@ USAGES = {
 MEASURES = {"count": "İşlem Adedi", "amount": "İşlem Tutarı (Milyon TL)"}
 KINDS = {"shopping": "Alışveriş", "cash": "Nakit Çekme", "total": "Toplam"}
 VPOS_TITLE = "Sanal POS İşlemleri"
+# Terminal counts: (row label, table title), on every page since 2017-01.
+TERMINALS = {"pos": ("POS Sayısı", "POS SAYILARI"), "atm": ("ATM Sayısı", "ATM SAYILARI")}
 VPOS_CHANNELS = {
     "internet": "İnternetten Kartlı Ödemeler",
     "mail_phone": "Mektup / Telefonla Yapılan Kartlı Ödemeler",
@@ -96,11 +98,14 @@ def parse_series_code(code: str) -> list[Cell]:
                 ]
             case ["vpos", channel, measure]:
                 return [Cell((VPOS_TITLE, VPOS_CHANNELS[channel]), (MEASURES[measure],))]
+            case ["terminals", kind]:
+                label, title = TERMINALS[kind]
+                return [Cell((label,), (title,))]
     except KeyError as exc:
         raise ValueError(f"invalid BKM series code {code!r}: unknown part {exc}") from None
     raise ValueError(
         f"invalid BKM series code {code!r}, expected cards:<card>, "
-        "txn:<card>:<usage>:<measure>:<kind> or vpos:<channel>:<measure>"
+        "txn:<card>:<usage>:<measure>:<kind>, vpos:<channel>:<measure> or terminals:<pos|atm>"
     )
 
 

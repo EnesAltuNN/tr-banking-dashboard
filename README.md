@@ -22,9 +22,9 @@ dashboard, in nominal and inflation-adjusted terms.
     Where it covers the same item as EVDS, the two agree within **about 0.3%**.
   - The [BDDK monthly bulletin](https://www.bddk.org.tr/BultenAylik): the regulator's own
     capital adequacy, profitability and margin ratios back to **2014**.
-  - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending and card
-    counts back to **2017**.
-  - 69 series in total, all defined in one YAML file.
+  - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending, card
+    counts and POS/ATM terminals back to **2017**.
+  - 71 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data

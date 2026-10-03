@@ -762,3 +762,25 @@ series:
     module: cards
     category: debit_card
     max_age_days: 100
+
+  # POS SAYILARI / ATM SAYILARI tables of the same page, counts at the month's end, verified
+  # 2026-10-03 on the 2017-01 and 2026-07 pages. Stocks, like the card counts: never summed.
+  - source: bkm
+    code: "terminals:pos"
+    name_tr: POS sayısı
+    name_en: Number of POS terminals
+    unit: terminals
+    frequency: monthly
+    module: cards
+    category: pos
+    max_age_days: 100
+
+  - source: bkm
+    code: "terminals:atm"
+    name_tr: ATM sayısı
+    name_en: Number of ATMs
+    unit: terminals
+    frequency: monthly
+    module: cards
+    category: atm
+    max_age_days: 100

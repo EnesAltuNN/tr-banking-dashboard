@@ -486,7 +486,7 @@ def test_cards_12_month_total_needs_12_months_and_keeps_card_counts(
     use_db: Callable, tmp_path: Path
 ) -> None:
     # The fixture holds three months (2023-07, 2024-06, 2024-07): no full 12-month window, so
-    # the TRY amounts drop out; card counts are not summed and stay.
+    # the TRY amounts drop out; card and terminal counts are not summed and stay.
     use_db(populated_db(tmp_path / "test.db"))
     app = run_dashboard("cards")
 
@@ -494,7 +494,7 @@ def test_cards_12_month_total_needs_12_months_and_keeps_card_counts(
 
     assert not app.exception
     shown = app.dataframe[0].value["Seri"].tolist()
-    assert shown == [spec.name_tr for spec in BKM_SPECS if spec.unit == "cards"]
+    assert shown == [spec.name_tr for spec in BKM_SPECS if spec.unit in ("cards", "terminals")]
     assert "son 12 ay toplamıdır" in page_text(app)
 
 
