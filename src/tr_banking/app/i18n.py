@@ -309,7 +309,9 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "önceki yılın son haftasıyla karşılaştırır. **Döviz mevduatının dolar karşılığı ≈** "
             "TL karşılığının o haftaki TCMB döviz alış kuruna bölünmesidir; euro ve altın da "
             "dolar kuruyla çevrildiği için yaklaşıktır. TL'nin değer kaybı döviz mevduatının TL "
-            "değerini şişirir; dolar cinsinden seri gerçek dolarizasyonu gösterir."
+            "değerini şişirir; dolar cinsinden seri gerçek dolarizasyonu gösterir. 2022-2024 "
+            "arasındaki düşüşün bir kısmı kur korumalı mevduattır (KKM, TCMB EVDS `bie_kkm`): "
+            "dövizden dönüşen KKM 2023 sonunda 86,6 milyar USD'ye çıktı, 2026'da sıfırlandı."
         ),
         "en": (
             "Source: BDDK weekly bulletin, tables *Mevduat* (deposits), *Takipteki Alacaklar* "
@@ -332,7 +334,9 @@ TEXTS: dict[str, dict[Lang, str]] = {
             "of the previous year. **FX deposits in US dollars ≈** divide the TRY value by that "
             "week's CBRT USD buying rate; euro and gold are converted at the dollar rate too, so "
             "it is approximate. A weaker lira inflates the TRY value of FX deposits; the dollar "
-            "series shows the real dollarization."
+            "series shows the real dollarization. Part of its 2022-2024 fall is the "
+            "FX-protected deposit scheme (KKM, CBRT EVDS `bie_kkm`): deposits converted from FX "
+            "reached 86.6 billion USD at the end of 2023 and were back to zero in 2026."
         ),
     },
     "cards_unavailable": {"tr": "Henüz kart verisi yok.", "en": "No card data yet."},

@@ -52,26 +52,25 @@ https://tr-banking-dashboard.streamlit.app/.
 | 2026-11-15 | BDDK TLS certificate renewed | On a certificate error, update the bundled intermediate (DATA_SOURCES). |
 | 2026-12-18 | CBRT publishes "2027 Para Politikası" | Add the rest of the 2027 MPC dates to `config/mpc_meetings.yaml`. |
 
-## Status (2026-10-01)
+## Status (2026-10-04)
 
-- **Live:** 25 series; Loans, Interest rates and Cards tabs.
-- **Local, not pushed (all tested), since the live 25 series:** Banking tab (BDDK weekly
-  and the monthly bulletin `bddk_monthly`), AI summary (migration 0004), alerts, MPC
-  calendar, filter row, funding cost, deposit rates (total, maturities, spread), USD/TRY,
-  cards 12-month view, POS/ATM, bank-group capital and ROE, CSV downloads. 79 series. The bond share
-  starts 2022-09-16 (BDDK break).
+- **Pushed; migration 0004 applied (2026-10-03):** Banking tab (BDDK weekly and monthly
+  `bddk_monthly`), AI summary, alerts, MPC calendar, filter row, funding cost, deposit rates
+  (total, maturities, spread), USD/TRY, cards 12-month view, POS/ATM. The user ran the full
+  backfill after the migration.
+- **Local, not pushed:** bank-group capital adequacy and ROE (8 `bddk_monthly` series, 79 in
+  all), CSV downloads, the KKM note.
 - **The user's steps, in order:**
-  1. Apply migration 0004 as the owner.
-  2. `git push`; on an ImportError, reboot the Streamlit app.
-  3. `uv run tr-banking backfill --start 2014-01-03` once more for every source (new
-     BDDK, EVDS and BDDK monthly history; about 6 minutes). A fetch brings 8 weeks only.
-  4. Add the GitHub secret `ANTHROPIC_API_KEY`; the first `summarize` needs a go-ahead
+  1. `git push`, then `uv run tr-banking backfill --start 2014-01-03 --source bddk_monthly`
+     once (the group series; about 3 minutes).
+  2. Check the live site; on an ImportError, reboot the Streamlit app.
+  3. Add the GitHub secret `ANTHROPIC_API_KEY`; the first `summarize` needs a go-ahead
      (`--dry-run` first).
-  5. Remove the Windows scheduled task (the cloud fetch runs green).
-  6. Retake the README image (it shows the old sidebar):
-     `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`;
-     check the Mermaid diagram on GitHub.
-- **Next:** KKM balance if EVDS has it.
+  4. Remove the Windows scheduled task (the cloud fetch runs green).
+  5. Retake the README image (it shows the old sidebar):
+     `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`.
+- **Next:** ask the user. Checked and skipped on 2026-10-04: KKM (wound down to 0), monthly
+  tables 11 (no LCR) and 12 (labels hold row numbers); see DATA_SOURCES.
 - **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
   rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
 

@@ -202,6 +202,13 @@ Kurları*, the CBRT indicative USD buying rate (Döviz Alış), business days fr
 billion USD on 2026-09-18, up from 231 a year earlier, while the TRY value rose 32%.
 Euro and gold are converted at the dollar rate too, so the USD figure is approximate.
 
+**FX-protected deposits (KKM), not loaded** (checked 2026-10-04): data group `bie_kkm`,
+monthly from 2021-12: `TP.KKM.K1` converted from FX (billion USD; 86.6 at the end of 2023),
+`TP.KKM.K2`/`K3` its individual/corporate split, `TP.KKM.K4` TRY KKM (billion TRY; 487.3 at
+the end of 2022). TRY KKM was 0 from 2024-12 and the FX-converted part 0 from 2026; a dead
+series would only add a freshness failure once the CBRT stops updating it, so the banking
+note mentions it instead.
+
 **MPC calendar and decision markers** (verified 2026-09-29):
 - The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from
   the first meeting inside the series (2018-10-25). Past dates come from the CBRT's decision
