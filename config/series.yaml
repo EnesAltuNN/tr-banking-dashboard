@@ -688,6 +688,92 @@ series:
     category: demand_deposits
     max_age_days: 75
 
+  # The same two ratios per bank group (taraf): deposit banks by ownership and participation
+  # banks, from the same request as the sector. Shown as one comparison chart per ratio.
+  - source: bddk_monthly
+    code: "15@10009:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)"
+    name_tr: "Sermaye yeterlilik oranı: kamu mevduat bankaları"
+    name_en: "Capital adequacy ratio: state deposit banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: capital_adequacy
+    max_age_days: 75
+
+  - source: bddk_monthly
+    code: "15@10008:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)"
+    name_tr: "Sermaye yeterlilik oranı: yerli özel mevduat bankaları"
+    name_en: "Capital adequacy ratio: domestic private deposit banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: capital_adequacy
+    max_age_days: 75
+
+  - source: bddk_monthly
+    code: "15@10010:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)"
+    name_tr: "Sermaye yeterlilik oranı: yabancı mevduat bankaları"
+    name_en: "Capital adequacy ratio: foreign deposit banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: capital_adequacy
+    max_age_days: 75
+
+  - source: bddk_monthly
+    code: "15@10003:Yasal Özkaynak / Risk Ağırlıklı Kalemler Toplamı (%)"
+    name_tr: "Sermaye yeterlilik oranı: katılım bankaları"
+    name_en: "Capital adequacy ratio: participation banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: capital_adequacy
+    max_age_days: 75
+
+  - source: bddk_monthly
+    code: "15@10009:Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)"
+    name_tr: "Özkaynak kârlılığı (yıllık): kamu mevduat bankaları"
+    name_en: "Return on equity (annualized): state deposit banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: roe
+    max_age_days: 75
+    year_to_date: true
+
+  - source: bddk_monthly
+    code: "15@10008:Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)"
+    name_tr: "Özkaynak kârlılığı (yıllık): yerli özel mevduat bankaları"
+    name_en: "Return on equity (annualized): domestic private deposit banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: roe
+    max_age_days: 75
+    year_to_date: true
+
+  - source: bddk_monthly
+    code: "15@10010:Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)"
+    name_tr: "Özkaynak kârlılığı (yıllık): yabancı mevduat bankaları"
+    name_en: "Return on equity (annualized): foreign deposit banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: roe
+    max_age_days: 75
+    year_to_date: true
+
+  - source: bddk_monthly
+    code: "15@10003:Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)"
+    name_tr: "Özkaynak kârlılığı (yıllık): katılım bankaları"
+    name_en: "Return on equity (annualized): participation banks"
+    unit: "%"
+    frequency: monthly
+    module: banking
+    category: roe
+    max_age_days: 75
+    year_to_date: true
+
 # ---------------------------------------------------------------------------------------------
 # BKM monthly card statistics (https://bkm.com.tr/secilen-aya-ait-istatistikler/), module 2.
 # Verified 2026-09-27 on the pages of 2017-01, 2021-03 and 2026-07 (same labels every month).

@@ -21,12 +21,14 @@ ROE = "Dönem Net Kârı (Zararı) / Ortalama Özkaynaklar (%)"
 NOT_PUBLISHED = {"success": False, "error": "2026 yılının en son 8 ayına ait veri bulunmaktadır!"}
 
 
-def test_parse_report_finds_rows_by_label() -> None:
+def test_parse_report_finds_rows_by_group_and_label() -> None:
     values = parse_report(REPORT, "15")
 
-    assert len(values) == 32
-    assert values[CAR] == pytest.approx(16.601448)  # August 2026, sector
-    assert values[ROE] == pytest.approx(16.54, abs=0.01)  # year to date, not annualized
+    assert len(values) == 5 * 32  # sector and four groups, 32 ratios each
+    assert values[("Sektör", CAR)] == pytest.approx(16.601448)  # August 2026
+    assert values[("Sektör", ROE)] == pytest.approx(16.54, abs=0.01)  # year to date
+    assert values[("Mevduat-Kamu", CAR)] == pytest.approx(14.13, abs=0.01)
+    assert values[("Katılım", ROE)] == pytest.approx(21.2, abs=0.01)
 
 
 @pytest.mark.parametrize(
@@ -48,10 +50,13 @@ def test_other_failures_and_odd_layouts_fail_loudly() -> None:
         parse_report(odd, "15")
 
 
-def test_series_code_is_table_and_label() -> None:
-    assert parse_series_code(f"15:{CAR}") == ("15", CAR)
-    with pytest.raises(ValueError, match="expected <table>:<label>"):
+def test_series_code_is_table_group_and_label() -> None:
+    assert parse_series_code(f"15:{CAR}") == ("15", "10001", CAR)  # no group: the sector
+    assert parse_series_code(f"15@10009:{CAR}") == ("15", "10009", CAR)
+    with pytest.raises(ValueError, match="expected <table>"):
         parse_series_code(CAR)
+    with pytest.raises(ValueError, match="taraf one of"):
+        parse_series_code(f"15@99999:{CAR}")
 
 
 def client(
@@ -75,12 +80,16 @@ def test_client_stores_month_end_values_and_skips_unpublished_months(tmp_path: P
     requests: list[httpx.Request] = []
     with client(tmp_path, {7, 8}, requests) as monthly:
         rows = monthly.fetch_observations(
-            [f"15:{CAR}", f"15:{ROE}"], date(2026, 7, 1), date(2026, 9, 30)
+            [f"15:{CAR}", f"15@10009:{CAR}", f"15:{ROE}"], date(2026, 7, 1), date(2026, 9, 30)
         )
 
-    assert len(requests) == 3  # one table, three months, one request each
+    # One table, three months: one request each, carrying both groups.
+    assert len(requests) == 3
+    assert b"taraf=10001&taraf=10009" in requests[0].content
     assert sorted(set(rows["date"])) == [date(2026, 7, 31), date(2026, 8, 31)]
-    assert len(rows) == 4
+    assert len(rows) == 6
+    state = rows[rows["code"] == f"15@10009:{CAR}"]["value"]
+    assert state.iloc[-1] == pytest.approx(14.13, abs=0.01)
 
 
 def test_a_missing_row_fails_loudly(tmp_path: Path) -> None:

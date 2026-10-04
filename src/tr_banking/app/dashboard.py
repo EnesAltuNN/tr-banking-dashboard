@@ -61,6 +61,8 @@ from tr_banking.app.metrics import (
 from tr_banking.config import load_mpc_calendar, load_series_config
 from tr_banking.db import StorageError, Summary, open_repository
 from tr_banking.settings import Settings, get_settings
+from tr_banking.sources.bddk_monthly import SECTOR
+from tr_banking.sources.bddk_monthly import parse_series_code as monthly_key
 
 logger = logging.getLogger(__name__)
 
@@ -631,7 +633,7 @@ def render_ratio_table(ratios: list[Ratio], lang: Lang, theme: str) -> None:
         .format(lambda day: format_date(day, lang), subset=[date_col])
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    show_table(styled, ratio_col)
+    show_table(styled, ratio_col, lang, "ratios")
 
 
 def render_spread_chart(
@@ -677,43 +679,9 @@ def render_deposit_terms(
     summary = summarize_rates(rows, pd.DataFrame(), as_of=as_of).merge(
         terms, left_on="series_id", right_on="id"
     )
-    # "TL mevduat faizi: 1 aya kadar" -> "1 aya kadar": the title already names the rate.
-    labels = summary[f"name_{lang}"].str.split(": ").str[-1]
-    order = [name.split(": ")[-1] for name in terms[f"name_{lang}"]]
-    now_label, year_label = text("term_now", lang), text("term_year_ago", lang)
-    data = pd.concat(
-        [
-            pd.DataFrame({"term": labels, "kind": now_label, "value": summary["last_value"]}),
-            pd.DataFrame(
-                {
-                    "term": labels,
-                    "kind": year_label,
-                    "value": summary["last_value"] - summary["yoy_pp"],
-                }
-            ),
-        ],
-        ignore_index=True,
-    ).dropna()
     color = series_color("deposit_term", theme)
-    y = alt.Y("term:N", title=None, sort=order)
-    x = alt.X("value:Q", title="%", axis=alt.Axis(format=",.0f"))
-    legend = alt.Color(
-        "kind:N",
-        scale=alt.Scale(domain=[now_label, year_label], range=[color, CROSSHAIR_COLOR]),
-        legend=alt.Legend(orient="bottom", title=None),
-    )
-    tooltip = [
-        alt.Tooltip("term:N", title=text("col_term", lang)),
-        alt.Tooltip("kind:N", title=text("col_date", lang)),
-        alt.Tooltip("value:Q", title="%", format=",.2f"),
-    ]
-    base = alt.Chart(data).encode(y=y, x=x, color=legend, tooltip=tooltip)
-    chart = alt.layer(
-        base.transform_filter(alt.datum.kind == now_label).mark_bar(height=14),
-        base.transform_filter(alt.datum.kind == year_label).mark_tick(thickness=3, size=22),
-    ).properties(height=CHART_HEIGHT)
-    if lang == "tr":
-        chart = chart.configure(locale=VEGA_LOCALE_TR)
+    order = [short_name(name) for name in terms[f"name_{lang}"]]
+    chart = latest_vs_year_ago(summary, order, text("col_term", lang), "week", color, lang)
     week = format_date(summary["last_date"].max(), lang, long=True)
     with column.container(border=True):
         chart_title(text("deposit_terms", lang), color)
@@ -722,6 +690,90 @@ def render_deposit_terms(
             f"{text('week_of', lang).format(week=week)} · "
             + text("chart_source", lang).format(source=SOURCE_LABELS["evds"][lang])
         )
+
+
+def short_name(name: str) -> str:
+    """The part after the last ": " ("TL mevduat faizi: 1 aya kadar" -> "1 aya kadar")."""
+    return name.split(": ")[-1]
+
+
+def latest_vs_year_ago(
+    summary: pd.DataFrame, order: list[str], item_title: str, period: str, color: str, lang: Lang
+) -> alt.LayerChart:
+    """Horizontal bars of each item's latest value (%), a tick at the value a year earlier.
+
+    `summary` is summarize_rates output merged with the series (for name_tr / name_en);
+    `period` ("week" or "month") names the latest value in the legend.
+    """
+    labels = summary[f"name_{lang}"].map(short_name)
+    now_label, year_label = text(f"bar_latest_{period}", lang), text("bar_year_earlier", lang)
+    data = pd.concat(
+        [
+            pd.DataFrame({"item": labels, "kind": now_label, "value": summary["last_value"]}),
+            pd.DataFrame(
+                {
+                    "item": labels,
+                    "kind": year_label,
+                    "value": summary["last_value"] - summary["yoy_pp"],
+                }
+            ),
+        ],
+        ignore_index=True,
+    ).dropna()
+    legend = alt.Color(
+        "kind:N",
+        scale=alt.Scale(domain=[now_label, year_label], range=[color, CROSSHAIR_COLOR]),
+        legend=alt.Legend(orient="bottom", title=None),
+    )
+    tooltip = [
+        alt.Tooltip("item:N", title=item_title),
+        alt.Tooltip("kind:N", title=text("col_date", lang)),
+        alt.Tooltip("value:Q", title="%", format=",.2f"),
+    ]
+    base = alt.Chart(data).encode(
+        # Room for "yerli özel mevduat bankaları"; Vega cuts labels at 180 px by default.
+        y=alt.Y("item:N", title=None, sort=order, axis=alt.Axis(labelLimit=240)),
+        x=alt.X("value:Q", title="%", axis=alt.Axis(format=",.0f")),
+        color=legend,
+        tooltip=tooltip,
+    )
+    chart = alt.layer(
+        base.transform_filter(alt.datum.kind == now_label).mark_bar(height=14),
+        base.transform_filter(alt.datum.kind == year_label).mark_tick(thickness=3, size=22),
+    ).properties(height=CHART_HEIGHT)
+    return chart.configure(locale=VEGA_LOCALE_TR) if lang == "tr" else chart
+
+
+def render_group_comparison(
+    groups: pd.DataFrame, observations: pd.DataFrame, lang: Lang, theme: str
+) -> None:
+    """Capital adequacy and return on equity per bank group, latest month against a year ago."""
+    charts = []
+    for category in ("capital_adequacy", "roe"):
+        specs = groups[groups["category"] == category]
+        frames = []
+        for spec in specs.itertuples():
+            values = observations.loc[observations["series_id"] == spec.id, ["date", "value"]]
+            values = annualized(values) if spec.year_to_date else values
+            frames.append(values.assign(series_id=spec.id))
+        rows = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        if not rows.empty:
+            charts.append((category, specs, rows))
+    if not charts:
+        return
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk_monthly"][lang])
+    for column, (category, specs, rows) in zip(st.columns(CHARTS_PER_ROW), charts, strict=False):
+        summary = summarize_rates(rows, pd.DataFrame()).merge(
+            specs, left_on="series_id", right_on="id"
+        )
+        order = [short_name(name) for name in specs[f"name_{lang}"]]
+        color = series_color(category, theme)
+        chart = latest_vs_year_ago(summary, order, text("col_group", lang), "month", color, lang)
+        month = format_month(summary["last_date"].max(), lang)
+        with column.container(border=True):
+            chart_title(text(f"groups_{category}", lang), color)
+            st.altair_chart(chart)
+            st.caption(f"{month} · {source}")
 
 
 def render_fx_in_usd(
@@ -766,7 +818,10 @@ def render_fx_in_usd(
 def render_monthly_ratios(
     monthly: pd.DataFrame, observations: pd.DataFrame, lang: Lang, theme: str
 ) -> None:
-    """BDDK's own monthly sector ratios: a table and one chart each, profitability annualized."""
+    """BDDK's own monthly sector ratios: a table and one chart each, profitability annualized;
+    then the bank groups compared."""
+    is_sector = monthly["code"].map(lambda code: monthly_key(code)[1] == SECTOR)
+    groups, monthly = monthly[~is_sector], monthly[is_sector]
     shown = []
     for spec in monthly.itertuples():
         values = observations.loc[observations["series_id"] == spec.id, ["date", "value"]]
@@ -800,7 +855,7 @@ def render_monthly_ratios(
         .format(lambda day: format_month(day, lang), subset=[month_col])
         .map(delta_style(theme, RATE_DECIMALS), subset=[yoy_col])
     )
-    show_table(styled, ratio_col)
+    show_table(styled, ratio_col, lang, "monthly-ratios")
     source = text("chart_source", lang).format(source=SOURCE_LABELS["bddk_monthly"][lang])
     for row_start in range(0, len(shown), CHARTS_PER_ROW):
         row = shown[row_start : row_start + CHARTS_PER_ROW]
@@ -811,6 +866,7 @@ def render_monthly_ratios(
                 chart = line_chart(values, "%", color, lang, monthly=True, axis_format=",.1f")
                 st.altair_chart(chart)
                 st.caption(source)
+    render_group_comparison(groups, observations, lang, theme)
     st.caption(text("monthly_ratios_note", lang))
 
 
@@ -882,7 +938,7 @@ def render_period_table(
     styled = frame.style.format(
         lambda value: format_pct(value, lang), subset=pct_cols, na_rep=MISSING
     ).map(delta_style(theme), subset=pct_cols)
-    show_table(styled, series_col)
+    show_table(styled, series_col, lang, "period-changes")
 
 
 def render_ratio_charts(ratios: list[Ratio], lang: Lang, theme: str) -> None:
@@ -1299,15 +1355,32 @@ def shown_unit(stored_unit: str, lang: Lang, month: str | None) -> tuple[float, 
 # --- tables ---
 
 
-def show_table(styled: Styler, first_col: str) -> None:
+def show_table(styled: Styler, first_col: str, lang: Lang, name: str) -> None:
     """Every table looks the same: no inner scroll (they are short) and a pinned first
-    column, so the name stays in view when a wide table scrolls sideways on a phone."""
+    column, so the name stays in view when a wide table scrolls sideways on a phone. A
+    small button below downloads the numbers as CSV."""
     st.dataframe(
         styled,
         hide_index=True,
         height="content",
         column_config={first_col: st.column_config.Column(pinned=True)},
     )
+    st.download_button(
+        text("download_csv", lang),
+        data=table_csv(styled.data, lang),
+        file_name=f"tr-banking-{name}.csv",
+        mime="text/csv",
+        icon=":material/download:",
+        type="tertiary",
+        key=f"csv_{name}",
+    )
+
+
+def table_csv(frame: pd.DataFrame, lang: Lang) -> bytes:
+    """The table's raw numbers as CSV that Excel opens right: Turkish Excel expects ";" and
+    a decimal comma; the BOM makes it read UTF-8 (ş, ğ, ı)."""
+    separator, decimal = (";", ",") if lang == "tr" else (",", ".")
+    return frame.to_csv(index=False, sep=separator, decimal=decimal).encode("utf-8-sig")
 
 
 def render_summary_table(
@@ -1360,7 +1433,7 @@ def render_summary_table(
         .format(lambda day: format_period(day, lang), subset=[date_col])
         .map(delta_style(theme), subset=pct_cols)
     )
-    show_table(styled, series_col)
+    show_table(styled, series_col, lang, "summary")
 
 
 def delta_style(theme: str, decimals: int = 1) -> Callable[[float], str]:
@@ -1405,7 +1478,7 @@ def render_rates_table(summary: pd.DataFrame, series: pd.DataFrame, lang: Lang, 
         # A real rate is a level, not a change: it keeps its sign but gets no up/down color.
         .map(delta_style(theme, RATE_DECIMALS), subset=[wow_col, yoy_col])
     )
-    show_table(styled, series_col)
+    show_table(styled, series_col, lang, "rates")
 
 
 # --- charts ---

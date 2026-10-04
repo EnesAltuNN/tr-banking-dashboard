@@ -202,6 +202,13 @@ Kurları*, the CBRT indicative USD buying rate (Döviz Alış), business days fr
 billion USD on 2026-09-18, up from 231 a year earlier, while the TRY value rose 32%.
 Euro and gold are converted at the dollar rate too, so the USD figure is approximate.
 
+**FX-protected deposits (KKM), not loaded** (checked 2026-10-04): data group `bie_kkm`,
+monthly from 2021-12: `TP.KKM.K1` converted from FX (billion USD; 86.6 at the end of 2023),
+`TP.KKM.K2`/`K3` its individual/corporate split, `TP.KKM.K4` TRY KKM (billion TRY; 487.3 at
+the end of 2022). TRY KKM was 0 from 2024-12 and the FX-converted part 0 from 2026; a dead
+series would only add a freshness failure once the CBRT stops updating it, so the banking
+note mentions it instead.
+
 **MPC calendar and decision markers** (verified 2026-09-29):
 - The meeting dates live in [`config/mpc_meetings.yaml`](../config/mpc_meetings.yaml), from
   the first meeting inside the series (2018-10-25). Past dates come from the CBRT's decision
@@ -380,7 +387,13 @@ ratios, ...), month-end values from 2003-01. Client: `sources/bddk_monthly.py`, 
   year) and August (16.54, 24.8) then agree. The net interest margin runs smoothly across
   year ends (December 2024 3.5, January 2025 3.4); return on equity is noisier in January,
   which holds one month only (December 2024 30.5, January 2025 19.3).
-- A backfill from 2014 is 152 requests, 1 s apart: about 2.5 minutes.
+- **Bank groups** (added 2026-10-03): one request takes several `taraf` values (a repeated
+  form field) and returns every group's rows, named in cell 0: `Sektör`, `Mevduat-Kamu`,
+  `Mevduat-Yerli Özel`, `Mevduat-Yabancı`, `Katılım` (the same names in 2014, 2019 and 2026).
+  Series code `15@<taraf>:<label>`; the capital adequacy ratio and return on equity are
+  loaded for the four groups and shown as one comparison chart each. August 2026: capital
+  adequacy 14.1 (state), 17.1 (domestic private), 17.9 (foreign), 17.8 (participation).
+- A backfill from 2014 is 152 requests, 1 s apart (all groups in each): about 2.5 minutes.
 
 ## BKM card statistics (verified 2026-09-27)
 

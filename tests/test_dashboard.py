@@ -17,7 +17,7 @@ from tr_banking.config import load_series_config
 from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
 from tr_banking.sources.bddk import parse_bddk_response
-from tr_banking.sources.bddk_monthly import parse_report
+from tr_banking.sources.bddk_monthly import GROUP_NAMES, parse_report
 from tr_banking.sources.bddk_monthly import parse_series_code as monthly_key
 from tr_banking.sources.bkm import parse_bkm_page, parse_series_code, sum_cells
 from tr_banking.sources.evds import parse_evds_response
@@ -136,10 +136,10 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
         # BDDK's monthly ratios table of August 2026, the real response.
         report = parse_report(fixture("bddk_monthly_ratios_2026_08.json"), "15")
-        monthly_rows = [
-            (spec.code, date(2026, 8, 31), report[monthly_key(spec.code)[1]])
-            for spec in MONTHLY_SPECS
-        ]
+        monthly_rows = []
+        for spec in MONTHLY_SPECS:
+            _, taraf, label = monthly_key(spec.code)
+            monthly_rows.append((spec.code, date(2026, 8, 31), report[(GROUP_NAMES[taraf], label)]))
         repo.upsert_observations(
             "bddk_monthly", pd.DataFrame(monthly_rows, columns=["code", "date", "value"])
         )
@@ -694,7 +694,9 @@ def test_banking_tab_shows_kpis_ratios_and_sector_series(use_db: Callable, tmp_p
     assert amounts["Seri"].tolist() == sector
     # Headline ratios, two share charts, the monthly ratios, then one chart per series. The
     # USD chart needs a USD rate in the BDDK fixture's weeks, which the fixtures do not have.
-    charts = len(HEADLINE_RATIOS) + 2 + len(MONTHLY_SPECS) + len(sector)
+    # Monthly: one chart per sector ratio, then two bank-group comparisons.
+    sector_monthly = [spec for spec in MONTHLY_SPECS if "@" not in spec.code]
+    charts = len(HEADLINE_RATIOS) + 2 + len(sector_monthly) + 2 + len(sector)
     assert len(app.get("vega_lite_chart")) == charts
     monthly = app.dataframe[1].value.set_index("Oran")["Son değer (%)"]
     assert monthly["Sermaye yeterlilik oranı"] == pytest.approx(16.601448)
@@ -849,3 +851,22 @@ def test_no_summary_box_without_a_summary(use_db: Callable, tmp_path: Path) -> N
     app = run_dashboard()
 
     assert "Haftanın özeti" not in page_text(app)
+
+
+def test_table_csv_opens_in_turkish_and_english_excel() -> None:
+    from tr_banking.app.dashboard import table_csv
+
+    frame = pd.DataFrame({"Seri": ["İhtiyaç"], "Son değer": [1234.5]})
+
+    turkish = table_csv(frame, "tr")
+    assert turkish.startswith(b"\xef\xbb\xbf")  # BOM: Excel reads UTF-8
+    assert turkish.decode("utf-8-sig").splitlines() == ["Seri;Son değer", "İhtiyaç;1234,5"]
+    assert table_csv(frame, "en").decode("utf-8-sig").splitlines()[1] == "İhtiyaç,1234.5"
+
+
+def test_every_table_has_a_csv_download(use_db: Callable, tmp_path: Path) -> None:
+    use_db(populated_db(tmp_path / "test.db"))
+
+    app = run_dashboard("rates")
+
+    assert len(app.get("download_button")) == len(app.dataframe) == 1
