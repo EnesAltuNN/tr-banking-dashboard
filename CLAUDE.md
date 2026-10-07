@@ -52,22 +52,16 @@ https://tr-banking-dashboard.streamlit.app/.
 | 2026-11-15 | BDDK TLS certificate renewed | On a certificate error, update the bundled intermediate (DATA_SOURCES). |
 | 2026-12-18 | CBRT publishes "2027 Para Politikası" | Add the rest of the 2027 MPC dates to `config/mpc_meetings.yaml`. |
 
-## Status (2026-10-04)
+## Status (2026-10-07)
 
-- **Pushed; migration 0004 applied (2026-10-03):** Banking tab (BDDK weekly and monthly
-  `bddk_monthly`), AI summary, alerts, MPC calendar, filter row, funding cost, deposit rates
-  (total, maturities, spread), USD/TRY, cards 12-month view, POS/ATM. The user ran the full
-  backfill after the migration.
-- **Local, not pushed:** bank-group capital adequacy and ROE (8 `bddk_monthly` series, 79 in
-  all), CSV downloads, the KKM note.
-- **The user's steps, in order:**
-  1. `git push`, then `uv run tr-banking backfill --start 2014-01-03 --source bddk_monthly`
-     once (the group series; about 3 minutes).
-  2. Check the live site; on an ImportError, reboot the Streamlit app.
-  3. Add the GitHub secret `ANTHROPIC_API_KEY`; the first `summarize` needs a go-ahead
-     (`--dry-run` first).
-  4. Remove the Windows scheduled task (the cloud fetch runs green).
-  5. Retake the README image (it shows the old sidebar):
+- **Everything is pushed and live** (checked 2026-10-07): 79 series in four tabs, migration
+  0004 applied, full history loaded (incl. the monthly bulletin's bank groups), CI green,
+  the scheduled fetch of 2026-10-06 green with all 79 series fresh. The Windows task is gone.
+- **Still open for the user:**
+  1. Add the GitHub secret `ANTHROPIC_API_KEY`; until then the summary step is skipped and
+     the summary box stays hidden. The first `summarize` needs a go-ahead (`--dry-run`
+     first).
+  2. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`.
 - **Next:** ask the user. Checked and skipped on 2026-10-04: KKM (wound down to 0), monthly
   tables 11 (no LCR) and 12 (labels hold row numbers); see DATA_SOURCES.
@@ -77,7 +71,6 @@ https://tr-banking-dashboard.streamlit.app/.
 ## Backlog (open items)
 
 3. Check that the Supabase free-tier project does not pause.
-4. Remove the Windows scheduled task: both scheduled runs (09-29, 10-02) were green.
 7. Module 3: bank rates and campaigns from bank sites. Postponed; decide the approach first.
 11. Revision history: upserts overwrite. Add a vintage table only if revisions matter.
 
