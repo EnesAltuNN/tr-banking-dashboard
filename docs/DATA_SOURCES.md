@@ -460,9 +460,34 @@ Series codes (the label mapping lives in `sources/bkm.py`):
   amounts over the 12 months ending in each month, which holds every season once; card
   counts are stocks and are not summed. A month missing from the window leaves no total.
 
-## Bank websites (module 3, postponed)
+## Bank websites (module 3, verified 2026-10-07)
 
-Research on 2026-09-29 (robots.txt, sitemaps, one fetch per product page):
+**Deposit rates, loaded** (source `bank_site`, client `sources/bank_site.py`). The user chose
+static HTML only (2026-10-07): no browser automation, no undocumented endpoints. One page per
+bank per run, `robots.txt` checked first, the project's User-Agent.
+
+| Bank | Page | Table | 100,000 TRY, 32 days (2026-10-07) |
+|---|---|---|---|
+| Ziraat | `ziraatbank.com.tr/tr/fiyatlar-ve-oranlar` | `data-id="rdIntBranchVadeliTL"` (internet branch) | 31.00% |
+| Ziraat | same page | `data-id="rdBranchVadeliTL"` (branch) | 5.00% |
+| İş Bankası | `isbank.com.tr/kampanyali-mevduat-oranlari` | the page's only table (İşCep, internet campaign) | 36.50% |
+
+- Tables are vade groups (rows, "32 - 45 gün", "367 Üzeri Gün") by amount brackets (columns,
+  "100.000 - 499.999,99 TL", "10.000.001 TL Üzeri"); the client takes the one cell whose
+  ranges hold the series' days and amount. Yearly simple rates.
+- Number formats differ: Ziraat writes `%31.00` (decimal point), İş Bankası `% 36,50`, typed
+  by hand: one cell read `% 3 7,85` plus a zero-width space. Spaces and U+200B are dropped,
+  a comma is the decimal mark when present, and anything outside 0-100% fails.
+- Series code `<bank>:<table>:<days>:<amount>`, frequency `daily`, `max_age_days: 7` (fetched
+  twice a week). The pages show today's rates only: a backfill stores nothing, and the
+  history starts with the first fetch.
+- **Checked and left out:** Halkbank (no table in the HTML), Yapı Kredi (the table's cells
+  are empty until JavaScript fills them from `/_ajaxproxy/...`), Garanti BBVA (only the
+  withholding-tax table and one campaign headline), Akbank (campaign headline only),
+  VakıfBank (no rate page found; URLs are never guessed). Aggregators (hesapkurdu,
+  hangikredi, ...) are commercial secondary sources and are not used.
+
+**Loan rates (research 2026-09-29, not loaded):** (robots.txt, sitemaps, one fetch per product page):
 - `robots.txt` allows the product pages at Ziraat, VakıfBank, Halkbank, Garanti BBVA, İş
   Bankası, Akbank, Yapı Kredi, ING and Enpara (Enpara also sends "ai-train=no").
 - Comparable rates are rarely in the HTML. İş Bankası states personalised rates ("kişiye özel
@@ -471,6 +496,5 @@ Research on 2026-09-29 (robots.txt, sitemaps, one fetch per product page):
 - Only Garanti BBVA shows a statutory "örnek hesaplama" table in HTML (personal loan, 100,000
   TRY, 36 months, 3.94% monthly, with an update date); ING shows campaign "from" rates.
 - Taşıt and konut pages show almost no rates in HTML.
-- Options when resuming: the JSON endpoints behind the calculators (like BDDK's chart
-  endpoint; undocumented, check each bank's terms), or browser automation (Playwright) in
-  the scheduled job (heavy, fragile). Decide first; campaigns would need their own table.
+- Loan rates and campaigns would need browser automation or undocumented endpoints, which
+  the user ruled out on 2026-10-07; campaigns would also need their own table.

@@ -63,22 +63,26 @@ https://tr-banking-dashboard.streamlit.app/.
      first).
   2. Retake the README image (it shows the old sidebar):
      `uv run --with playwright python scripts/screenshots.py --url https://tr-banking-dashboard.streamlit.app/`.
-- **Next:** ask the user. Checked and skipped on 2026-10-04: KKM (wound down to 0), monthly
+- **Next:** ask the user. Skipped on 2026-10-04: KKM (back to 0), monthly
   tables 11 (no LCR) and 12 (labels hold row numbers); see DATA_SOURCES.
-- **Open questions:** module 3 (calculator JSON or Playwright, see DATA_SOURCES); the real
-  rate column is empty until CPI is out (ask before changing); AI summary effort and eval.
+- **Module 3 (local, not pushed):** source `bank_site`, Ziraat branch and internet, İş
+  Bankası campaign, 100,000 TRY for 32 days; a bar chart in the Rates tab. No history
+  until the scheduled fetch runs (today's rates only). 82 series.
+- **Open questions:** the real rate column is empty until CPI is out (ask before
+  changing); AI summary effort and eval.
 
 ## Backlog (open items)
 
 3. Check that the Supabase free-tier project does not pause.
-7. Module 3: bank rates and campaigns from bank sites. Postponed; decide the approach first.
+7. Module 3: more banks only when their rate table is in plain HTML (the user's choice,
+   2026-10-07: no Playwright, no hidden endpoints). Loans and campaigns are out for now.
 11. Revision history: upserts overwrite. Add a vintage table only if revisions matter.
 
 ## Commands
 
 ```powershell
 uv run pytest; uv run ruff check .; uv run ruff format .
-uv run tr-banking fetch [--source evds|bddk|bddk_monthly|bkm]  # latest 8 weeks
+uv run tr-banking fetch [--source evds|bddk|bddk_monthly|bkm|bank_site]  # latest 8 weeks
 uv run tr-banking backfill --start 2014-01-03 [--source ...]
 uv run tr-banking db migrate [--check] | db check | check-freshness | scan-raw | clean-raw
 uv run tr-banking summarize [--dry-run] [--force]     # Claude API, costs money

@@ -10,6 +10,7 @@ from tr_banking.config import SeriesSpec, Source, load_series_config
 from tr_banking.db import Repository, open_repository
 from tr_banking.settings import Settings
 from tr_banking.sources import ObservationClient
+from tr_banking.sources.bank_site import BankSiteClient
 from tr_banking.sources.bddk import BddkClient
 from tr_banking.sources.bddk_monthly import BddkMonthlyClient
 from tr_banking.sources.bkm import BkmClient
@@ -19,7 +20,7 @@ from tr_banking.sources.evds import EvdsClient
 logger = logging.getLogger(__name__)
 
 # Sources with a client today; config.Source also lists the planned ones.
-IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bddk_monthly", "bkm")
+IMPLEMENTED_SOURCES: tuple[Source, ...] = ("evds", "bddk", "bddk_monthly", "bkm", "bank_site")
 # Monthly data is published late and sometimes revised, so every fetch re-reads at least the
 # last N months before today's month, whatever `--weeks` says. TÜİK's CPI (in EVDS) comes about
 # three days after the month ends, BDDK's monthly bulletin about a month after, BKM about
@@ -85,7 +86,7 @@ def month_index(day: date) -> int:
 
 def open_client(
     source: Source, settings: Settings
-) -> EvdsClient | BddkClient | BddkMonthlyClient | BkmClient:
+) -> EvdsClient | BddkClient | BddkMonthlyClient | BkmClient | BankSiteClient:
     if source == "evds":
         if settings.evds_api_key is None:
             raise ValueError("EVDS_API_KEY is not set (add it to .env or the environment)")
@@ -96,6 +97,8 @@ def open_client(
         return BddkMonthlyClient(settings.raw_dir)
     if source == "bkm":
         return BkmClient(settings.raw_dir)
+    if source == "bank_site":
+        return BankSiteClient(settings.raw_dir)
     raise ValueError(f"source {source!r} has no client yet")
 
 

@@ -57,6 +57,8 @@ Category = Literal[
     # deposit rate and the USD/TRY rate (EVDS)
     "deposit_rate",
     "deposit_term",
+    # module 3: deposit rates read from the banks' own websites
+    "bank_deposit",
     # BKM terminals
     "pos",
     "atm",
