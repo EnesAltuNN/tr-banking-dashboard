@@ -127,6 +127,7 @@ CATEGORY_HUES = {
     "government_bonds": "red",
     "deposit_rate": "yellow",
     "deposit_term": "yellow",
+    "bank_deposit": "orange",
     "usd_try": "green",
     "pos": "violet",
     "atm": "aqua",
@@ -430,7 +431,8 @@ def render_rates_view(
     render_kpis(rate_tiles(series, observations, inflation, policy_id, lang), theme)
 
     # The maturities have their own chart below; as time series they are a click away.
-    main_ids = [int(i) for i in series.loc[series["category"] != "deposit_term", "id"]]
+    detail = series["category"].isin(["deposit_term", "bank_deposit"])
+    main_ids = [int(i) for i in series.loc[~detail, "id"]]
     filters = render_filters(bar, series, observations, lang, key="rates", default_ids=main_ids)
     if filters is None:
         return
@@ -461,6 +463,7 @@ def render_rates_view(
     spread_column, terms_column = st.columns(CHARTS_PER_ROW)
     render_spread_chart(spread_column, series, observations, in_range, lang, theme)
     render_deposit_terms(terms_column, series, observations, end, lang, theme)
+    render_bank_rates(st.columns(CHARTS_PER_ROW)[0], series, observations, end, lang, theme)
     with st.expander(text("notes", lang)):
         st.caption(text("rates_note", lang))
 
@@ -707,6 +710,7 @@ def latest_vs_year_ago(
     """
     labels = summary[f"name_{lang}"].map(short_name)
     now_label, year_label = text(f"bar_latest_{period}", lang), text("bar_year_earlier", lang)
+    has_year = summary["yoy_pp"].notna().any()  # a new series has nothing a year back yet
     data = pd.concat(
         [
             pd.DataFrame({"item": labels, "kind": now_label, "value": summary["last_value"]}),
@@ -722,7 +726,10 @@ def latest_vs_year_ago(
     ).dropna()
     legend = alt.Color(
         "kind:N",
-        scale=alt.Scale(domain=[now_label, year_label], range=[color, CROSSHAIR_COLOR]),
+        scale=alt.Scale(
+            domain=[now_label, year_label][: 1 + has_year],
+            range=[color, CROSSHAIR_COLOR][: 1 + has_year],
+        ),
         legend=alt.Legend(orient="bottom", title=None),
     )
     tooltip = [
@@ -742,6 +749,33 @@ def latest_vs_year_ago(
         base.transform_filter(alt.datum.kind == year_label).mark_tick(thickness=3, size=22),
     ).properties(height=CHART_HEIGHT)
     return chart.configure(locale=VEGA_LOCALE_TR) if lang == "tr" else chart
+
+
+def render_bank_rates(
+    column: DeltaGenerator,
+    series: pd.DataFrame,
+    observations: pd.DataFrame,
+    as_of: date,
+    lang: Lang,
+    theme: str,
+) -> None:
+    """Deposit rates read from the banks' own websites, one comparable point (module 3)."""
+    banks = series[series["category"] == "bank_deposit"]
+    rows = observations[observations["series_id"].isin(banks["id"])]
+    if rows.empty:
+        return
+    summary = summarize_rates(rows, pd.DataFrame(), as_of=as_of).merge(
+        banks, left_on="series_id", right_on="id"
+    )
+    color = series_color("bank_deposit", theme)
+    order = [short_name(name) for name in banks[f"name_{lang}"]]
+    chart = latest_vs_year_ago(summary, order, text("col_bank", lang), "day", color, lang)
+    day = format_date(summary["last_date"].max(), lang, long=True)
+    source = text("chart_source", lang).format(source=SOURCE_LABELS["bank_site"][lang])
+    with column.container(border=True):
+        chart_title(text("bank_rates", lang), color)
+        st.altair_chart(chart)
+        st.caption(f"{text('bank_rates_note', lang).format(day=day)} · {source}")
 
 
 def render_group_comparison(

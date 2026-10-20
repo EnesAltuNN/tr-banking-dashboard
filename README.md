@@ -24,7 +24,7 @@ dashboard, in nominal and inflation-adjusted terms.
     capital adequacy, profitability and margin ratios back to **2014**, also per bank group.
   - [BKM](https://bkm.com.tr/) (the interbank card center): monthly card spending, card
     counts and POS/ATM terminals back to **2017**.
-  - 79 series in total, all defined in one YAML file.
+  - 82 series in total, all defined in one YAML file.
 - **Nominal and real:**
   - One switch deflates TRY values by CPI, in the prices of the latest CPI month.
   - TÜİK moved the CPI to a new base in January 2026. A test on the real published data
@@ -192,13 +192,11 @@ Done:
 - ✔ **Alerts:** unusual weekly changes flagged above the tabs.
 - ✔ **Weekly AI summary:** facts from Python, text from Claude, shown above the tabs.
 - ✔ **Card seasonality:** a 12-month-total view that flattens the December and summer peaks.
+- ✔ **Module 3, bank deposit rates:** read from the banks' own rate tables (Ziraat branch
+  and internet, İş Bankası campaign), only where the table is in the page's HTML.
 
-Planned, in order:
-1. **Module 3, bank rates and campaigns:** from bank websites. Postponed: research on
-   2026-09-29 found that most banks show personalised rates through JavaScript calculators,
-   not comparable rates in their HTML; it needs a decision on browser automation first.
-
-Other ideas:
+Ideas:
+- more banks, as and when they publish their rate tables in plain HTML;
 - a vintage table that keeps revised values, if revisions turn out to matter.
 
 ## Documentation

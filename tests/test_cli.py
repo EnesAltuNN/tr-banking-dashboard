@@ -75,7 +75,7 @@ def test_backfill_end_defaults_to_today(fake_run: FakeRun) -> None:
         ["backfill", "--start", "2024-12-31", "--end", "2024-01-01"],
         ["fetch", "--weeks", "0"],
         ["fetch", "--weeks", "abc"],
-        ["fetch", "--source", "bank_site"],
+        ["fetch", "--source", "nope"],
     ],
 )
 def test_invalid_arguments_exit_with_usage_error(fake_run: FakeRun, argv: list[str]) -> None:
@@ -99,7 +99,7 @@ def test_known_failure_returns_exit_code_1(
 def test_all_sources_by_default(fake_run: FakeRun) -> None:
     cli.main(["fetch"])
 
-    assert fake_run.sources == [("evds", "bddk", "bddk_monthly", "bkm")]
+    assert fake_run.sources == [("evds", "bddk", "bddk_monthly", "bkm", "bank_site")]
 
 
 def test_source_option_limits_the_update(fake_run: FakeRun) -> None:
@@ -178,7 +178,9 @@ KEY = "fake-evds-key-must-not-leak"
 
 
 def seed(
-    db_path: Path, day: date, sources: tuple[str, ...] = ("evds", "bddk", "bddk_monthly", "bkm")
+    db_path: Path,
+    day: date,
+    sources: tuple[str, ...] = ("evds", "bddk", "bddk_monthly", "bkm", "bank_site"),
 ) -> None:
     with SqliteRepository(db_path) as repo:
         repo.init_schema()

@@ -192,6 +192,24 @@ TEXTS: dict[str, dict[Lang, str]] = {
     "deposit_terms": {"tr": "TL mevduat faizi, vadeye göre", "en": "TRY deposit rate by maturity"},
     "bar_latest_week": {"tr": "Son hafta", "en": "Latest week"},
     "bar_latest_month": {"tr": "Son ay", "en": "Latest month"},
+    "bar_latest_day": {"tr": "Son ölçüm", "en": "Latest reading"},
+    "col_bank": {"tr": "Banka", "en": "Bank"},
+    "bank_rates": {
+        "tr": "Banka mevduat faizleri (100.000 TL, 32 gün)",
+        "en": "Bank deposit rates (100,000 TRY, 32 days)",
+    },
+    "bank_rates_note": {
+        "tr": (
+            "{day} ölçümü. Bankaların kendi sitelerindeki tablolardan, yıllık basit faiz; "
+            "yalnız tablosu sayfada açıkça yayımlanan bankalar. Kanal (şube, internet) ve "
+            "kampanya farkları büyüktür."
+        ),
+        "en": (
+            "Read on {day} from the banks' own rate tables, yearly simple rate; only banks that "
+            "publish their table in the page. Channel (branch, internet) and campaign gaps are "
+            "large."
+        ),
+    },
     "bar_year_earlier": {"tr": "Bir yıl önce", "en": "A year earlier"},
     "groups_capital_adequacy": {
         "tr": "Sermaye yeterlilik oranı, banka grubuna göre",
@@ -514,6 +532,7 @@ SOURCE_LABELS: dict[str, dict[Lang, str]] = {
     "evds": {"tr": "TCMB EVDS", "en": "CBRT EVDS"},
     "bddk": {"tr": "BDDK haftalık bülteni", "en": "BDDK weekly bulletin"},
     "bddk_monthly": {"tr": "BDDK aylık bülteni", "en": "BDDK monthly bulletin"},
+    "bank_site": {"tr": "bankaların internet siteleri", "en": "the banks' websites"},
     "bkm": {"tr": "BKM aylık istatistikler", "en": "BKM monthly statistics"},
 }
 

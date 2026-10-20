@@ -16,6 +16,8 @@ from tr_banking.app.dashboard import DETAIL_CATEGORIES, HEADLINE_RATIOS
 from tr_banking.config import load_series_config
 from tr_banking.db import Repository, SqliteRepository, Summary
 from tr_banking.settings import PROJECT_ROOT, Settings
+from tr_banking.sources.bank_site import TABLES, find_rate, table_after
+from tr_banking.sources.bank_site import parse_series_code as bank_key
 from tr_banking.sources.bddk import parse_bddk_response
 from tr_banking.sources.bddk_monthly import GROUP_NAMES, parse_report
 from tr_banking.sources.bddk_monthly import parse_series_code as monthly_key
@@ -28,8 +30,11 @@ CONFIG = load_series_config(PROJECT_ROOT / "config" / "series.yaml")
 SPECS = [spec for spec in CONFIG.for_source("evds") if spec.module == "credit"]
 CPI_SPEC = CONFIG.deflator
 RATE_SPECS = [spec for spec in CONFIG.series if spec.module == "rates"]
-# Shown by default: the deposit maturities have their own chart and are one click away.
-MAIN_RATE_SPECS = [spec for spec in RATE_SPECS if spec.category != "deposit_term"]
+# Shown by default: the deposit maturities and the bank rates have their own charts and are
+# one click away.
+MAIN_RATE_SPECS = [
+    spec for spec in RATE_SPECS if spec.category not in ("deposit_term", "bank_deposit")
+]
 FUNDING_CODE = "TP.APIFON4"  # the CBRT funding cost, the other "policy" series
 DEPOSIT_CODES = [s.code for s in CONFIG.series if s.category in ("deposit_rate", "deposit_term")]
 USD_SPEC = next(spec for spec in CONFIG.series if spec.category == "usd_try")
@@ -81,6 +86,10 @@ def fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+def fixture_text(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
+
 def bkm_rows() -> pd.DataFrame:
     grids = parse_bkm_page((FIXTURES / "bkm_2026_07.html").read_text(encoding="utf-8"))
     july = {spec.code: sum_cells(grids, parse_series_code(spec.code)) for spec in BKM_SPECS}
@@ -106,7 +115,7 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
     loan_codes = [
         spec.code
         for spec in RATE_SPECS
-        if spec.category not in ("policy", "deposit_rate", "deposit_term")
+        if spec.source == "evds" and spec.category not in ("policy", "deposit_rate", "deposit_term")
     ]
     # Same window as the policy rate: since 2018 the two policy-category series agree.
     with SqliteRepository(path) as repo:
@@ -134,6 +143,19 @@ def populated_db(path: Path, cpi_until: str = "2024-12-31") -> Path:
         bddk = fixture("bddk_konut_2024.json")
         for spec in ALL_BDDK_SPECS:  # the housing fixture stands in for every BDDK series
             repo.upsert_observations("bddk", parse_bddk_response(bddk, spec.code))
+        # Bank websites: today's rates from the recorded pages, dated the last loan-rate week.
+        bank_rows = []
+        for spec in RATE_SPECS:
+            if spec.source == "bank_site":
+                key = bank_key(spec.code)
+                page = fixture_text(f"bank_{key.bank}_2026_10_07.html")
+                grid = table_after(page, TABLES[(key.bank, key.table)].marker)
+                bank_rows.append(
+                    (spec.code, date(2024, 7, 12), find_rate(grid, key.days, key.amount))
+                )
+        repo.upsert_observations(
+            "bank_site", pd.DataFrame(bank_rows, columns=["code", "date", "value"])
+        )
         # BDDK's monthly ratios table of August 2026, the real response.
         report = parse_report(fixture("bddk_monthly_ratios_2026_08.json"), "15")
         monthly_rows = []
@@ -405,9 +427,12 @@ def test_rate_charts_share_one_axis_with_inflation_and_decisions(
     app = run_dashboard("rates")
 
     charts = [json.loads(chart.proto.spec) for chart in app.get("vega_lite_chart")]
-    # One chart per rate, then the spread and the deposit maturities.
-    assert len(charts) == len(MAIN_RATE_SPECS) + 2
-    assert '"type": "bar"' in json.dumps(charts[-1])  # maturities: latest week as bars
+    # One chart per rate, then the spread, the deposit maturities and the bank rates.
+    assert len(charts) == len(MAIN_RATE_SPECS) + 3
+    for bars in charts[-2:]:  # maturities and banks: the latest value as bars
+        assert '"type": "bar"' in json.dumps(bars)
+    # No bank history a year back yet: the legend names only the latest reading.
+    assert '"domain": ["Son ölçüm"]' in json.dumps(charts[-1], ensure_ascii=False)
     charts = charts[: len(MAIN_RATE_SPECS)]
     for spec in charts:
         text = json.dumps(spec, ensure_ascii=False)

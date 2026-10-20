@@ -14,6 +14,7 @@ from tr_banking.db import SqliteRepository
 from tr_banking.pipeline import UpdateError, fetch_window_start, load_source, run_update
 from tr_banking.security import files_containing_secrets, secret_values
 from tr_banking.settings import PROJECT_ROOT, Settings
+from tr_banking.sources.bank_site import BankSiteClient
 from tr_banking.sources.bddk import BddkClient
 from tr_banking.sources.bddk_monthly import BddkMonthlyClient
 from tr_banking.sources.bkm import BkmClient
@@ -41,6 +42,11 @@ BDDK_SPECS = CONFIG.for_source("bddk")
 BKM_SPECS = CONFIG.for_source("bkm")
 BKM_ROWS = len(BKM_SPECS)  # only June is "published" in bkm_transport
 MONTHLY_ROWS = len(CONFIG.for_source("bddk_monthly"))  # one month in monthly_transport
+BANK_ROWS = len(CONFIG.for_source("bank_site"))  # today's rate per series
+BANK_PAGES = {
+    "www.ziraatbank.com.tr": (FIXTURES / "bank_ziraat_2026_10_07.html").read_bytes(),
+    "www.isbank.com.tr": (FIXTURES / "bank_isbank_2026_10_07.html").read_bytes(),
+}
 MONTHLY_REPORT = (FIXTURES / "bddk_monthly_ratios_2026_08.json").read_bytes()
 MONTHLY_NOT_PUBLISHED = {"success": False, "error": "2026 yılının en son 8 ayına ait veri var!"}
 # credit, loan rates, CPI, policy, funding cost, deposit rate, USD/TRY
@@ -187,6 +193,17 @@ def monthly_client(tmp_path: Path) -> BddkMonthlyClient:
     )
 
 
+def bank_client(tmp_path: Path) -> BankSiteClient:
+    """robots.txt allows everything; each bank answers with its recorded rate table."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /\n")
+        return httpx.Response(200, content=BANK_PAGES[request.url.host])
+
+    return BankSiteClient(tmp_path, transport=httpx.MockTransport(handler), today=END)
+
+
 def use_clients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, bddk_status: int = 200) -> None:
     """Replace real clients with mocked ones; keep the real missing-key check for EVDS."""
     real_open_client = pipeline.open_client
@@ -199,6 +216,8 @@ def use_clients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, bddk_status: in
             return bkm_client(tmp_path)
         if source == "bddk_monthly":
             return monthly_client(tmp_path)
+        if source == "bank_site":
+            return bank_client(tmp_path)
         return bddk_client(tmp_path, bddk_status)
 
     monkeypatch.setattr(pipeline, "open_client", fake_open_client)
@@ -222,6 +241,7 @@ def test_run_update_loads_all_sources(monkeypatch: pytest.MonkeyPatch, tmp_path:
         "bddk": 3 * len(BDDK_SPECS),
         "bddk_monthly": MONTHLY_ROWS,
         "bkm": BKM_ROWS,
+        "bank_site": BANK_ROWS,
     }
     assert stored_rows_per_source(settings.db_path) == written
 
@@ -239,6 +259,7 @@ def test_failing_source_does_not_block_others(
         "evds": EVDS_ROWS,
         "bddk_monthly": MONTHLY_ROWS,
         "bkm": BKM_ROWS,
+        "bank_site": BANK_ROWS,
     }
     assert "bddk update failed: BDDK returned HTTP 404" in caplog.text
 
@@ -257,6 +278,7 @@ def test_missing_api_key_only_fails_evds(
         "bddk": 3 * len(BDDK_SPECS),
         "bddk_monthly": MONTHLY_ROWS,
         "bkm": BKM_ROWS,
+        "bank_site": BANK_ROWS,
     }
 
 

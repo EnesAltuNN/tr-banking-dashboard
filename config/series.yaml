@@ -216,6 +216,40 @@ series:
     category: deposit_term
     alerts: false
 
+  # Module 3: TRY deposit rates read from the banks' own websites (sources/bank_site.py),
+  # verified 2026-10-07. One comparable point per bank: 100,000 TRY for 32 days, yearly simple
+  # rate. Only pages whose tables are in the HTML; today's rate only, so the history starts
+  # with the first fetch (twice a week), hence max_age_days 7.
+  - source: bank_site
+    code: "ziraat:internet:32:100000"
+    name_tr: "Banka mevduat faizi (100.000 TL, 32 gün): Ziraat internet şubesi"
+    name_en: "Bank deposit rate (100,000 TRY, 32 days): Ziraat internet branch"
+    unit: "%"
+    frequency: daily
+    module: rates
+    category: bank_deposit
+    max_age_days: 7
+
+  - source: bank_site
+    code: "ziraat:branch:32:100000"
+    name_tr: "Banka mevduat faizi (100.000 TL, 32 gün): Ziraat şube"
+    name_en: "Bank deposit rate (100,000 TRY, 32 days): Ziraat branch"
+    unit: "%"
+    frequency: daily
+    module: rates
+    category: bank_deposit
+    max_age_days: 7
+
+  - source: bank_site
+    code: "isbank:campaign:32:100000"
+    name_tr: "Banka mevduat faizi (100.000 TL, 32 gün): İş Bankası kampanya (İşCep, internet)"
+    name_en: "Bank deposit rate (100,000 TRY, 32 days): İş Bankası campaign (İşCep, internet)"
+    unit: "%"
+    frequency: daily
+    module: rates
+    category: bank_deposit
+    max_age_days: 7
+
   # Policy rate. Data group bie_pyintbnk, "(1H) TCMB Kotasyonlari SATIS (%) (1 Haftalik Islem)":
   # the one-week repo lending rate, business days, 1996-11-04 onward. Its change dates match the
   # MPC (PPK) decisions. No value on holidays, and long holidays last up to 9 days, hence 14 days.

@@ -71,7 +71,7 @@ pipeline.py  ->  db/ (only place with SQL)  ->  SQLite data/tr_banking.db
   - `sqlite.py` and `postgres.py` only add connections, transactions and schema setup.
   - Always open storage via `open_repository(settings)`.
 - `cli.py`:
-  - `tr-banking fetch [--weeks N] [--source evds|bddk|bddk_monthly|bkm]`
+  - `tr-banking fetch [--weeks N] [--source evds|bddk|bddk_monthly|bkm|bank_site]`
   - `tr-banking backfill --start YYYY-MM-DD [--end] [--source ...]`
   - `tr-banking db migrate` (idempotent; needs the owner role)
   - `tr-banking db migrate --check`: applies nothing, exit 1 if a migration is pending. It works
